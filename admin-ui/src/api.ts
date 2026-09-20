@@ -49,3 +49,33 @@ export interface Summary { hours: number; counts: Count[]; backlog: number; requ
 export interface Point { bucket: string; channel: string; status: string; count: number }
 export interface MessageRow { id: string; requestId: string; clientId: string; clientName: string; channel: string; recipient: string; status: string; attempts: number; lastError?: string; providerMessageId?: string; createdAt: string; sentAt?: string }
 export interface MessagePage { items: MessageRow[]; page: number; size: number; totalItems: number }
+
+export async function download(path: string, filename: string): Promise<void> {
+  const res = await fetch('/api/admin' + path, { headers: { Authorization: auth.get() ?? '' } });
+  if (!res.ok) throw new ApiError(res.status, `HTTP ${res.status}`);
+  const url = URL.createObjectURL(await res.blob());
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
+export interface BillingRate { channel: Channel; unitPrice: string; freeAllowance: number }
+export interface BillingPlan { id: string; name: string; currency: string; platformFee: string; taxRate: number; active: boolean; rates: BillingRate[] }
+export interface BillingAccount {
+  clientId: string; clientName: string; planId: string; planName: string; currency: string; mode: 'POSTPAID' | 'PREPAID';
+  status: 'ACTIVE' | 'SUSPENDED'; creditBalance?: string; monthlySpendCap?: string; billingEmail?: string;
+}
+export interface BillingLine { kind: string; channel?: Channel; description: string; quantity: number; unitPrice: string; amount: string }
+export interface BillingPayment { amount: string; method: string; reference: string; receivedAt: string }
+export type InvoiceStatus = 'DRAFT' | 'ISSUED' | 'PAID' | 'VOID';
+export interface BillingInvoice {
+  id: string; number?: string; clientId: string; clientName: string; month: string; status: InvoiceStatus; currency: string;
+  lines: BillingLine[]; subtotal: string; taxRate: number; tax: string; total: string; paid: string; outstanding: string;
+  issuedAt?: string; dueAt?: string; paidAt?: string; voidReason?: string; payments: BillingPayment[];
+}
+export interface LedgerEntry { id: string; type: string; amount: string; reference: string; description?: string; createdAt: string }
+export interface LedgerPage { items: LedgerEntry[]; total: number; page: number; size: number }
+export interface GenerationReport { created: number; existing: number; failures: string[] }
+export const money = (amount: string, currency: string) => `${amount} ${currency}`;

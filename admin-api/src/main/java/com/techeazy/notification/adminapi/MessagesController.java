@@ -14,7 +14,6 @@ import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
-import org.springframework.web.server.ResponseStatusException;
 
 import java.time.Instant;
 import java.util.ArrayList;
@@ -37,11 +36,14 @@ class MessagesController {
     private final NotificationMessageRepository messages;
     private final ClientRepository clients;
     private final OutboxPublisher outbox;
+    private final MessageRetry retry;
 
-    MessagesController(NotificationMessageRepository messages, ClientRepository clients, OutboxPublisher outbox) {
+    MessagesController(NotificationMessageRepository messages, ClientRepository clients, OutboxPublisher outbox,
+                       MessageRetry retry) {
         this.messages = messages;
         this.clients = clients;
         this.outbox = outbox;
+        this.retry = retry;
     }
 
     @GetMapping
@@ -74,14 +76,8 @@ class MessagesController {
     @PostMapping("/{id}/retry")
     @ResponseStatus(HttpStatus.ACCEPTED)
     void retry(@PathVariable UUID id) {
-        NotificationMessage m = messages.findById(id).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
-        if (m.getStatus() != MessageStatus.FAILED) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "Only FAILED messages can be retried (status is " + m.getStatus() + ")");
-        }
-        if (messages.requeueFailed(id, Instant.now()) == 1) {
-            m.setStatus(MessageStatus.PENDING);
-            outbox.publishAndMarkQueued(List.of(m));
-        }
+        NotificationMessage message = retry.requeue(id);
+        outbox.publishAndMarkQueued(List.of(message));
     }
 
     private static Row toRow(NotificationMessage m, Map<UUID, String> clientNames) {

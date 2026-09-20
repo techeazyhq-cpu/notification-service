@@ -97,3 +97,24 @@ export function variablesOf(...texts: (string | undefined)[]): string[] {
   names.delete('recipient');
   return [...names];
 }
+
+export interface BillingRate { channel: Channel; unitPrice: string; freeAllowance: number }
+export interface BillingAccount {
+  planName: string; currency: string; mode: 'POSTPAID' | 'PREPAID'; status: 'ACTIVE' | 'SUSPENDED';
+  creditBalance?: string; monthlySpendCap?: string; platformFee: string; taxRate: string; rates: BillingRate[];
+}
+export interface BillingLine { kind: 'USAGE' | 'PLATFORM_FEE'; channel?: Channel; description: string; quantity: number; unitPrice: string; amount: string }
+export interface BillingUsage { month: string; currency: string; estimate: boolean; lines: BillingLine[]; subtotal: string; tax: string; total: string }
+export type InvoiceStatus = 'DRAFT' | 'ISSUED' | 'PAID' | 'VOID';
+export interface InvoiceSummary {
+  id: string; number?: string; month: string; status: InvoiceStatus; currency: string; total: string; outstanding: string;
+  issuedAt?: string; dueAt?: string;
+}
+export interface InvoicePayment { amount: string; method: string; reference: string; receivedAt: string }
+export interface InvoiceDetail extends InvoiceSummary {
+  lines: BillingLine[]; subtotal: string; taxRate: string; tax: string; paid: string; paidAt?: string; payments: InvoicePayment[];
+}
+export interface LedgerEntry { id: string; type: 'TOP_UP' | 'HOLD' | 'SETTLEMENT' | 'ADJUSTMENT'; amount: string; reference: string; description?: string; createdAt: string }
+export interface LedgerPage { currency: string; items: LedgerEntry[]; total: number; page: number; size: number }
+
+export const money = (amount: string, currency: string) => `${amount} ${currency}`;
