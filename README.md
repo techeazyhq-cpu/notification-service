@@ -138,6 +138,10 @@ GitHub Actions run on every pull request and on `main` (`.github/workflows`):
 
 Make the **CI** and **Security** checks required in the branch protection rules of `main` so nothing merges while they are red.
 
+## Dead letters and reprocessing
+
+Messages that end FAILED are the dead-letter queue. Open **Dead letters** in the admin UI to see them by kind (PERMANENT: fix the cause first; EXHAUSTED and DEAD_LETTERED: safe to resend), filter by client, channel or error text, and reprocess selected messages or up to 200 matching ones. Messages the broker dead-lettered (`notification-<channel>-dlq` topics) are recorded automatically. API: `GET /api/admin/dead-letters`, `GET /api/admin/dead-letters/summary`, `POST /api/admin/dead-letters/reprocess`. Prepaid clients are charged again for the new attempt. See ADR-010.
+
 ## Static analysis
 
 Sonar findings are kept at zero. To reproduce locally with a throwaway SonarQube (`admin`/`admin`, UI on `:9001`):

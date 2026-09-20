@@ -30,3 +30,5 @@ databaseChangeLog:
       file: db/changelog/changes/006-client-senders.sql
   - include:
       file: db/changelog/changes/007-personal-data-retention.sql
+  - include:
+      file: db/changelog/changes/008-dead-letters.sql

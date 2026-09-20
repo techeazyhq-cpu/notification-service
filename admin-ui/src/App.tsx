@@ -28,6 +28,7 @@ import BillingPlans from './pages/BillingPlans';
 import BillingAccounts from './pages/BillingAccounts';
 import BillingInvoices from './pages/BillingInvoices';
 import Messages from './pages/Messages';
+import DeadLetters from './pages/DeadLetters';
 import Account from './pages/Account';
 import Privacy from './pages/Privacy';
 
@@ -91,6 +92,7 @@ export default function App() {
         <h2>Notifications</h2>
         <NavLink to="/dashboard">Dashboard</NavLink>
         <NavLink to="/messages">Messages</NavLink>
+        <NavLink to="/dead-letters">Dead letters</NavLink>
         <NavLink to="/clients">Clients</NavLink>
         <NavLink to="/templates">Templates</NavLink>
         <NavLink to="/providers">Providers</NavLink>
@@ -107,6 +109,7 @@ export default function App() {
           <Route path="/" element={<Navigate to="/dashboard" replace />} />
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/messages" element={<Messages />} />
+          <Route path="/dead-letters" element={<DeadLetters />} />
           <Route path="/clients" element={<Clients />} />
           <Route path="/templates" element={<Templates />} />
           <Route path="/providers" element={<Providers />} />
