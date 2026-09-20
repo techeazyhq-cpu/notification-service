@@ -23,6 +23,9 @@ spring:
     url: ${DB_URL:jdbc:postgresql://localhost:5432/notification}
     username: ${DB_USER:notification}
     password: ${DB_PASSWORD:notification}
+  threads:
+    virtual:
+      enabled: ${VIRTUAL_THREADS_ENABLED:false}
   jpa:
     open-in-view: false
     hibernate:
