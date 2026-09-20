@@ -28,8 +28,8 @@ function Login({ onDone }: Readonly<{ onDone: () => void }>) {
   return (
     <form className="login card" onSubmit={submit}>
       <h1>Notification Admin</h1>
-      <label>Username<input value={user} onChange={(e) => setUser(e.target.value)} autoFocus /></label>
-      <label>Password<input type="password" value={password} onChange={(e) => setPassword(e.target.value)} /></label>
+      <label>Username<input value={user} onChange={(e) => setUser(e.target.value)} autoComplete="username" /></label>
+      <label>Password<input type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="current-password" /></label>
       {error && <p className="error">{error}</p>}
       <button type="submit" className="primary">Sign in</button>
     </form>
