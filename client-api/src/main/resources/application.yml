@@ -10,6 +10,8 @@ spring:
     password: ${DB_PASSWORD:notification}
   jpa:
     open-in-view: false
+    hibernate:
+      ddl-auto: validate   # the schema is owned by the db-migration job; fail fast if it is missing or behind the code
     properties:
       hibernate:
         jdbc:

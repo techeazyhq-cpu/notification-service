@@ -34,7 +34,7 @@ Positive:
 - Personal data lives only in PostgreSQL.
 
 Negative / accepted:
-- Shared database couples the three deployables at the schema level (mitigated by table ownership and Flyway in one module).
+- Shared database couples the three deployables at the schema level (mitigated by table ownership and a single migration job, see ADR-003).
 - Sweeper-based recovery means a crash can produce a duplicate send after the 5-minute reclaim; providers with idempotency keys should use `messageId`.
 - PostgreSQL is on the hot path for bulk; needs partitioning/retention at volume.
 - Admin auth is HTTP Basic in v0.1 (temporary).

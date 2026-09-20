@@ -49,7 +49,6 @@ class DashboardController {
         if (!Map.of("minute", 1, "hour", 1, "day", 1).containsKey(bucket)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "bucket must be minute, hour or day");
         }
-        // The bucket unit is bound as a parameter (allow-listed above anyway), so no SQL is assembled from input.
         return jdbc.query("select date_trunc(?, created_at), channel, status, count(*) "
                         + "from notification_message where created_at >= ? group by 1, 2, 3 order by 1",
                 (rs, i) -> new Point(rs.getTimestamp(1).toInstant(), rs.getString(2), rs.getString(3), rs.getLong(4)),

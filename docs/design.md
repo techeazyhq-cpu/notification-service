@@ -189,7 +189,7 @@ Known limitation: the browser holds a key that can also *send*. It is kept in `s
 
 ## 5. Data
 
-PostgreSQL (Flyway `V1__init.sql`): `client`, `template`, `provider_config`, `rate_limit_policy`, `notification_request`, `notification_message`. Notable choices: UUID primary keys assigned by the app (JDBC batching without a round trip); partial unique index for idempotency keys; indexes on `(request_id, status)` for status counts and `(status, updated_at)` for the sweeper. API keys are stored only as SHA-256 hashes (keys are 256-bit random, so an unsalted hash suffices for lookup).
+PostgreSQL, schema owned by the `db-migration` job (Liquibase changesets in `db-migration/src/main/resources/db/changelog/`, see ADR-003): `client`, `template`, `provider_config`, `rate_limit_policy`, `notification_request`, `notification_message`. The job runs before the services, can preview (`update-sql`), validate and roll back, and the services only validate the schema at start-up. Notable choices: UUID primary keys assigned by the app (JDBC batching without a round trip); partial unique index for idempotency keys; indexes on `(request_id, status)` for status counts and `(status, updated_at)` for the sweeper. API keys are stored only as SHA-256 hashes (keys are 256-bit random, so an unsalted hash suffices for lookup).
 
 ## 6. Cross-cutting
 

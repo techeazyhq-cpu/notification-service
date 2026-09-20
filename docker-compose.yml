@@ -48,6 +48,20 @@ services:
     build: ./tools/catcher
     ports: ["9000:9000"]
 
+  # One-shot job: applies pending schema changes (Liquibase), then exits. The services start only after it succeeded.
+  # Other commands: docker compose run --rm db-migrate status | update-sql | validate | history
+  db-migrate:
+    profiles: [app]
+    build: { context: ., args: { MODULE: db-migration } }
+    command: ["update"]
+    restart: "no"
+    environment:
+      DB_URL: jdbc:postgresql://postgres:5432/notification
+      DB_USER: notification
+      DB_PASSWORD: notification
+    depends_on:
+      postgres: { condition: service_healthy }
+
   client-api:
     profiles: [app]
     build: { context: ., args: { MODULE: client-api } }
@@ -57,6 +71,7 @@ services:
       REDIS_HOST: redis
       PULSAR_URL: pulsar://pulsar:6650
     depends_on: &svc-deps
+      db-migrate: { condition: service_completed_successfully }
       postgres: { condition: service_healthy }
       redis: { condition: service_healthy }
       pulsar: { condition: service_healthy }

@@ -8,7 +8,7 @@ Generic multi-channel notification platform: **Email, SMS, WhatsApp, App Push**,
 - **Dispatcher** (`:8082`): Pulsar consumers that rate-limit, render, send, retry and fail over between providers.
 - Local catchers: **Mailpit** (email, UI `:8025`) and a small **catcher** for SMS/WhatsApp/Push (UI `:9000`).
 
-Design: [docs/design.md](docs/design.md) · Decisions: [ADR-001](docs/adr-001-modular-monolith-pulsar-outbox.md), [ADR-002](docs/adr-002-client-owned-templates-content-snapshot.md)
+Design: [docs/design.md](docs/design.md) · Decisions: [ADR-001](docs/adr-001-modular-monolith-pulsar-outbox.md), [ADR-002](docs/adr-002-client-owned-templates-content-snapshot.md), [ADR-003](docs/adr-003-liquibase-migration-job.md)
 
 ## Run it
 
@@ -74,12 +74,37 @@ Circuit breaker drill (SMS): `curl -X POST "localhost:9000/admin/fail?status=503
 
 | Path | What |
 |---|---|
-| `notification-core` | Domain entities, Flyway schema, repositories, Pulsar publisher, Redis rate limiter, outbox sweeper |
+| `notification-core` | Domain entities, repositories, Pulsar publisher, Redis rate limiter, outbox sweeper |
+| `db-migration` | One-shot Liquibase job that owns the schema: `update`, `update-sql`, `status`, `validate`, `history`, rollback |
 | `client-api` / `admin-api` / `dispatcher` | The three Spring Boot deployables |
 | `admin-ui` | React + Vite admin SPA |
 | `client-ui` | React + Vite SPA for API clients: track requests, manage their own templates |
 | `tools/catcher` | SMS/WhatsApp/Push gateway stand-in |
 | `docs` | Design, ADRs, draw.io container diagram |
+
+## Database migrations
+
+The schema is owned by the `db-migration` job (Liquibase), not by the services. `docker compose --profile app up` runs it
+first (`db-migrate`) and the services start only after it succeeds; they run Hibernate `ddl-auto: validate` and refuse to
+start against a missing or outdated schema. Changesets live in `db-migration/src/main/resources/db/changelog/`.
+
+```bash
+docker compose run --rm db-migrate status        # what is still to be applied
+docker compose run --rm db-migrate update-sql    # the exact SQL update would run, without running it
+docker compose run --rm db-migrate validate      # changelog valid, and no applied changeset was edited
+docker compose run --rm db-migrate history       # what has been applied (and pre-update tags)
+docker compose run --rm db-migrate update        # apply (what the stack does automatically)
+
+# undo: refused unless explicitly allowed, because it changes or deletes data
+docker compose run --rm -e MIGRATION_ALLOW_ROLLBACK=true db-migrate rollback-count 1
+docker compose run --rm -e MIGRATION_ALLOW_ROLLBACK=true db-migrate rollback-tag pre-20260920101500
+```
+
+`update` tags the previous state (`pre-<utc time>`) before applying anything, so a bad release can be undone with
+`rollback-tag`. **To change the schema:** add a new file under `changes/`, list it at the end of
+`db.changelog-master.yaml`, and give every changeset a `--rollback`. Never edit a changeset that has been released
+(`validate` will fail). Outside Docker: `java -jar db-migration/target/db-migration-*.jar status` with `DB_URL`,
+`DB_USER`, `DB_PASSWORD` set. Databases previously migrated by Flyway are adopted automatically (see ADR-003).
 
 ## Static analysis
 
@@ -96,7 +121,8 @@ JaCoCo reports are written to `*/target/site/jacoco/` by `mvn test` and picked u
 ## Test
 
 ```bash
-mvn test                       # unit tests (no infrastructure needed)
+mvn test                       # unit tests; the db-migration tests use a real PostgreSQL via Testcontainers
+                               # (they need Docker and are skipped automatically without it)
 cd admin-ui && npm run build   # type-check + build the UI
 cd client-ui && npm run build  # likewise for the client tracker
 ```

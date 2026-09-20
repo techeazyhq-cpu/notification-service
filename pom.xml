@@ -20,6 +20,7 @@
     <module>client-api</module>
     <module>admin-api</module>
     <module>dispatcher</module>
+    <module>db-migration</module>
   </modules>
 
   <properties>
@@ -27,6 +28,8 @@
     <pulsar.version>3.3.3</pulsar.version>
     <commons-csv.version>1.11.0</commons-csv.version>
     <springdoc.version>2.6.0</springdoc.version>
+    <!-- Spring Boot 3.3 manages an older Testcontainers whose Docker client is rejected by Docker Engine 29 (min API 1.40) -->
+    <testcontainers.version>1.21.4</testcontainers.version>
     <resilience4j.version>2.2.0</resilience4j.version>
     <jacoco.version>0.8.12</jacoco.version>
   </properties>

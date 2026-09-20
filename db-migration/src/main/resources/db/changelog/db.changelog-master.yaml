@@ -1,0 +1,9 @@
+# Master changelog. Files are applied in the order listed; never reorder or edit a changeset that has been released
+# (Liquibase verifies checksums). To change the schema, add a new file below and a new changeset in it.
+databaseChangeLog:
+  - include:
+      file: db/changelog/changes/001-baseline.sql
+  - include:
+      file: db/changelog/changes/002-client-tracking-indexes.sql
+  - include:
+      file: db/changelog/changes/003-client-owned-templates.sql

@@ -7,6 +7,7 @@ COPY notification-core/pom.xml notification-core/
 COPY client-api/pom.xml client-api/
 COPY admin-api/pom.xml admin-api/
 COPY dispatcher/pom.xml dispatcher/
+COPY db-migration/pom.xml db-migration/
 RUN --mount=type=cache,target=/root/.m2 mvn -q -B dependency:go-offline -pl ${MODULE} -am || true
 COPY notification-core/src notification-core/src
 COPY ${MODULE}/src ${MODULE}/src
