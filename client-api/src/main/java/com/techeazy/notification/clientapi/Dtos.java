@@ -12,6 +12,7 @@ import jakarta.validation.constraints.Size;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 public final class Dtos {
@@ -49,4 +50,11 @@ public final class Dtos {
                               String providerMessageId, Instant sentAt, Instant updatedAt) {}
 
     public record PageView<T>(List<T> items, int page, int size, long totalItems, int totalPages) {}
+
+    public record MeView(UUID id, String name, Set<Channel> allowedChannels) {}
+
+    public record ChannelStatusCount(Channel channel, MessageStatus status, long count) {}
+
+    /** Message counts for the calling client over the last {@code hours}. */
+    public record SummaryView(int hours, long requests, List<ChannelStatusCount> counts) {}
 }

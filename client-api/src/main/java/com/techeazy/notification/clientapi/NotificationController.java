@@ -9,7 +9,10 @@ import com.techeazy.notification.domain.RequestKind;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
+import org.apache.commons.csv.CSVFormat;
+import org.apache.commons.csv.CSVPrinter;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -19,12 +22,15 @@ import org.springframework.web.multipart.MultipartFile;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.UUID;
 
 @RestController
 @RequestMapping("/v1/notifications")
 @Tag(name = "Notifications")
 public class NotificationController {
+
+    private static final int EXPORT_PAGE_SIZE = 200;
 
     private final IngestService ingest;
     private final StatusQueryService status;
@@ -86,22 +92,56 @@ public class NotificationController {
         return status.get(client.id(), requestId);
     }
 
-    @Operation(summary = "List per-recipient messages of a request", description = "Filter by status; paged.")
+    @Operation(summary = "List per-recipient messages of a request",
+            description = "Filter by status and/or recipient (contains, case-insensitive); paged.")
     @GetMapping("/{requestId}/messages")
     public PageView<MessageView> messages(@RequestAttribute(ClientAuthFilter.CLIENT_ATTRIBUTE) AuthenticatedClient client,
                                           @PathVariable UUID requestId,
                                           @RequestParam(required = false) MessageStatus status,
+                                          @RequestParam(required = false) String recipient,
                                           @RequestParam(defaultValue = "0") int page,
                                           @RequestParam(defaultValue = "50") int size) {
-        return this.status.messages(client.id(), requestId, status, page, size);
+        return this.status.messages(client.id(), requestId, status, recipient, page, size);
     }
 
-    @Operation(summary = "List your recent requests")
+    @Operation(summary = "Download a request's recipients as CSV",
+            description = "Optionally only one status, e.g. status=FAILED to get the recipients to re-send to.")
+    @GetMapping(value = "/{requestId}/messages/export", produces = "text/csv")
+    public void export(@RequestAttribute(ClientAuthFilter.CLIENT_ATTRIBUTE) AuthenticatedClient client,
+                       @PathVariable UUID requestId,
+                       @RequestParam(required = false) MessageStatus status,
+                       HttpServletResponse response) throws IOException {
+        this.status.get(client.id(), requestId); // 404 before any bytes are written
+        response.setContentType("text/csv;charset=UTF-8");
+        response.setHeader("Content-Disposition", "attachment; filename=\"request-" + requestId
+                + (status == null ? "" : "-" + status.name().toLowerCase(Locale.ROOT)) + ".csv\"");
+        try (CSVPrinter out = new CSVPrinter(response.getWriter(), CSVFormat.DEFAULT)) {
+            out.printRecord(MessageCsv.HEADER);
+            int page = 0;
+            PageView<MessageView> current;
+            do {
+                current = this.status.messages(client.id(), requestId, status, null, page++, EXPORT_PAGE_SIZE);
+                for (MessageView m : current.items()) out.printRecord(MessageCsv.row(m));
+            } while (page < current.totalPages());
+        }
+    }
+
+    @Operation(summary = "List your recent requests",
+            description = "Newest first. Filter by channel and/or clientReference (contains, case-insensitive).")
     @GetMapping
     public PageView<RequestView> list(@RequestAttribute(ClientAuthFilter.CLIENT_ATTRIBUTE) AuthenticatedClient client,
+                                      @RequestParam(required = false) Channel channel,
+                                      @RequestParam(required = false) String clientReference,
                                       @RequestParam(defaultValue = "0") int page,
                                       @RequestParam(defaultValue = "20") int size) {
-        return status.list(client.id(), page, size);
+        return status.list(client.id(), channel, clientReference, page, size);
+    }
+
+    @Operation(summary = "Message counts per channel and status over the last N hours (default 24, max 720)")
+    @GetMapping("/summary")
+    public SummaryView summary(@RequestAttribute(ClientAuthFilter.CLIENT_ATTRIBUTE) AuthenticatedClient client,
+                               @RequestParam(defaultValue = "24") int hours) {
+        return status.summary(client.id(), hours);
     }
 
     private static ResponseEntity<SubmitResponse> respond(SubmitResponse r) {

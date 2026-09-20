@@ -6,6 +6,7 @@ import com.techeazy.notification.domain.Client;
 import com.techeazy.notification.domain.MessageStatus;
 import com.techeazy.notification.domain.NotificationMessage;
 import com.techeazy.notification.persistence.ClientRepository;
+import com.techeazy.notification.persistence.LikePatterns;
 import com.techeazy.notification.persistence.NotificationMessageRepository;
 import jakarta.persistence.criteria.Predicate;
 import org.springframework.data.domain.PageRequest;
@@ -26,8 +27,6 @@ import java.util.stream.Collectors;
 @RestController
 @RequestMapping("/api/admin/messages")
 class MessagesController {
-
-    private static final char LIKE_ESCAPE = '\\';
 
     record Row(UUID id, UUID requestId, UUID clientId, String clientName, Channel channel, String recipient,
                MessageStatus status, int attempts, String lastError, String providerMessageId, Instant createdAt,
@@ -60,7 +59,7 @@ class MessagesController {
             if (clientId != null) where.add(cb.equal(root.get("clientId"), clientId));
             if (requestId != null) where.add(cb.equal(root.get("requestId"), requestId));
             if (recipient != null && !recipient.isBlank()) {
-                where.add(cb.like(cb.lower(root.get("recipient")), "%" + escapeLike(recipient.trim().toLowerCase()) + "%", LIKE_ESCAPE));
+                where.add(cb.like(cb.lower(root.get("recipient")), LikePatterns.contains(recipient), LikePatterns.ESCAPE));
             }
             return cb.and(where.toArray(new Predicate[0]));
         };
@@ -89,10 +88,5 @@ class MessagesController {
         return new Row(m.getId(), m.getRequestId(), m.getClientId(), clientNames.getOrDefault(m.getClientId(), "unknown"),
                 m.getChannel(), m.getRecipient(), m.getStatus(), m.getAttempts(), m.getLastError(),
                 m.getProviderMessageId(), m.getCreatedAt(), m.getSentAt());
-    }
-
-    /** Recipients may contain % or _ (e.g. plus-addressed emails); treat them literally. */
-    private static String escapeLike(String s) {
-        return s.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_");
     }
 }

@@ -30,6 +30,8 @@ notification:
 
 client-api:
   max-bulk-recipients: ${MAX_BULK_RECIPIENTS:50000}
+  # Browser origins allowed to call the API (the client tracking UI). Comma-separated; empty disables CORS.
+  cors-origins: ${CLIENT_API_CORS_ORIGINS:http://localhost:5174}
 
 management:
   endpoints:
