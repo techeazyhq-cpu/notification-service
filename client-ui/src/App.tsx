@@ -23,6 +23,7 @@ import Overview from './pages/Overview';
 import RequestDetail from './pages/RequestDetail';
 import Templates from './pages/Templates';
 import Playground from './pages/Playground';
+import Privacy from './pages/Privacy';
 import Senders from './pages/Senders';
 import Billing from './pages/Billing';
 import InvoiceView from './pages/InvoiceView';
@@ -87,6 +88,7 @@ export default function App() {
         {me.allowedChannels.includes('EMAIL') && <Link to="/senders">Sender addresses</Link>}
         <Link to="/billing">Billing</Link>
         <Link to="/playground">API playground</Link>
+        <Link to="/privacy">Privacy</Link>
         <p className="muted" style={{ padding: '8px 10px', fontSize: 12 }}>
           Signed in as <b>{me.name}</b><br />Channels: {me.allowedChannels.join(', ')}
         </p>
@@ -99,6 +101,7 @@ export default function App() {
           <Route path="/requests/:requestId" element={<RequestDetail />} />
           <Route path="/templates" element={<Templates />} />
           <Route path="/playground" element={<Playground />} />
+          <Route path="/privacy" element={<Privacy />} />
           <Route path="/senders" element={<Senders />} />
           <Route path="/billing" element={<Billing />} />
           <Route path="/billing/invoices/:invoiceId" element={<InvoiceView />} />

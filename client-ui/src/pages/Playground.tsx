@@ -99,6 +99,7 @@ export default function Playground() {
       return;
     }
     if (selected.live && !window.confirm('This sends real messages through your account and may be billed. Continue?')) return;
+    if (selected.confirm && !window.confirm(selected.confirm)) return;
     setError('');
     setBusy(true);
     const outcome = await execute(selected, url, body, idempotencyKey);

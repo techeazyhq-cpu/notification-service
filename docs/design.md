@@ -228,7 +228,7 @@ PostgreSQL, schema owned by the `db-migration` job (Liquibase changesets in `db-
 
 **Resilience.** Broker down → ingest still returns `202` (rows stay `PENDING`, sweeper catches up). Provider down → circuit breaker (below), then retries with backoff, then failover to the next provider, then `FAILED` with admin re-queue. Worker crash → sweeper reclaims after 5 min. Redis down → limiter fails open. Poison messages → DLQ topic.
 
-**Compliance.** Recipient data is personal data: keep it in one store, add a retention job (delete messages after N days) and per-client erasure before production; document lawful basis and opt-out handling with the calling applications (this service sends what it is asked to). Not legal advice — confirm with your DPO.
+**Compliance.** Recipient data is personal data and is kept in one store. A daily retention job erases the recipient, variables and error text of finished messages after 90 days, deletes the records after 400 days and clears idempotency keys after 7 (all configurable), and a recipient can be erased on request by the client (`POST /v1/privacy/erasure`) or an operator; work in progress is never touched (ADR-009). Backups, provider-side copies and opt-out handling are still open; document the lawful basis with the calling applications (this service sends what it is asked to). Not legal advice — confirm with your DPO.
 
 ## 7. Options considered (summary; detail in the ADR)
 

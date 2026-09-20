@@ -128,6 +128,10 @@ docker compose run --rm -e MIGRATION_ALLOW_ROLLBACK=true db-migrate rollback-tag
 
 Off by default. `VIRTUAL_THREADS_ENABLED=true` turns them on for the Client and Admin APIs, but on Java 21 they were slower and stalled under 500 concurrent clients in our test (thread pinning), so they are not recommended yet. Measurements and when to revisit: ADR-006.
 
+## Data retention and erasure
+
+A daily job (dispatcher) limits how long personal data is kept: recipient, variables and error text of finished messages are erased after `RETENTION_PERSONAL_DATA_DAYS` (90), the message records are deleted after `RETENTION_DELETE_DAYS` (400) and idempotency keys cleared after `RETENTION_IDEMPOTENCY_DAYS` (7); 0 switches a step off; `RETENTION_CRON` (`0 30 2 * * *`) and `RETENTION_ENABLED` control the schedule. Clients erase a recipient with `POST /v1/privacy/erasure` (or the **Privacy** page in the client UI); operators use **Privacy** in the admin UI, for one client or all. Messages still being delivered are never erased and erased messages cannot be retried. See ADR-009.
+
 ## Static analysis
 
 Sonar findings are kept at zero. To reproduce locally with a throwaway SonarQube (`admin`/`admin`, UI on `:9001`):

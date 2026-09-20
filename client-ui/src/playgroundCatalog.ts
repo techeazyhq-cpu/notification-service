@@ -33,6 +33,7 @@ export interface PlaygroundEndpoint {
   idempotency?: boolean;
   upload?: boolean;
   live?: boolean;
+  confirm?: string;
 }
 
 export const CATALOG: PlaygroundEndpoint[] = [
@@ -117,6 +118,15 @@ export const CATALOG: PlaygroundEndpoint[] = [
   {
     id: 'sender-add', group: 'Sender addresses', title: 'Register a sender address', method: 'POST', path: '/v1/senders',
     description: 'Sends a confirmation e-mail to the address.', body: { email: 'orders@example.com', displayName: 'Example Orders' },
+  },
+  {
+    id: 'retention', group: 'Privacy', title: 'Retention policy', method: 'GET', path: '/v1/privacy/retention',
+    description: 'Days after which recipient data is erased and finished message records are deleted.',
+  },
+  {
+    id: 'erasure', group: 'Privacy', title: 'Erase a recipient', method: 'POST', path: '/v1/privacy/erasure',
+    description: 'Erases the address, variables and error text of every finished message you sent to this recipient. Cannot be undone.',
+    body: { recipient: 'ada@example.com' }, confirm: 'This permanently erases the recipient data of matching messages. Continue?',
   },
   {
     id: 'billing-account', group: 'Billing', title: 'Billing account', method: 'GET', path: '/v1/billing/account',
