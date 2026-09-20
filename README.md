@@ -117,6 +117,10 @@ docker compose run --rm -e MIGRATION_ALLOW_ROLLBACK=true db-migrate rollback-tag
 (`validate` will fail). Outside Docker: `java -jar db-migration/target/db-migration-*.jar status` with `DB_URL`,
 `DB_USER`, `DB_PASSWORD` set. Databases previously migrated by Flyway are adopted automatically (see ADR-003).
 
+## Virtual threads
+
+Off by default. `VIRTUAL_THREADS_ENABLED=true` turns them on for the Client and Admin APIs, but on Java 21 they were slower and stalled under 500 concurrent clients in our test (thread pinning), so they are not recommended yet. Measurements and when to revisit: ADR-006.
+
 ## Static analysis
 
 Sonar findings are kept at zero. To reproduce locally with a throwaway SonarQube (`admin`/`admin`, UI on `:9001`):
