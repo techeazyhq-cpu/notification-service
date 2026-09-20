@@ -1,6 +1,7 @@
 package com.techeazy.notification.dispatcher;
 
 import com.techeazy.notification.application.RateLimitService;
+import com.techeazy.notification.application.TemplateRenderer;
 import com.techeazy.notification.dispatcher.provider.ChannelProvider.Outbound;
 import com.techeazy.notification.dispatcher.provider.ChannelProvider.PermanentSendException;
 import com.techeazy.notification.dispatcher.provider.ChannelProvider.SendResult;
@@ -8,7 +9,6 @@ import com.techeazy.notification.dispatcher.provider.ProviderRegistry;
 import com.techeazy.notification.domain.*;
 import com.techeazy.notification.persistence.NotificationMessageRepository;
 import com.techeazy.notification.persistence.NotificationRequestRepository;
-import com.techeazy.notification.persistence.TemplateRepository;
 import com.techeazy.notification.port.RateLimiter.Decision;
 import io.micrometer.core.instrument.MeterRegistry;
 import org.slf4j.Logger;
@@ -45,18 +45,16 @@ public class DispatchService {
 
     private final NotificationMessageRepository messages;
     private final NotificationRequestRepository requests;
-    private final TemplateRepository templates;
     private final RateLimitService rateLimits;
     private final ProviderRegistry providers;
     private final DispatcherProperties props;
     private final MeterRegistry metrics;
 
     public DispatchService(NotificationMessageRepository messages, NotificationRequestRepository requests,
-                           TemplateRepository templates, RateLimitService rateLimits, ProviderRegistry providers,
+                           RateLimitService rateLimits, ProviderRegistry providers,
                            DispatcherProperties props, MeterRegistry metrics) {
         this.messages = messages;
         this.requests = requests;
-        this.templates = templates;
         this.rateLimits = rateLimits;
         this.providers = providers;
         this.props = props;
@@ -121,18 +119,13 @@ public class DispatchService {
     private Outbound render(NotificationMessage m) {
         NotificationRequest req = requests.findById(m.getRequestId())
                 .orElseThrow(() -> new PermanentSendException("Request " + m.getRequestId() + " not found"));
-        String subject = req.getSubject();
-        String body = req.getBody();
-        if (req.getTemplateId() != null) {
-            Template t = templates.findById(req.getTemplateId())
-                    .orElseThrow(() -> new PermanentSendException("Template " + req.getTemplateId() + " no longer exists"));
-            subject = t.getSubject();
-            body = t.getBody();
-        }
+        // The request holds a snapshot of the content taken when it was accepted (from a template or inline), so
+        // editing or deleting a template never changes or breaks a request that is already in flight.
+        if (req.getBody() == null) throw new PermanentSendException("Request " + req.getId() + " has no content");
         Map<String, String> vars = new HashMap<>(m.getVariables());
-        vars.put("recipient", m.getRecipient());
+        vars.put(TemplateRenderer.RECIPIENT, m.getRecipient());
         return new Outbound(m.getId(), m.getChannel(), m.getRecipient(),
-                TemplateRenderer.render(subject, vars), TemplateRenderer.render(body, vars));
+                TemplateRenderer.render(req.getSubject(), vars), TemplateRenderer.render(req.getBody(), vars));
     }
 
     Duration backoff(int attempt) {

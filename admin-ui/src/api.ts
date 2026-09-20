@@ -40,7 +40,8 @@ export async function api<T = unknown>(method: string, path: string, body?: unkn
 }
 
 export interface Client { id: string; name: string; status: 'ACTIVE' | 'DISABLED'; allowedChannels: Channel[]; apiKeyPrefix: string; createdAt: string }
-export interface Template { id: string; name: string; channel: Channel; subject?: string; body: string }
+/** ownerClientId is null for shared templates (managed here); otherwise the template belongs to that client. */
+export interface Template { id: string; ownerClientId?: string; ownerName?: string; name: string; channel: Channel; subject?: string; body: string }
 export interface Provider { id: string; channel: Channel; name: string; type: 'SMTP' | 'HTTP_JSON'; settings: Record<string, string>; enabled: boolean; priority: number }
 export interface RateLimit { id: string; scope: 'CLIENT_API' | 'CLIENT_CHANNEL' | 'GLOBAL_CHANNEL'; clientId?: string; channel?: Channel; ratePerSecond: number; burst: number; enabled: boolean }
 export interface Count { channel: string; status: string; count: number }

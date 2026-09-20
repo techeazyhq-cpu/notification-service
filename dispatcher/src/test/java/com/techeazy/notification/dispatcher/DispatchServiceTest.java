@@ -9,7 +9,6 @@ import com.techeazy.notification.dispatcher.provider.ProviderRegistry;
 import com.techeazy.notification.domain.*;
 import com.techeazy.notification.persistence.NotificationMessageRepository;
 import com.techeazy.notification.persistence.NotificationRequestRepository;
-import com.techeazy.notification.persistence.TemplateRepository;
 import com.techeazy.notification.port.RateLimiter.Decision;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.BeforeEach;
@@ -28,7 +27,6 @@ class DispatchServiceTest {
 
     NotificationMessageRepository messages = mock(NotificationMessageRepository.class);
     NotificationRequestRepository requests = mock(NotificationRequestRepository.class);
-    TemplateRepository templates = mock(TemplateRepository.class);
     RateLimitService rateLimits = mock(RateLimitService.class);
     ProviderRegistry providers = mock(ProviderRegistry.class);
     DispatcherProperties props = new DispatcherProperties();
@@ -41,7 +39,7 @@ class DispatchServiceTest {
     void setUp() {
         props.setMaxAttempts(3);
         props.setBaseBackoffSeconds(5);
-        service = new DispatchService(messages, requests, templates, rateLimits, providers, props, new SimpleMeterRegistry());
+        service = new DispatchService(messages, requests, rateLimits, providers, props, new SimpleMeterRegistry());
 
         message = new NotificationMessage();
         message.setId(id);

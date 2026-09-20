@@ -29,6 +29,7 @@ export default function Templates() {
   return (
     <>
       <h1>Templates</h1>
+      <p className="muted">Shared templates are managed here and visible to every client. Clients create their own templates in the client tracker; those are listed for support and are read-only here.</p>
       <form className="card" onSubmit={save}>
         <div className="row">
           <label>Name<input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required /></label>
@@ -51,16 +52,25 @@ export default function Templates() {
       {error && <p className="error">{error}</p>}
       <div className="card">
         <table>
-          <thead><tr><th>Name</th><th>Channel</th><th>Subject</th><th>Body</th><th></th></tr></thead>
+          <thead><tr><th>Name</th><th>Owner</th><th>Channel</th><th>Subject</th><th>Body</th><th></th></tr></thead>
           <tbody>
             {data?.map((t) => (
               <tr key={t.id}>
-                <td>{t.name}</td><td>{t.channel}</td><td>{t.subject}</td>
+                <td>{t.name}</td>
+                <td><span className={t.ownerClientId ? 'badge' : 'badge ACTIVE'}>{t.ownerClientId ? (t.ownerName ?? 'client') : 'Shared'}</span></td>
+                <td>{t.channel}</td><td>{t.subject}</td>
                 <td className="mono">{t.body.length > 80 ? t.body.slice(0, 80) + '…' : t.body}</td>
-                <td><button type="button" onClick={() => edit(t)}>Edit</button> <button type="button" className="danger" onClick={() => remove(t)}>Delete</button></td>
+                <td>
+                  {t.ownerClientId ? <span className="muted">read-only</span> : (
+                    <>
+                      <button type="button" onClick={() => edit(t)}>Edit</button>{' '}
+                      <button type="button" className="danger" onClick={() => remove(t)}>Delete</button>
+                    </>
+                  )}
+                </td>
               </tr>
             ))}
-            {data?.length === 0 && <tr><td colSpan={5} className="muted">No templates yet.</td></tr>}
+            {data?.length === 0 && <tr><td colSpan={6} className="muted">No templates yet.</td></tr>}
           </tbody>
         </table>
       </div>

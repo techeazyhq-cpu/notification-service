@@ -67,15 +67,27 @@ class ProviderRegistryTest {
         registry = new ProviderRegistry(List.of(primary, backup), repo, breakers, new DispatcherProperties());
     }
 
+    /**
+     * Most tests assert the OPEN state, so the open period is far longer than any test can take (a short one made them
+     * flaky when the machine was busy). Only the recovery tests opt in to a short wait via {@link #shortOpenWait()}.
+     */
     @BeforeEach
     void setUp() {
-        breakers = CircuitBreakerRegistry.of(CircuitBreakerConfig.custom()
+        breakers = registry(Duration.ofMinutes(5));
+        primary.behaviour = () -> { throw new TransientSendException("gateway down"); };
+    }
+
+    private static CircuitBreakerRegistry registry(Duration openWait) {
+        return CircuitBreakerRegistry.of(CircuitBreakerConfig.custom()
                 .slidingWindowSize(4).minimumNumberOfCalls(4).failureRateThreshold(50)
-                .waitDurationInOpenState(Duration.ofMillis(200)).permittedNumberOfCallsInHalfOpenState(2)
+                .waitDurationInOpenState(openWait).permittedNumberOfCallsInHalfOpenState(2)
                 .automaticTransitionFromOpenToHalfOpenEnabled(true)
                 .recordExceptions(TransientSendException.class).ignoreExceptions(PermanentSendException.class)
                 .build());
-        primary.behaviour = () -> { throw new TransientSendException("gateway down"); };
+    }
+
+    private void shortOpenWait() {
+        breakers = registry(Duration.ofMillis(200));
     }
 
     private void failTimes(int n) {
@@ -122,6 +134,7 @@ class ProviderRegistryTest {
 
     @Test
     void recoversThroughHalfOpenWhenTheProviderComesBack() {
+        shortOpenWait();
         withProviders(config("sms-primary", ProviderType.HTTP_JSON, 10));
         failTimes(4);
         assertThat(registry.isAvailable(Channel.SMS)).isFalse();
@@ -136,6 +149,7 @@ class ProviderRegistryTest {
 
     @Test
     void aFailedProbeReopensTheCircuit() {
+        shortOpenWait();
         withProviders(config("sms-primary", ProviderType.HTTP_JSON, 10));
         failTimes(4);
 

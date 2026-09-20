@@ -26,7 +26,7 @@ class CorsConfig {
         List<String> allowed = origins.stream().filter(o -> !o.isBlank()).toList();
         if (!allowed.isEmpty()) {
             config.setAllowedOrigins(allowed);
-            config.setAllowedMethods(List.of("GET", "POST", "OPTIONS"));
+            config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
             config.setAllowedHeaders(List.of("X-API-Key", "Content-Type", "Idempotency-Key"));
             config.setExposedHeaders(List.of("Retry-After", "Content-Disposition", "Location"));
             config.setMaxAge(3600L);
