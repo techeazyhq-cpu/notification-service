@@ -128,9 +128,15 @@ docker compose run --rm -e MIGRATION_ALLOW_ROLLBACK=true db-migrate rollback-tag
 
 Off by default. `VIRTUAL_THREADS_ENABLED=true` turns them on for the Client and Admin APIs, but on Java 21 they were slower and stalled under 500 concurrent clients in our test (thread pinning), so they are not recommended yet. Measurements and when to revisit: ADR-006.
 
-## Data retention and erasure
+## Continuous integration
 
-A daily job (dispatcher) limits how long personal data is kept: recipient, variables and error text of finished messages are erased after `RETENTION_PERSONAL_DATA_DAYS` (90), the message records are deleted after `RETENTION_DELETE_DAYS` (400) and idempotency keys cleared after `RETENTION_IDEMPOTENCY_DAYS` (7); 0 switches a step off; `RETENTION_CRON` (`0 30 2 * * *`) and `RETENTION_ENABLED` control the schedule. Clients erase a recipient with `POST /v1/privacy/erasure` (or the **Privacy** page in the client UI); operators use **Privacy** in the admin UI, for one client or all. Messages still being delivered are never erased and erased messages cannot be retried. See ADR-009.
+GitHub Actions run on every pull request and on `main` (`.github/workflows`):
+
+- **CI:** `mvn verify` (unit tests and the PostgreSQL integration tests), UI build and tests plus `npm audit`, and a build and vulnerability scan (Trivy, critical) of all six Docker images.
+- **Security:** repository scan for vulnerable dependencies, committed secrets and misconfiguration (high and critical), CodeQL for Java and TypeScript, and a weekly re-run.
+- **Dependabot** opens weekly update pull requests for Maven, npm, Docker and the workflows themselves.
+
+Make the **CI** and **Security** checks required in the branch protection rules of `main` so nothing merges while they are red.
 
 ## Static analysis
 
