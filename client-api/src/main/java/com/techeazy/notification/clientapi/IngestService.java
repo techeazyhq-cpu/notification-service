@@ -59,10 +59,12 @@ public class IngestService {
     private final OutboxPublisher outbox;
     private final StatusQueryService status;
     private final AdmissionControl admission;
+    private final SenderService senders;
     private final int maxBulkRecipients;
 
     public IngestService(TemplateRepository templates, NotificationRequestRepository requests, IngestPersister persister,
                          OutboxPublisher outbox, StatusQueryService status, AdmissionControl admission,
+                         SenderService senders,
                          @Value("${client-api.max-bulk-recipients:50000}") int maxBulkRecipients) {
         this.templates = templates;
         this.requests = requests;
@@ -70,6 +72,7 @@ public class IngestService {
         this.outbox = outbox;
         this.status = status;
         this.admission = admission;
+        this.senders = senders;
         this.maxBulkRecipients = maxBulkRecipients;
     }
 
@@ -77,9 +80,15 @@ public class IngestService {
         return maxBulkRecipients;
     }
 
-    /** Everything a caller supplies for one submission; {@code idempotencyKey} and content fields may be null. */
+    /** Everything a caller supplies for one submission; {@code idempotencyKey}, {@code from} and content fields may be null. */
     public record SubmitCommand(RequestKind kind, Channel channel, String templateName, String subject, String body,
-                                List<Recipient> recipients, String clientReference, String idempotencyKey) {}
+                                List<Recipient> recipients, String clientReference, String idempotencyKey, String from) {
+
+        public SubmitCommand(RequestKind kind, Channel channel, String templateName, String subject, String body,
+                             List<Recipient> recipients, String clientReference, String idempotencyKey) {
+            this(kind, channel, templateName, subject, body, recipients, clientReference, idempotencyKey, null);
+        }
+    }
 
     public SubmitResponse submit(AuthenticatedClient client, SubmitCommand cmd) {
         requireChannelAllowed(client, cmd.channel());
@@ -87,6 +96,7 @@ public class IngestService {
         Content content = resolveContent(client, cmd.channel(), cmd.templateName(), cmd.subject(), cmd.body());
         validateRecipients(cmd.channel(), cmd.recipients());
         validateVariables(content, cmd.recipients());
+        Optional<SenderAddress> sender = senders.resolve(client, cmd.channel(), cmd.from());
 
         Optional<NotificationRequest> duplicate = findByIdempotencyKey(client, cmd.idempotencyKey());
         if (duplicate.isPresent()) {
@@ -94,6 +104,10 @@ public class IngestService {
         }
 
         NotificationRequest request = newRequest(client, cmd, content);
+        sender.ifPresent(s -> {
+            request.setSenderEmail(s.email());
+            request.setSenderName(s.displayName());
+        });
         List<NotificationMessage> messages;
         try {
             messages = persister.persist(request, cmd.recipients(), () -> admit(client, cmd, request));

@@ -136,3 +136,8 @@ export interface LedgerEntry { id: string; type: 'TOP_UP' | 'HOLD' | 'SETTLEMENT
 export interface LedgerPage { currency: string; items: LedgerEntry[]; total: number; page: number; size: number }
 
 export const money = (amount: string, currency: string) => `${amount} ${currency}`;
+
+export interface SenderAddress {
+  id: string; email: string; displayName?: string; status: 'PENDING' | 'VERIFIED'; isDefault: boolean;
+  createdAt: string; verifiedAt?: string; verificationSentAt?: string;
+}

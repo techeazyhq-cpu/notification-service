@@ -143,7 +143,8 @@ public class DispatchService {
         Map<String, String> vars = new HashMap<>(m.getVariables());
         vars.put(TemplateRenderer.RECIPIENT, m.getRecipient());
         return new Outbound(m.getId(), m.getChannel(), m.getRecipient(),
-                TemplateRenderer.render(req.getSubject(), vars), TemplateRenderer.render(req.getBody(), vars));
+                TemplateRenderer.render(req.getSubject(), vars), TemplateRenderer.render(req.getBody(), vars),
+                req.getSenderEmail(), req.getSenderName());
     }
 
     Duration backoff(int attempt) {

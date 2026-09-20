@@ -22,6 +22,7 @@ import { api, Me, session } from './api';
 import Overview from './pages/Overview';
 import RequestDetail from './pages/RequestDetail';
 import Templates from './pages/Templates';
+import Senders from './pages/Senders';
 import Billing from './pages/Billing';
 import InvoiceView from './pages/InvoiceView';
 
@@ -82,6 +83,7 @@ export default function App() {
         <h2>Notification Tracker</h2>
         <Link to="/requests">Requests</Link>
         <Link to="/templates">Templates</Link>
+        {me.allowedChannels.includes('EMAIL') && <Link to="/senders">Sender addresses</Link>}
         <Link to="/billing">Billing</Link>
         <p className="muted" style={{ padding: '8px 10px', fontSize: 12 }}>
           Signed in as <b>{me.name}</b><br />Channels: {me.allowedChannels.join(', ')}
@@ -94,6 +96,7 @@ export default function App() {
           <Route path="/requests" element={<Overview />} />
           <Route path="/requests/:requestId" element={<RequestDetail />} />
           <Route path="/templates" element={<Templates />} />
+          <Route path="/senders" element={<Senders />} />
           <Route path="/billing" element={<Billing />} />
           <Route path="/billing/invoices/:invoiceId" element={<InvoiceView />} />
           <Route path="*" element={<Navigate to="/requests" replace />} />

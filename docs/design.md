@@ -181,6 +181,10 @@ Rules: names are 2-64 characters (letters, digits, `.` `-` `_`) and unique per o
 
 **Content snapshot.** When a request is accepted, the template's subject and body are copied onto the request and the dispatcher renders from that copy (`template_id` remains as a reference only, and becomes `NULL` if the template is deleted). Editing or deleting a template therefore can never change or break a bulk that is already queued, or rewrite history. Verified with a 2,000-recipient bulk whose template was edited and then deleted while 1,960 messages were still queued: all 2,000 went out with the original text. See ADR-002. The admin UI lists every template with its owner for support, but only shared ones can be changed there.
 
+### 4.4 E-mail sender addresses
+
+Clients can send e-mail from their own address. `POST /v1/senders` registers one and mails a confirmation link to it (single use, 24 hours); `GET /v1/senders`, `POST /v1/senders/{id}/resend`, `PUT /v1/senders/{id}/default` and `DELETE /v1/senders/{id}` manage them; `GET /v1/senders/verify?token=...` is the link and needs no API key. A request may carry `from` (EMAIL only, must be a verified address of the caller, else `422 SENDER_NOT_VERIFIED`); without it the client's default is used, else the provider's own address. The choice is copied onto the request at accept time. Deliverability depends on the client's SPF/DKIM allowing the platform. See ADR-007.
+
 ### 4.3 Billing
 
 Clients are billed per message that reaches `SENT`. Each client has at most one billing account: a **plan** (per-channel unit price and monthly free allowance, monthly platform fee, tax rate, one currency) and a **mode**. No account means not billed. Decisions and trade-offs are in ADR-004.

@@ -20,6 +20,7 @@ package com.techeazy.notification.dispatcher.provider;
 
 import com.techeazy.notification.domain.ProviderConfig;
 import com.techeazy.notification.domain.ProviderType;
+import com.techeazy.notification.infra.SmtpSenderFactory;
 import jakarta.mail.internet.AddressException;
 import jakarta.mail.internet.MimeMessage;
 import org.springframework.mail.MailParseException;
@@ -28,7 +29,6 @@ import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.stereotype.Component;
 
 import java.util.Map;
-import java.util.Properties;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -62,16 +62,26 @@ public class SmtpProvider implements ChannelProvider {
             JavaMailSenderImpl sender = senders.computeIfAbsent(new Key(config.getId(), config.getUpdatedAt()), k -> build(s));
             MimeMessage mime = sender.createMimeMessage();
             MimeMessageHelper helper = new MimeMessageHelper(mime, "UTF-8");
-            helper.setFrom(from);
+            applySender(helper, from, message);
             helper.setTo(message.recipient());
             helper.setSubject(message.subject() == null ? "" : message.subject());
             helper.setText(message.body(), Boolean.parseBoolean(s.getOrDefault(HTML, "false")));
             sender.send(mime);
             return new SendResult(mime.getMessageID());
-        } catch (MailParseException e) {
+        } catch (MailParseException | java.io.UnsupportedEncodingException e) {
             throw new PermanentSendException("Invalid email: " + e.getMessage(), e);
         } catch (jakarta.mail.MessagingException | org.springframework.mail.MailException e) {
             throw fail(e);
+        }
+    }
+
+    private static void applySender(MimeMessageHelper helper, String defaultFrom, Outbound message) throws jakarta.mail.MessagingException, java.io.UnsupportedEncodingException {
+        if (message.fromAddress() == null || message.fromAddress().isBlank()) {
+            helper.setFrom(defaultFrom);
+        } else if (message.fromName() == null || message.fromName().isBlank()) {
+            helper.setFrom(message.fromAddress());
+        } else {
+            helper.setFrom(message.fromAddress(), message.fromName());
         }
     }
 
@@ -88,21 +98,8 @@ public class SmtpProvider implements ChannelProvider {
     }
 
     private static JavaMailSenderImpl build(Map<String, String> s) {
-        JavaMailSenderImpl sender = new JavaMailSenderImpl();
-        sender.setHost(require(s, HOST));
-        sender.setPort(Integer.parseInt(s.getOrDefault(PORT, "25")));
-        Properties p = sender.getJavaMailProperties();
-        p.put("mail.smtp.connectiontimeout", "5000");
-        p.put("mail.smtp.timeout", "10000");
-        p.put("mail.smtp.writetimeout", "10000");
-        String username = s.get(USERNAME);
-        if (username != null && !username.isBlank()) {
-            sender.setUsername(username);
-            sender.setPassword(s.get(PASSWORD));
-            p.put("mail.smtp.auth", "true");
-        }
-        if (Boolean.parseBoolean(s.getOrDefault(STARTTLS, "false"))) p.put("mail.smtp.starttls.enable", "true");
-        return sender;
+        require(s, HOST);
+        return SmtpSenderFactory.build(s);
     }
 
     private static String require(Map<String, String> s, String key) {

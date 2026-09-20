@@ -56,7 +56,8 @@ class IngestServiceTest {
     OutboxPublisher outbox = mock(OutboxPublisher.class);
     StatusQueryService status = mock(StatusQueryService.class);
     AdmissionControl admission = mock(AdmissionControl.class);
-    IngestService service =new IngestService(templates, requests, persister, outbox, status, admission, 100);
+    SenderService senders = mock(SenderService.class);
+    IngestService service =new IngestService(templates, requests, persister, outbox, status, admission, senders, 100);
 
     AuthenticatedClient me = new AuthenticatedClient(UUID.randomUUID(), "acme", Set.of(Channel.SMS, Channel.EMAIL));
 
@@ -240,5 +241,42 @@ class IngestServiceTest {
         assertThatThrownBy(() -> service.submit(smsOnly, new SubmitCommand(RequestKind.SINGLE, Channel.PUSH, null, null,
                 "hi", List.of(to("token", Map.of())), null, null)))
                 .isInstanceOfSatisfying(ApiException.class, e -> assertThat(e.status()).isEqualTo(HttpStatus.FORBIDDEN));
+    }
+
+    @Test
+    void theResolvedSenderIsCopiedOntoTheRequest() {
+        SenderAddress sender = new SenderAddress(UUID.randomUUID(), me.id(), "orders@acme.com", "Acme Orders",
+                SenderAddress.Status.VERIFIED, true, java.time.Instant.now(), java.time.Instant.now(), null);
+        when(senders.resolve(me, Channel.EMAIL, "orders@acme.com")).thenReturn(Optional.of(sender));
+        var captured = org.mockito.ArgumentCaptor.forClass(NotificationRequest.class);
+        when(persister.persist(captured.capture(), any(), any())).thenReturn(List.of());
+
+        service.submit(me, new SubmitCommand(RequestKind.SINGLE, Channel.EMAIL, null, "Hi", "hello",
+                List.of(to("bob@example.com", Map.of())), null, null, "orders@acme.com"));
+
+        assertThat(captured.getValue().getSenderEmail()).isEqualTo("orders@acme.com");
+        assertThat(captured.getValue().getSenderName()).isEqualTo("Acme Orders");
+    }
+
+    @Test
+    void withoutASenderTheRequestKeepsThePlatformDefault() {
+        var captured = org.mockito.ArgumentCaptor.forClass(NotificationRequest.class);
+        when(persister.persist(captured.capture(), any(), any())).thenReturn(List.of());
+
+        service.submit(me, new SubmitCommand(RequestKind.SINGLE, Channel.EMAIL, null, "Hi", "hello",
+                List.of(to("bob@example.com", Map.of())), null, null));
+
+        assertThat(captured.getValue().getSenderEmail()).isNull();
+    }
+
+    @Test
+    void anUnverifiedSenderRefusesTheRequestBeforeAnythingIsStored() {
+        when(senders.resolve(me, Channel.EMAIL, "spoof@other.com")).thenThrow(new ApiException(HttpStatus.UNPROCESSABLE_ENTITY, "SENDER_NOT_VERIFIED", "no"));
+
+        assertThatThrownBy(() -> service.submit(me, new SubmitCommand(RequestKind.SINGLE, Channel.EMAIL, null, "Hi", "hello",
+                List.of(to("bob@example.com", Map.of())), null, null, "spoof@other.com")))
+                .isInstanceOfSatisfying(ApiException.class, e -> assertThat(e.code()).isEqualTo("SENDER_NOT_VERIFIED"));
+
+        verifyNoInteractions(persister, outbox, admission);
     }
 }
