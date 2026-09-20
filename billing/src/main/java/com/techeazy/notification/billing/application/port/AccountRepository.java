@@ -28,10 +28,11 @@ import java.util.UUID;
  * Stores billing accounts. Saving never writes the credit balance: it is changed only through
  * {@link CreditStore}, whose operations are atomic, so a concurrent edit of the account cannot overwrite it.
  */
-public interface AccountRepository {
+public interface AccountRepository extends AccountLookup {
 
     BillingAccount save(BillingAccount account);
 
+    @Override
     Optional<BillingAccount> findByClientId(UUID clientId);
 
     List<BillingAccount> findAll();

@@ -41,7 +41,7 @@ import static org.mockito.Mockito.*;
 class ClientTemplateServiceTest {
 
     TemplateRepository repo = mock(TemplateRepository.class);
-    ClientTemplateService service = new ClientTemplateService(repo, 2);
+    ClientTemplateService service = new ClientTemplateService(repo, new TemplateCache(repo, 0), 2);
     AuthenticatedClient me = new AuthenticatedClient(UUID.randomUUID(), "acme", Set.of(Channel.EMAIL, Channel.SMS));
 
     @BeforeEach

@@ -23,6 +23,8 @@ spring:
     url: ${DB_URL:jdbc:postgresql://localhost:5432/notification}
     username: ${DB_USER:notification}
     password: ${DB_PASSWORD:notification}
+    hikari:
+      maximum-pool-size: ${DB_POOL_SIZE:20}
   jpa:
     open-in-view: false
     hibernate:
@@ -47,6 +49,7 @@ notification:
 
 client-api:
   max-bulk-recipients: ${MAX_BULK_RECIPIENTS:50000}
+  template-cache-seconds: ${TEMPLATE_CACHE_SECONDS:5}
   max-senders-per-client: ${MAX_SENDERS_PER_CLIENT:10}
   public-base-url: ${CLIENT_API_PUBLIC_BASE_URL:http://localhost:8080}
   # Browser origins allowed to call the API (the client tracking UI). Comma-separated; empty disables CORS.

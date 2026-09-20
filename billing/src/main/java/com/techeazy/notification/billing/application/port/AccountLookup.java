@@ -18,20 +18,13 @@
 
 package com.techeazy.notification.billing.application.port;
 
-import com.techeazy.notification.billing.domain.Plan;
+import com.techeazy.notification.billing.domain.BillingAccount;
 
-import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
-public interface PlanRepository extends PlanLookup {
+/** Read-only access to a client's billing account; the only part of the account store the send path needs. */
+public interface AccountLookup {
 
-    Plan save(Plan plan);
-
-    @Override
-    Optional<Plan> findById(UUID id);
-
-    Optional<Plan> findByName(String name);
-
-    List<Plan> findAll();
+    Optional<BillingAccount> findByClientId(UUID clientId);
 }

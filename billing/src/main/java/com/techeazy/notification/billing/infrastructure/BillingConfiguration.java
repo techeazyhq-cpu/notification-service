@@ -25,13 +25,16 @@ import com.techeazy.notification.billing.application.HoldSettlement;
 import com.techeazy.notification.billing.application.InvoiceService;
 import com.techeazy.notification.billing.application.PlanCatalog;
 import com.techeazy.notification.billing.application.UsageService;
+import com.techeazy.notification.billing.application.port.AccountLookup;
 import com.techeazy.notification.billing.application.port.AccountRepository;
 import com.techeazy.notification.billing.application.port.CreditStore;
 import com.techeazy.notification.billing.application.port.InvoiceRepository;
+import com.techeazy.notification.billing.application.port.PlanLookup;
 import com.techeazy.notification.billing.application.port.PlanRepository;
 import com.techeazy.notification.billing.application.port.Transactions;
 import com.techeazy.notification.billing.application.port.UsageReader;
 import com.techeazy.notification.billing.domain.InvoiceCalculator;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
@@ -41,6 +44,7 @@ import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import java.time.Clock;
+import java.time.Duration;
 
 /** The only place billing is wired to Spring: adapters are built here and injected into the framework-free use cases. */
 @Configuration
@@ -106,8 +110,12 @@ public class BillingConfiguration {
 
     @Bean
     AdmissionControl admissionControl(AccountRepository accounts, PlanRepository plans, CreditStore credits,
-                                      UsageReader usage, InvoiceCalculator calculator, Clock clock) {
-        return new AdmissionControl(accounts, plans, credits, usage, calculator, clock);
+                                      UsageReader usage, InvoiceCalculator calculator, Clock clock,
+                                      @Value("${billing.admission-cache-seconds:5}") long cacheSeconds) {
+        Duration ttl = Duration.ofSeconds(Math.max(cacheSeconds, 1));
+        AccountLookup accountLookup = cacheSeconds > 0 ? CachedLookups.accounts(accounts, ttl) : accounts;
+        PlanLookup planLookup = cacheSeconds > 0 ? CachedLookups.plans(plans, ttl) : plans;
+        return new AdmissionControl(accountLookup, planLookup, credits, usage, calculator, clock);
     }
 
     @Bean

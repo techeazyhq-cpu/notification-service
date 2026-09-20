@@ -46,11 +46,13 @@ public class ClientTemplateService {
     private static final String PREVIEW_RECIPIENT = "recipient@example.com";
 
     private final TemplateRepository templates;
+    private final TemplateCache cache;
     private final int maxPerClient;
 
-    public ClientTemplateService(TemplateRepository templates,
+    public ClientTemplateService(TemplateRepository templates, TemplateCache cache,
                                  @Value("${client-api.max-templates-per-client:200}") int maxPerClient) {
         this.templates = templates;
+        this.cache = cache;
         this.maxPerClient = maxPerClient;
     }
 
@@ -78,7 +80,9 @@ public class ClientTemplateService {
         t.setCreatedAt(Instant.now());
         apply(t, in);
         try {
-            return view(templates.saveAndFlush(t), client);
+            TemplateView created = view(templates.saveAndFlush(t), client);
+            cache.invalidateAfterCommit(client.id());
+            return created;
         } catch (DataIntegrityViolationException e) { // lost a race with a concurrent create of the same name
             throw nameTaken(in.name());
         }
@@ -93,12 +97,14 @@ public class ClientTemplateService {
         }
         if (!in.name().equals(t.getName())) requireNameAvailable(client, in.name());
         apply(t, in);
+        cache.invalidateAfterCommit(client.id());
         return view(t, client);
     }
 
     @Transactional
     public void delete(AuthenticatedClient client, UUID id) {
         templates.delete(owned(client, id)); // requests keep their content snapshot; template_id is set to NULL
+        cache.invalidateAfterCommit(client.id());
     }
 
     /** Renders with the supplied values and leaves unresolved placeholders visible; nothing is stored or sent. */

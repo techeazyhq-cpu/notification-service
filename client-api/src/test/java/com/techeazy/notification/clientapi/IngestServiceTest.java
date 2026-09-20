@@ -57,7 +57,7 @@ class IngestServiceTest {
     StatusQueryService status = mock(StatusQueryService.class);
     AdmissionControl admission = mock(AdmissionControl.class);
     SenderService senders = mock(SenderService.class);
-    IngestService service =new IngestService(templates, requests, persister, outbox, status, admission, senders, 100);
+    IngestService service =new IngestService(new TemplateCache(templates, 0), requests, persister, outbox, status, admission, senders, new io.micrometer.core.instrument.simple.SimpleMeterRegistry(), 100);
 
     AuthenticatedClient me = new AuthenticatedClient(UUID.randomUUID(), "acme", Set.of(Channel.SMS, Channel.EMAIL));
 

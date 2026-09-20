@@ -121,6 +121,10 @@ docker compose run --rm -e MIGRATION_ALLOW_ROLLBACK=true db-migrate rollback-tag
 (`validate` will fail). Outside Docker: `java -jar db-migration/target/db-migration-*.jar status` with `DB_URL`,
 `DB_USER`, `DB_PASSWORD` set. Databases previously migrated by Flyway are adopted automatically (see ADR-003).
 
+## Ingest performance settings
+
+`TEMPLATE_CACHE_SECONDS` (5) and `billing.admission-cache-seconds` (5) trade a few seconds of staleness for fewer database reads; `DB_POOL_SIZE` (20) sizes the client API connection pool; `notification.queued-flush-ms` (50) is how often published messages are marked QUEUED. Per-stage latency is in `/actuator/prometheus` as `notification_ingest_stage_seconds`. Measurements and trade-offs: ADR-008.
+
 ## Static analysis
 
 Sonar findings are kept at zero. To reproduce locally with a throwaway SonarQube (`admin`/`admin`, UI on `:9001`):
