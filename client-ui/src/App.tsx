@@ -3,6 +3,7 @@ import { Link, Navigate, Route, Routes } from 'react-router-dom';
 import { api, Me, session } from './api';
 import Overview from './pages/Overview';
 import RequestDetail from './pages/RequestDetail';
+import Templates from './pages/Templates';
 
 function Login({ onDone }: Readonly<{ onDone: () => void }>) {
   const [apiKey, setApiKey] = useState('');
@@ -60,6 +61,7 @@ export default function App() {
       <nav>
         <h2>Notification Tracker</h2>
         <Link to="/requests">Requests</Link>
+        <Link to="/templates">Templates</Link>
         <p className="muted" style={{ padding: '8px 10px', fontSize: 12 }}>
           Signed in as <b>{me.name}</b><br />Channels: {me.allowedChannels.join(', ')}
         </p>
@@ -70,6 +72,7 @@ export default function App() {
           <Route path="/" element={<Navigate to="/requests" replace />} />
           <Route path="/requests" element={<Overview />} />
           <Route path="/requests/:requestId" element={<RequestDetail />} />
+          <Route path="/templates" element={<Templates />} />
           <Route path="*" element={<Navigate to="/requests" replace />} />
         </Routes>
       </main>

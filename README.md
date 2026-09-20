@@ -3,12 +3,12 @@
 Generic multi-channel notification platform: **Email, SMS, WhatsApp, App Push**, built on **Apache Pulsar**.
 
 - **Client API** (`:8080`): REST for single and bulk sends (JSON body or CSV upload) and request/message status queries. Swagger UI at `/swagger-ui.html`.
-- **Client UI** (`:5174`): sign in with a client API key to follow your requests: summary, per-request progress with live updates, per-recipient outcomes, search, CSV export of failed recipients.
+- **Client UI** (`:5174`): sign in with a client API key to follow your requests: summary, per-request progress with live updates, per-recipient outcomes, search, CSV export of failed recipients, and your own message templates (create, edit, preview).
 - **Admin API** (`:8081`) + **Admin UI** (`:5173`): clients and API keys, templates, providers, rate limits, dashboard, failed-message retry.
 - **Dispatcher** (`:8082`): Pulsar consumers that rate-limit, render, send, retry and fail over between providers.
 - Local catchers: **Mailpit** (email, UI `:8025`) and a small **catcher** for SMS/WhatsApp/Push (UI `:9000`).
 
-Design: [docs/design.md](docs/design.md) · Decision: [docs/adr-001-modular-monolith-pulsar-outbox.md](docs/adr-001-modular-monolith-pulsar-outbox.md)
+Design: [docs/design.md](docs/design.md) · Decisions: [ADR-001](docs/adr-001-modular-monolith-pulsar-outbox.md), [ADR-002](docs/adr-002-client-owned-templates-content-snapshot.md)
 
 ## Run it
 
@@ -52,6 +52,12 @@ curl -X POST localhost:8080/v1/notifications/bulk -H "X-API-Key: $KEY" -H "Conte
 curl -X POST localhost:8080/v1/notifications/bulk/upload -H "X-API-Key: $KEY" \
   -F channel=WHATSAPP -F templateName=order-whatsapp -F file=@recipients.csv
 
+# your own template, then send with it (your template wins over a shared one of the same name)
+curl -X POST localhost:8080/v1/templates -H "X-API-Key: $KEY" -H "Content-Type: application/json" \
+  -d '{"name":"promo-sms","channel":"SMS","body":"Hi {{name}}, use code {{code}}"}'
+curl -X POST localhost:8080/v1/notifications -H "X-API-Key: $KEY" -H "Content-Type: application/json" \
+  -d '{"channel":"SMS","recipient":"+14155550123","templateName":"promo-sms","variables":{"name":"Ann","code":"X1"}}'
+
 # status
 curl localhost:8080/v1/notifications/<requestId> -H "X-API-Key: $KEY"
 curl "localhost:8080/v1/notifications/<requestId>/messages?status=FAILED" -H "X-API-Key: $KEY"
@@ -71,9 +77,9 @@ Circuit breaker drill (SMS): `curl -X POST "localhost:9000/admin/fail?status=503
 | `notification-core` | Domain entities, Flyway schema, repositories, Pulsar publisher, Redis rate limiter, outbox sweeper |
 | `client-api` / `admin-api` / `dispatcher` | The three Spring Boot deployables |
 | `admin-ui` | React + Vite admin SPA |
-| `client-ui` | React + Vite tracking SPA for API clients (read-only) |
+| `client-ui` | React + Vite SPA for API clients: track requests, manage their own templates |
 | `tools/catcher` | SMS/WhatsApp/Push gateway stand-in |
-| `docs` | Design, ADR, draw.io container diagram |
+| `docs` | Design, ADRs, draw.io container diagram |
 
 ## Static analysis
 

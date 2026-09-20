@@ -154,7 +154,8 @@ OpenAPI is served at `/v3/api-docs`, Swagger UI at `/swagger-ui.html`. All calls
 | GET | `/v1/notifications?page=&size=` | The client's recent requests |
 
 - Send an `Idempotency-Key` header to make retries safe (per client; a replay returns `200` with the original `requestId`).
-- Content is either `templateName` or inline `body` (+ `subject` for email). Strict template rendering: a missing variable fails that message permanently.
+- Content is either `templateName` or inline `body` (+ `subject` for email). A variable the content uses but a recipient does not supply rejects the **whole request** with `400` (naming the first offenders) before anything is stored; `{{recipient}}` is built in.
+- `templateName` resolves to the client's own template first, then a shared one. The content is copied onto the request when it is accepted (see 4.2).
 - Errors: `{ "code": "...", "message": "..." }` with `400`, `401`, `403`, `413`, `429`, `500`.
 
 Example:
@@ -164,6 +165,21 @@ curl -X POST localhost:8080/v1/notifications \
   -H "X-API-Key: $KEY" -H "Idempotency-Key: order-42-shipped" -H "Content-Type: application/json" \
   -d '{"channel":"SMS","recipient":"+14155550123","templateName":"otp-sms","variables":{"code":"481516"}}'
 ```
+
+### 4.2 Templates: shared and client-owned
+
+Different purposes need different content, so clients manage their own templates instead of asking an administrator. A template is either **shared** (no owner: created by admins, visible to every client, read-only for them) or **owned** by exactly one client.
+
+| Method | Path | Purpose |
+|---|---|---|
+| GET | `/v1/templates` | Own templates (editable) plus shared ones (`readOnly: true`), each with the variables it needs |
+| GET / POST | `/v1/templates[/{id}]` | Read one, create one |
+| PUT / DELETE | `/v1/templates/{id}` | Edit or delete an **own** template (shared: `403`; another client's: `404`) |
+| POST | `/v1/templates/preview` | Render with sample values; nothing stored or sent; unresolved placeholders stay visible |
+
+Rules: names are 2-64 characters (letters, digits, `.` `-` `_`) and unique per owner; a client cannot take the name of a shared template (`409`, so what a name means is never ambiguous), but its own template wins if an admin later adds a shared one with the same name; the channel cannot be changed after creation; a client may only create templates for channels it is allowed to use; at most 200 per client (`client-api.max-templates-per-client`); body up to 10,000 characters; malformed placeholders (`{{name}`) are rejected. Templates are plain substitution (no expressions), so authors cannot execute anything.
+
+**Content snapshot.** When a request is accepted, the template's subject and body are copied onto the request and the dispatcher renders from that copy (`template_id` remains as a reference only, and becomes `NULL` if the template is deleted). Editing or deleting a template therefore can never change or break a bulk that is already queued, or rewrite history. Verified with a 2,000-recipient bulk whose template was edited and then deleted while 1,960 messages were still queued: all 2,000 went out with the original text. See ADR-002. The admin UI lists every template with its owner for support, but only shared ones can be changed there.
 
 ### 4.1 Client tracking UI
 

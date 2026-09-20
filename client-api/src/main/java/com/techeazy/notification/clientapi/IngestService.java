@@ -1,6 +1,7 @@
 package com.techeazy.notification.clientapi;
 
 import com.techeazy.notification.application.OutboxPublisher;
+import com.techeazy.notification.application.TemplateRenderer;
 import com.techeazy.notification.clientapi.Dtos.SubmitResponse;
 import com.techeazy.notification.clientapi.IngestPersister.Recipient;
 import com.techeazy.notification.domain.*;
@@ -14,7 +15,9 @@ import org.springframework.stereotype.Service;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -61,8 +64,9 @@ public class IngestService {
         if (recipients.size() > maxBulkRecipients) {
             throw ApiException.badRequest("At most " + maxBulkRecipients + " recipients per request");
         }
-        Template template = resolveContent(channel, cmd.templateName(), cmd.subject(), cmd.body());
+        Content content = resolveContent(client, channel, cmd.templateName(), cmd.subject(), cmd.body());
         validateRecipients(channel, recipients);
+        validateVariables(content, recipients);
 
         if (idempotencyKey != null) {
             Optional<NotificationRequest> existing = requests.findByClientIdAndIdempotencyKey(client.id(), idempotencyKey);
@@ -74,9 +78,10 @@ public class IngestService {
         request.setClientId(client.id());
         request.setKind(kind);
         request.setChannel(channel);
-        request.setTemplateId(template == null ? null : template.getId());
-        request.setSubject(template == null ? cmd.subject() : null);
-        request.setBody(template == null ? cmd.body() : null);
+        // Snapshot of the content as accepted: later template edits or deletes never touch this request.
+        request.setTemplateId(content.templateId());
+        request.setSubject(content.subject());
+        request.setBody(content.body());
         request.setTotal(recipients.size());
         request.setIdempotencyKey(idempotencyKey);
         request.setClientReference(cmd.clientReference());
@@ -105,21 +110,43 @@ public class IngestService {
         return new SubmitResponse(existing.getId(), existing.getKind(), view.status(), existing.getTotal(), null, true, existing.getCreatedAt());
     }
 
-    /** @return the template when one is used, or null for inline content */
-    private Template resolveContent(Channel channel, String templateName, String subject, String body) {
+    /** The content a request will be sent with, and the template it came from (null for inline content). */
+    record Content(UUID templateId, String subject, String body) {}
+
+    /** The client's own template wins over a shared one of the same name. */
+    private Content resolveContent(AuthenticatedClient client, Channel channel, String templateName, String subject, String body) {
         if (templateName != null && !templateName.isBlank()) {
-            Template t = templates.findByName(templateName)
+            Template t = templates.findByClientIdAndName(client.id(), templateName)
+                    .or(() -> templates.findByClientIdIsNullAndName(templateName))
                     .orElseThrow(() -> ApiException.badRequest("Unknown template '" + templateName + "'"));
             if (t.getChannel() != channel) {
                 throw ApiException.badRequest("Template '" + templateName + "' is for channel " + t.getChannel() + ", not " + channel);
             }
-            return t;
+            return new Content(t.getId(), t.getSubject(), t.getBody());
         }
         if (body == null || body.isBlank()) throw ApiException.badRequest("Provide either templateName or body");
         if (channel == Channel.EMAIL && (subject == null || subject.isBlank())) {
             throw ApiException.badRequest("subject is required for inline EMAIL content");
         }
-        return null;
+        return new Content(null, subject, body);
+    }
+
+    /**
+     * Fails the whole request up front if any recipient lacks a variable the content uses, instead of letting those
+     * messages fail one by one later. {{recipient}} is built in.
+     */
+    private void validateVariables(Content content, List<Recipient> recipients) {
+        Set<String> required = TemplateRenderer.requiredVariables(content.subject(), content.body());
+        if (required.isEmpty()) return;
+        List<String> problems = new ArrayList<>();
+        for (int i = 0; i < recipients.size() && problems.size() < 10; i++) {
+            Map<String, String> vars = recipients.get(i).variables();
+            List<String> missing = required.stream().filter(v -> vars == null || vars.get(v) == null).toList();
+            if (!missing.isEmpty()) problems.add("recipient #" + (i + 1) + " is missing " + String.join(", ", missing));
+        }
+        if (!problems.isEmpty()) {
+            throw ApiException.badRequest("Missing template variables (first " + problems.size() + "): " + String.join("; ", problems));
+        }
     }
 
     private void validateRecipients(Channel channel, List<Recipient> recipients) {

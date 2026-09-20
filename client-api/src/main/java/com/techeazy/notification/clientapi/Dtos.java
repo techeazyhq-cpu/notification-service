@@ -5,6 +5,7 @@ import com.techeazy.notification.domain.MessageStatus;
 import com.techeazy.notification.domain.RequestKind;
 import com.techeazy.notification.domain.RequestStatus;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
@@ -52,6 +53,24 @@ public final class Dtos {
     public record PageView<T>(List<T> items, int page, int size, long totalItems, int totalPages) {}
 
     public record MeView(UUID id, String name, Set<Channel> allowedChannels) {}
+
+    /** Name: 2-64 chars of letters, digits, dot, dash, underscore. The channel cannot be changed after creation. */
+    public record TemplateInput(
+            @NotNull @Size(min = 2, max = 64) String name,
+            @NotNull Channel channel,
+            @Size(max = 500) String subject,
+            @NotBlank @Size(max = 10000) String body) {}
+
+    public enum TemplateScope { OWNED, SHARED }
+
+    /** {@code variables} are what a sender must supply per recipient ({{recipient}} is built in and not listed). */
+    public record TemplateView(UUID id, String name, Channel channel, String subject, String body, List<String> variables,
+                               TemplateScope scope, boolean readOnly, Instant createdAt, Instant updatedAt) {}
+
+    public record PreviewRequest(@Size(max = 500) String subject, @NotBlank @Size(max = 10000) String body,
+                                 Map<String, String> variables) {}
+
+    public record PreviewView(String subject, String body, List<String> requiredVariables, List<String> missingVariables) {}
 
     public record ChannelStatusCount(Channel channel, MessageStatus status, long count) {}
 
