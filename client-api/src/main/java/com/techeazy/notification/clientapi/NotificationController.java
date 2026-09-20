@@ -68,7 +68,7 @@ public class NotificationController {
             @Valid @RequestBody SendRequest req) {
         var recipients = List.of(new Recipient(req.recipient(), req.variables()));
         return respond(ingest.submit(client, new SubmitCommand(RequestKind.SINGLE, req.channel(), req.templateName(),
-                req.subject(), req.body(), recipients, req.clientReference(), idempotencyKey)));
+                req.subject(), req.body(), recipients, req.clientReference(), idempotencyKey, req.from())));
     }
 
     @Operation(summary = "Send to many recipients (JSON body)",
@@ -81,7 +81,7 @@ public class NotificationController {
         List<Recipient> recipients = new ArrayList<>(req.recipients().size());
         req.recipients().forEach(r -> recipients.add(new Recipient(r.recipient(), r.variables())));
         return respond(ingest.submit(client, new SubmitCommand(RequestKind.BULK, req.channel(), req.templateName(),
-                req.subject(), req.body(), recipients, req.clientReference(), idempotencyKey)));
+                req.subject(), req.body(), recipients, req.clientReference(), idempotencyKey, req.from())));
     }
 
     @Operation(summary = "Send to many recipients (CSV upload)",
@@ -95,13 +95,14 @@ public class NotificationController {
             @RequestParam(required = false) String templateName,
             @RequestParam(required = false) String subject,
             @RequestParam(required = false) String body,
-            @RequestParam(required = false) String clientReference) throws IOException {
+            @RequestParam(required = false) String clientReference,
+            @Parameter(description = "EMAIL only: a confirmed sender address; default sender if omitted") @RequestParam(required = false) String from) throws IOException {
         if (file.isEmpty()) throw ApiException.badRequest("file is empty");
         List<Recipient> recipients = CsvRecipientParser.parse(file.getInputStream(), ingest.maxBulkRecipients()).stream()
                 .map(r -> new Recipient(r.recipient(), r.variables())).toList();
         if (recipients.isEmpty()) throw ApiException.badRequest("CSV contains no recipients");
         return respond(ingest.submit(client, new SubmitCommand(RequestKind.BULK, channel, templateName, subject, body,
-                recipients, clientReference, idempotencyKey)));
+                recipients, clientReference, idempotencyKey, from)));
     }
 
     @Operation(summary = "Get request status with per-status message counts")

@@ -41,5 +41,7 @@ public class NotificationRequest {
     private int total;
     private String idempotencyKey;
     private String clientReference;
+    private String senderEmail;
+    private String senderName;
     private Instant createdAt;
 }

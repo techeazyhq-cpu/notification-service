@@ -87,6 +87,10 @@ Circuit breaker drill (SMS): `curl -X POST "localhost:9000/admin/fail?status=503
 
 The admin UI signs in with a user name and password (first start: `admin` / `admin`, seeded from `ADMIN_USERNAME` / `ADMIN_PASSWORD` only when there is no administrator yet). Open **My account** to change the password (12+ characters) and to turn on two-factor authentication: scan the QR code with an authenticator app, enter the 6-digit code, and keep the 10 recovery codes. Sessions end after 30 idle minutes; 5 wrong attempts lock the account for 15 minutes. Set `ADMIN_TWO_FACTOR_KEY` to your own secret (it encrypts the stored two-factor keys). API scripts sign in with `POST /api/admin/auth/login` and send the returned token as `Authorization: Bearer ...`; `scripts/seed.mjs` does this and reads `ADMIN_OTP` when two-factor is on. See ADR-005.
 
+## Sending from your own address
+
+In the client UI open **Sender addresses**, add an address and open the link that is e-mailed to it. A confirmed address can be the default, or be chosen per request with `"from": "orders@acme.com"`. Requests naming an unconfirmed address get `422 SENDER_NOT_VERIFIED`. Set `CLIENT_API_PUBLIC_BASE_URL` to the public URL of the client API so the link in the e-mail works. See ADR-007.
+
 ## Billing
 
 Admin UI: **Billing plans** (prices, free allowance, platform fee, tax), **Billing accounts** (assign a plan, postpaid or prepaid, spend cap, top up credit), **Invoices** (generate a closed month, issue, record payment, void, CSV). Client UI: **Billing** (account, usage, invoices, prepaid ledger; invoices print to PDF from the browser).
