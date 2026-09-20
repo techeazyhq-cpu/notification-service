@@ -21,7 +21,7 @@ COPY . .
 RUN npm run build
 
 # Non-root nginx: serves the SPA and proxies /v1 to the Client API, so the browser sees a single origin.
-FROM nginxinc/nginx-unprivileged:1.27-alpine
+FROM nginxinc/nginx-unprivileged:1.31-alpine
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 COPY --from=build /app/dist /usr/share/nginx/html
 EXPOSE 8080
