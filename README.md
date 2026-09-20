@@ -87,6 +87,10 @@ Circuit breaker drill (SMS): `curl -X POST "localhost:9000/admin/fail?status=503
 
 The admin UI signs in with a user name and password (first start: `admin` / `admin`, seeded from `ADMIN_USERNAME` / `ADMIN_PASSWORD` only when there is no administrator yet). Open **My account** to change the password (12+ characters) and to turn on two-factor authentication: scan the QR code with an authenticator app, enter the 6-digit code, and keep the 10 recovery codes. Sessions end after 30 idle minutes; 5 wrong attempts lock the account for 15 minutes. Set `ADMIN_TWO_FACTOR_KEY` to your own secret (it encrypts the stored two-factor keys). API scripts sign in with `POST /api/admin/auth/login` and send the returned token as `Authorization: Bearer ...`; `scripts/seed.mjs` does this and reads `ADMIN_OTP` when two-factor is on. See ADR-005.
 
+## API playground
+
+The client UI has an **API playground** for trying the Client API from the browser: pick an endpoint, edit the path, query and JSON body, send it with your own key, and see the status, timing and response. Sending endpoints are real (they deliver messages and may be billed) and ask for confirmation; "Copy as curl" gives the same call for your own code with `$API_KEY` as the key. The full reference is at `/swagger-ui.html` (also served through the client UI). Integrating from your own system needs only the API key and `X-API-Key`; the UI is optional.
+
 ## Billing
 
 Admin UI: **Billing plans** (prices, free allowance, platform fee, tax), **Billing accounts** (assign a plan, postpaid or prepaid, spend cap, top up credit), **Invoices** (generate a closed month, issue, record payment, void, CSV). Client UI: **Billing** (account, usage, invoices, prepaid ledger; invoices print to PDF from the browser).

@@ -181,6 +181,10 @@ Rules: names are 2-64 characters (letters, digits, `.` `-` `_`) and unique per o
 
 **Content snapshot.** When a request is accepted, the template's subject and body are copied onto the request and the dispatcher renders from that copy (`template_id` remains as a reference only, and becomes `NULL` if the template is deleted). Editing or deleting a template therefore can never change or break a bulk that is already queued, or rewrite history. Verified with a 2,000-recipient bulk whose template was edited and then deleted while 1,960 messages were still queued: all 2,000 went out with the original text. See ADR-002. The admin UI lists every template with its owner for support, but only shared ones can be changed there.
 
+### 4.5 API playground
+
+The client UI includes a playground over the Client API. The endpoint list is a static catalogue (`client-ui/src/playgroundCatalog.ts`) with sample bodies; calls go through the same `/v1` proxy and the signed-in key, which is never displayed (the generated curl uses `$API_KEY`). Endpoints that deliver messages are marked live and confirmed before sending. The URL, curl and response formatting live in `playgroundLogic.ts` and are covered by `npm test`. The catalogue must be updated when an endpoint is added; the source of truth remains the OpenAPI document at `/v3/api-docs`.
+
 ### 4.3 Billing
 
 Clients are billed per message that reaches `SENT`. Each client has at most one billing account: a **plan** (per-channel unit price and monthly free allowance, monthly platform fee, tax rate, one currency) and a **mode**. No account means not billed. Decisions and trade-offs are in ADR-004.
