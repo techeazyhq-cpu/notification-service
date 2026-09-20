@@ -1,5 +1,5 @@
 # Infra only:            docker compose up -d
-# Infra + all services:  docker compose --profile app up -d --build
+# Infra + all services + both UIs:  docker compose --profile app up -d --build
 name: notification-service
 
 services:
@@ -77,6 +77,20 @@ services:
     ports: ["8082:8082"]
     environment: *svc-env
     depends_on: *svc-deps
+
+  # Admin UI on http://localhost:5173 (admin / admin); nginx proxies /api to admin-api
+  admin-ui:
+    profiles: [app]
+    build: ./admin-ui
+    ports: ["5173:8080"]
+    depends_on: [admin-api]
+
+  # Client tracking UI on http://localhost:5174; sign in with a client API key; nginx proxies /v1 to client-api
+  client-ui:
+    profiles: [app]
+    build: ./client-ui
+    ports: ["5174:8080"]
+    depends_on: [client-api]
 
 volumes:
   pgdata:

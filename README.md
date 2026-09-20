@@ -15,11 +15,21 @@ Design: [docs/design.md](docs/design.md) · Decision: [docs/adr-001-modular-mono
 Requires Docker, and Node 20+ for the seed script and UI.
 
 ```bash
-docker compose --profile app up -d --build     # postgres, redis, pulsar, mailpit, catcher + 3 services
+docker compose --profile app up -d --build     # postgres, redis, pulsar, mailpit, catcher, 3 services, both UIs
 node scripts/seed.mjs                          # providers, templates, demo client (prints its API key once)
-cd admin-ui && npm install && npm run dev      # http://localhost:5173  (admin / admin)
-cd client-ui && npm install && npm run dev     # http://localhost:5174  (sign in with the demo client API key)
 ```
+
+| What | URL | Sign-in |
+|---|---|---|
+| Admin UI | http://localhost:5173 | `admin` / `admin` |
+| Client tracker | http://localhost:5174 | the demo client's API key from the seed output |
+| Client API (Swagger) | http://localhost:8080/swagger-ui.html | `X-API-Key` header |
+| Mailpit (captured email) | http://localhost:8025 | none |
+| SMS / WhatsApp / Push catcher | http://localhost:9000 | none |
+
+Stop with `docker compose --profile app down` (add `-v` to also wipe the database and Pulsar data). For UI development
+with hot reload run `npm run dev` in `admin-ui` or `client-ui` instead of the containers (stop the matching container
+first, the ports are the same).
 
 Infra only (run services from your IDE): `docker compose up -d`, then `mvn -q -DskipTests package` and
 `java -jar client-api/target/client-api-*.jar` (likewise `admin-api`, `dispatcher`). If the dispatcher runs on your host,
