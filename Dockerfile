@@ -14,7 +14,7 @@
 #
 # @author Vasantha Kumar <vasantha.kumar@hotmail.com>
 # Builds any deployable module:  docker build --build-arg MODULE=client-api -t notification-client-api .
-FROM maven:3.9-eclipse-temurin-21 AS build
+FROM maven:3-eclipse-temurin-24 AS build
 ARG MODULE
 WORKDIR /src
 COPY pom.xml .
