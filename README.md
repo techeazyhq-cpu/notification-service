@@ -90,6 +90,9 @@ The admin UI signs in with a user name and password (first start: `admin` / `adm
 ## API playground
 
 The client UI has an **API playground** for trying the Client API from the browser: pick an endpoint, edit the path, query and JSON body, send it with your own key, and see the status, timing and response. Sending endpoints are real (they deliver messages and may be billed) and ask for confirmation; "Copy as curl" gives the same call for your own code with `$API_KEY` as the key. The full reference is at `/swagger-ui.html` (also served through the client UI). Integrating from your own system needs only the API key and `X-API-Key`; the UI is optional.
+## Sending from your own address
+
+In the client UI open **Sender addresses**, add an address and open the link that is e-mailed to it. A confirmed address can be the default, or be chosen per request with `"from": "orders@acme.com"`. Requests naming an unconfirmed address get `422 SENDER_NOT_VERIFIED`. Set `CLIENT_API_PUBLIC_BASE_URL` to the public URL of the client API so the link in the e-mail works. See ADR-007.
 
 ## Billing
 
@@ -120,6 +123,10 @@ docker compose run --rm -e MIGRATION_ALLOW_ROLLBACK=true db-migrate rollback-tag
 `db.changelog-master.yaml`, and give every changeset a `--rollback`. Never edit a changeset that has been released
 (`validate` will fail). Outside Docker: `java -jar db-migration/target/db-migration-*.jar status` with `DB_URL`,
 `DB_USER`, `DB_PASSWORD` set. Databases previously migrated by Flyway are adopted automatically (see ADR-003).
+
+## Virtual threads
+
+Off by default. `VIRTUAL_THREADS_ENABLED=true` turns them on for the Client and Admin APIs, but on Java 21 they were slower and stalled under 500 concurrent clients in our test (thread pinning), so they are not recommended yet. Measurements and when to revisit: ADR-006.
 
 ## Static analysis
 

@@ -45,7 +45,8 @@ public final class Dtos {
             @Size(max = 500) String subject,
             String body,
             Map<String, String> variables,
-            @Size(max = 120) String clientReference) {}
+            @Size(max = 120) String clientReference,
+            @Size(max = 254) String from) {}
 
     public record BulkRecipient(@NotNull @Size(min = 1, max = 320) String recipient, Map<String, String> variables) {}
 
@@ -55,7 +56,8 @@ public final class Dtos {
             @Size(max = 500) String subject,
             String body,
             @NotEmpty List<@Valid BulkRecipient> recipients,
-            @Size(max = 120) String clientReference) {}
+            @Size(max = 120) String clientReference,
+            @Size(max = 254) String from) {}
 
     public record SubmitResponse(UUID requestId, RequestKind kind, RequestStatus status, int total,
                                  List<UUID> messageIds, boolean idempotentReplay, Instant createdAt) {}

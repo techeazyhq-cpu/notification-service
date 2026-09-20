@@ -44,6 +44,7 @@ import java.util.Optional;
 public class ClientAuthFilter extends OncePerRequestFilter {
 
     public static final String CLIENT_ATTRIBUTE = "notification.client";
+    static final String SENDER_VERIFY_PATH = "/v1/senders/verify";
 
     private final ClientRepository clients;
     private final RateLimitService rateLimits;
@@ -59,7 +60,8 @@ public class ClientAuthFilter extends OncePerRequestFilter {
 
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
-        return !request.getRequestURI().startsWith("/v1/");
+        String uri = request.getRequestURI();
+        return !uri.startsWith("/v1/") || uri.equals(SENDER_VERIFY_PATH);
     }
 
     @Override

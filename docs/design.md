@@ -184,6 +184,9 @@ Rules: names are 2-64 characters (letters, digits, `.` `-` `_`) and unique per o
 ### 4.5 API playground
 
 The client UI includes a playground over the Client API. The endpoint list is a static catalogue (`client-ui/src/playgroundCatalog.ts`) with sample bodies; calls go through the same `/v1` proxy and the signed-in key, which is never displayed (the generated curl uses `$API_KEY`). Endpoints that deliver messages are marked live and confirmed before sending. The URL, curl and response formatting live in `playgroundLogic.ts` and are covered by `npm test`. The catalogue must be updated when an endpoint is added; the source of truth remains the OpenAPI document at `/v3/api-docs`.
+### 4.4 E-mail sender addresses
+
+Clients can send e-mail from their own address. `POST /v1/senders` registers one and mails a confirmation link to it (single use, 24 hours); `GET /v1/senders`, `POST /v1/senders/{id}/resend`, `PUT /v1/senders/{id}/default` and `DELETE /v1/senders/{id}` manage them; `GET /v1/senders/verify?token=...` is the link and needs no API key. A request may carry `from` (EMAIL only, must be a verified address of the caller, else `422 SENDER_NOT_VERIFIED`); without it the client's default is used, else the provider's own address. The choice is copied onto the request at accept time. Deliverability depends on the client's SPF/DKIM allowing the platform. See ADR-007.
 
 ### 4.3 Billing
 

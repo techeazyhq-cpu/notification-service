@@ -27,7 +27,13 @@ import java.util.UUID;
 /** SPI for delivering one rendered message through one kind of provider. */
 public interface ChannelProvider {
 
-    record Outbound(UUID messageId, Channel channel, String recipient, String subject, String body) {}
+    /** {@code fromAddress} and {@code fromName} are the client's own verified sender; both null means the provider's default. */
+    record Outbound(UUID messageId, Channel channel, String recipient, String subject, String body, String fromAddress, String fromName) {
+
+        public Outbound(UUID messageId, Channel channel, String recipient, String subject, String body) {
+            this(messageId, channel, recipient, subject, body, null, null);
+        }
+    }
 
     record SendResult(String providerMessageId) {}
 
