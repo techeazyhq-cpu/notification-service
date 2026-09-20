@@ -18,6 +18,7 @@
 
 package com.techeazy.notification.adminapi;
 
+import com.techeazy.notification.application.PersonalData;
 import com.techeazy.notification.billing.application.Admission;
 import com.techeazy.notification.billing.application.AdmissionControl;
 import com.techeazy.notification.billing.domain.HoldScope;
@@ -54,6 +55,9 @@ class MessageRetry {
         if (message.getStatus() != MessageStatus.FAILED) {
             throw new ResponseStatusException(HttpStatus.CONFLICT,
                     "Only FAILED messages can be retried (status is " + message.getStatus() + ")");
+        }
+        if (PersonalData.isErased(message.getRecipient())) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "The personal data of this message was erased, so it cannot be sent again");
         }
         admission.admit(new Admission(message.getClientId(), message.getChannel(), 1, HoldScope.MESSAGE, message.getId()));
         if (messages.requeueFailed(id, Instant.now()) != 1) {

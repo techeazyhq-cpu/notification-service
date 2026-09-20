@@ -38,6 +38,14 @@ notification:
   sweeper:
     enabled: true
 
+retention:
+  enabled: ${RETENTION_ENABLED:true}
+  cron: ${RETENTION_CRON:0 30 2 * * *}
+  personal-data-days: ${RETENTION_PERSONAL_DATA_DAYS:90}
+  delete-days: ${RETENTION_DELETE_DAYS:400}
+  idempotency-days: ${RETENTION_IDEMPOTENCY_DAYS:7}
+  batch-size: ${RETENTION_BATCH_SIZE:5000}
+
 billing:
   payment-terms-days: ${BILLING_PAYMENT_TERMS_DAYS:30}
   settlement:

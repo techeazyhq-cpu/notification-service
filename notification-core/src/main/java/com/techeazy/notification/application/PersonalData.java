@@ -16,18 +16,17 @@
  * @author Vasantha Kumar <vasantha.kumar@hotmail.com>
  */
 
-package com.techeazy.notification.config;
+package com.techeazy.notification.application;
 
-import org.springframework.boot.autoconfigure.domain.EntityScan;
-import org.springframework.boot.context.properties.EnableConfigurationProperties;
-import org.springframework.context.annotation.Configuration;
-import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
-import org.springframework.scheduling.annotation.EnableScheduling;
+/** What replaces personal data that has been erased. Callers must not send to or retry a message that holds it. */
+public final class PersonalData {
 
-@Configuration
-@EnableConfigurationProperties({NotificationProperties.class, RetentionProperties.class})
-@EntityScan("com.techeazy.notification.domain")
-@EnableJpaRepositories("com.techeazy.notification.persistence")
-@EnableScheduling
-public class CoreConfig {
+    public static final String ERASED = "[erased]";
+
+    private PersonalData() {
+    }
+
+    public static boolean isErased(String value) {
+        return ERASED.equals(value);
+    }
 }
