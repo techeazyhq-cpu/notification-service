@@ -14,8 +14,15 @@ import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
 
+import com.techeazy.notification.dispatcher.provider.ProviderRegistry;
+import org.springframework.scheduling.annotation.Scheduled;
+
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -32,10 +39,14 @@ public class DispatchConsumers {
     private final DispatcherProperties props;
     private final DispatchService dispatch;
     private final ObjectMapper mapper;
+    private final ProviderRegistry providers;
     private final List<Consumer<byte[]>> consumers = new ArrayList<>();
+    private final Map<Channel, List<Consumer<byte[]>>> byChannel = new ConcurrentHashMap<>();
+    private final Set<Channel> pausedChannels = ConcurrentHashMap.newKeySet();
 
     public DispatchConsumers(PulsarClient client, NotificationProperties notificationProps, DispatcherProperties props,
-                             DispatchService dispatch, ObjectMapper mapper) {
+                             DispatchService dispatch, ObjectMapper mapper, ProviderRegistry providers) {
+        this.providers = providers;
         this.client = client;
         this.notificationProps = notificationProps;
         this.props = props;
@@ -47,8 +58,9 @@ public class DispatchConsumers {
     public void start() throws PulsarClientException {
         for (Channel channel : Channel.values()) {
             String topic = PulsarMessagePublisher.topicFor(notificationProps, channel);
+            List<Consumer<byte[]>> forChannel = new CopyOnWriteArrayList<>();
             for (int i = 0; i < props.getConsumersPerChannel(); i++) {
-                consumers.add(client.newConsumer(Schema.BYTES)
+                Consumer<byte[]> created = client.newConsumer(Schema.BYTES)
                         .topic(topic)
                         .subscriptionName("dispatcher-" + channel.topicSuffix())
                         .subscriptionType(SubscriptionType.Shared)
@@ -63,8 +75,11 @@ public class DispatchConsumers {
                                 .deadLetterTopic(topic + "-dlq")
                                 .build())
                         .messageListener((consumer, msg) -> handle(consumer, msg, channel))
-                        .subscribe());
+                        .subscribe();
+                consumers.add(created);
+                forChannel.add(created);
             }
+            byChannel.put(channel, forChannel);
             log.info("Started {} consumer(s) on {}", props.getConsumersPerChannel(), topic);
         }
     }
@@ -86,6 +101,12 @@ public class DispatchConsumers {
                             continue;
                         }
                     }
+                    case Outcome.Unavailable u -> {
+                        // Circuit open: hold the message until a provider recovers. No deadline and no nack, because
+                        // redelivery counts would push a healthy message into the dead-letter topic during a long outage.
+                        Thread.sleep(u.waitMillis());
+                        continue;
+                    }
                 }
                 return;
             }
@@ -95,6 +116,27 @@ public class DispatchConsumers {
         } catch (Exception e) {
             log.error("Unexpected error handling broker message {} on {}; negative-acking", msg.getMessageId(), channel, e);
             consumer.negativeAcknowledge(msg);
+        }
+    }
+
+    /**
+     * While every provider of a channel is circuit-open, pause that channel's consumers so the backlog waits in Pulsar
+     * (durable, and visible as backlog) instead of being prefetched into this process. Resumed as soon as any
+     * provider leaves the OPEN state. Idempotent, so it also covers admin config changes that add a healthy provider.
+     */
+    @Scheduled(fixedDelay = 1000)
+    void reconcilePausedChannels() {
+        for (Channel channel : Channel.values()) {
+            List<Consumer<byte[]>> list = byChannel.get(channel);
+            if (list == null) continue;
+            boolean available = providers.isAvailable(channel);
+            if (!available && pausedChannels.add(channel)) {
+                list.forEach(Consumer::pause);
+                log.warn("Paused {} consumers: all providers unavailable", channel);
+            } else if (available && pausedChannels.remove(channel)) {
+                list.forEach(Consumer::resume);
+                log.info("Resumed {} consumers: a provider is available again", channel);
+            }
         }
     }
 

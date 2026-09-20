@@ -50,6 +50,18 @@ public interface NotificationMessageRepository extends JpaRepository<Notificatio
     int markFailedOrRetry(@Param("id") UUID id, @Param("status") MessageStatus status,
                           @Param("error") String error, @Param("now") Instant now);
 
+    /**
+     * Gives back a claim taken for an attempt that never reached a provider (circuit open): the message returns
+     * to QUEUED and the attempt is not counted, so a provider outage cannot exhaust a message's retries.
+     */
+    @Transactional
+    @Modifying
+    @Query("""
+            update NotificationMessage m set m.status = com.techeazy.notification.domain.MessageStatus.QUEUED,
+                   m.attempts = m.attempts - 1, m.updatedAt = :now
+            where m.id = :id and m.status = com.techeazy.notification.domain.MessageStatus.PROCESSING and m.attempts > 0""")
+    int release(@Param("id") UUID id, @Param("now") Instant now);
+
     @Transactional
     @Modifying
     @Query("""

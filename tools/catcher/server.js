@@ -67,7 +67,7 @@ http.createServer(async (req, res) => {
       }
       if (String(payload.to || '').endsWith('0400')) return json(res, 400, { error: 'invalid recipient' });
       const id = randomUUID();
-      messages.push({ id, channel, receivedAt: new Date().toISOString(), ...payload });
+      messages.push({ id, receivedAt: new Date().toISOString(), ...payload, channel }); // path channel wins over payload's
       if (messages.length > MAX) messages.shift();
       return json(res, 200, { id });
     }

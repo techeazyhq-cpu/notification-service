@@ -25,9 +25,16 @@ dispatcher:
   consumers-per-channel: ${CONSUMERS_PER_CHANNEL:2}
   max-attempts: ${MAX_ATTEMPTS:5}
   base-backoff-seconds: ${BASE_BACKOFF_SECONDS:5}
+  circuit-breaker:
+    enabled: ${CB_ENABLED:true}
+    sliding-window-size: ${CB_WINDOW:20}
+    minimum-number-of-calls: ${CB_MIN_CALLS:10}
+    failure-rate-threshold: ${CB_FAILURE_RATE:50}
+    wait-duration-in-open-state-ms: ${CB_OPEN_WAIT_MS:30000}
+    permitted-calls-in-half-open-state: ${CB_HALF_OPEN_CALLS:3}
 
 management:
   endpoints:
     web:
       exposure:
-        include: health,info,prometheus
+        include: health,info,prometheus,providerhealth
