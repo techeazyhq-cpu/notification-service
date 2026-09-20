@@ -12,7 +12,9 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 /**
  * Publishes committed PENDING messages and flips the confirmed ones to QUEUED.
@@ -63,7 +65,11 @@ public class OutboxPublisher {
             try {
                 futures.get(i).get(30, TimeUnit.SECONDS);
                 ok.add(chunk.get(i).getId());
-            } catch (Exception e) {
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                log.warn("Interrupted while publishing; {} message(s) left for the sweeper", chunk.size() - i);
+                break;
+            } catch (ExecutionException | TimeoutException e) {
                 log.warn("Publish failed for message {}, left for sweeper: {}", chunk.get(i).getId(), e.toString());
             }
         }

@@ -23,12 +23,12 @@ export default function Messages() {
     <>
       <h1>Messages</h1>
       <div className="card row">
-        <label>Status
+        <label><span>Status</span>
           <select value={filters.status} onChange={(e) => set('status', e.target.value)}>
             <option value="">Any</option>{STATUSES.map((s) => <option key={s}>{s}</option>)}
           </select>
         </label>
-        <label>Channel
+        <label><span>Channel</span>
           <select value={filters.channel} onChange={(e) => set('channel', e.target.value)}>
             <option value="">Any</option>{CHANNELS.map((c) => <option key={c}>{c}</option>)}
           </select>
@@ -48,7 +48,7 @@ export default function Messages() {
                 <td><span className={`badge ${m.status}`}>{m.status}</span></td>
                 <td>{m.attempts}</td>
                 <td className="mono" title={m.id}>{m.lastError ?? m.providerMessageId ?? ''}</td>
-                <td>{m.status === 'FAILED' && <button onClick={() => retry(m.id)}>Retry</button>}</td>
+                <td>{m.status === 'FAILED' && <button type="button" onClick={() => retry(m.id)}>Retry</button>}</td>
               </tr>
             ))}
             {data?.items.length === 0 && <tr><td colSpan={8} className="muted">No messages match.</td></tr>}
@@ -57,9 +57,9 @@ export default function Messages() {
         <div className="spread" style={{ marginTop: 12, marginBottom: 0 }}>
           <span className="muted">{data?.totalItems ?? 0} message(s)</span>
           <span>
-            <button disabled={page === 0} onClick={() => setPage(page - 1)}>Previous</button>{' '}
+            <button type="button" disabled={page === 0} onClick={() => setPage(page - 1)}>Previous</button>{' '}
             Page {page + 1} of {pages}{' '}
-            <button disabled={page + 1 >= pages} onClick={() => setPage(page + 1)}>Next</button>
+            <button type="button" disabled={page + 1 >= pages} onClick={() => setPage(page + 1)}>Next</button>
           </span>
         </div>
       </div>

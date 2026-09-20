@@ -30,7 +30,7 @@ public class ClientAuthFilter extends OncePerRequestFilter {
     private final ClientRepository clients;
     private final RateLimitService rateLimits;
     private final ObjectMapper mapper;
-    private final Cache<String, Optional<Client>> cache = Caffeine.newBuilder()
+    private final Cache<String, Optional<AuthenticatedClient>> cache = Caffeine.newBuilder()
             .expireAfterWrite(Duration.ofSeconds(30)).maximumSize(10_000).build();
 
     public ClientAuthFilter(ClientRepository clients, RateLimitService rateLimits, ObjectMapper mapper) {
@@ -52,12 +52,12 @@ public class ClientAuthFilter extends OncePerRequestFilter {
             reject(res, HttpStatus.UNAUTHORIZED, "UNAUTHORIZED", "Missing X-API-Key header", null);
             return;
         }
-        Optional<Client> client = cache.get(ApiKeys.hash(key), h -> clients.findByApiKeyHash(h));
-        if (client.isEmpty() || !client.get().isActive()) {
+        Optional<AuthenticatedClient> client = cache.get(ApiKeys.hash(key), this::lookup);
+        if (client.isEmpty()) {
             reject(res, HttpStatus.UNAUTHORIZED, "UNAUTHORIZED", "Invalid or disabled API key", null);
             return;
         }
-        Decision d = rateLimits.checkClientApi(client.get().getId());
+        Decision d = rateLimits.checkClientApi(client.get().id());
         if (!d.allowed()) {
             long seconds = Math.max(1, (d.waitMillis() + 999) / 1000);
             reject(res, HttpStatus.TOO_MANY_REQUESTS, "RATE_LIMITED", "API rate limit exceeded", seconds);
@@ -65,6 +65,11 @@ public class ClientAuthFilter extends OncePerRequestFilter {
         }
         req.setAttribute(CLIENT_ATTRIBUTE, client.get());
         chain.doFilter(req, res);
+    }
+
+    /** Only ACTIVE clients are cached as authenticated; a disabled client resolves to empty (401). */
+    private Optional<AuthenticatedClient> lookup(String keyHash) {
+        return clients.findByApiKeyHash(keyHash).filter(Client::isActive).map(AuthenticatedClient::from);
     }
 
     private void reject(HttpServletResponse res, HttpStatus status, String code, String message, Long retryAfter)

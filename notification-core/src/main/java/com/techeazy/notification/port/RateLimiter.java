@@ -5,7 +5,7 @@ public interface RateLimiter {
 
     /** @param waitMillis when denied, how long until enough tokens exist (a hint, not a reservation) */
     record Decision(boolean allowed, long waitMillis) {
-        public static final Decision ALLOWED = new Decision(true, 0);
+        public static final Decision GRANTED = new Decision(true, 0);
     }
 
     Decision tryAcquire(String key, double ratePerSecond, int burst);

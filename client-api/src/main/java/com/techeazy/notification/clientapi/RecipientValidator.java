@@ -6,7 +6,8 @@ import java.util.regex.Pattern;
 
 /** Cheap syntactic checks so obviously bad recipients are rejected at ingest, not after retries. */
 final class RecipientValidator {
-    private static final Pattern EMAIL = Pattern.compile("^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$");
+    // Possessive quantifiers and dot-free domain labels: no backtracking, so hostile input cannot cause ReDoS.
+    private static final Pattern EMAIL = Pattern.compile("^[^@\\s]++@[^@\\s.]++(?:\\.[^@\\s.]++)++$");
     private static final Pattern E164 = Pattern.compile("^\\+[1-9]\\d{6,14}$");
 
     private RecipientValidator() {}

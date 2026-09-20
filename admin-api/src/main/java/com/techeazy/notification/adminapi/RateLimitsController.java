@@ -55,8 +55,7 @@ class RateLimitsController {
         p.setCreatedAt(Instant.now());
         apply(p, in);
         try {
-            RateLimitPolicy saved = repo.saveAndFlush(p);
-            return saved;
+            return repo.saveAndFlush(p);
         } catch (DataIntegrityViolationException e) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "A policy for this scope/client/channel already exists");
         }

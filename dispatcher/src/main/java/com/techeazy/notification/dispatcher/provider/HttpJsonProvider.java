@@ -23,6 +23,10 @@ import java.util.Map;
 @Component
 public class HttpJsonProvider implements ChannelProvider {
 
+    private static final String URL = "url";
+    private static final String AUTH_HEADER = "authHeader";
+    private static final String TIMEOUT_MS = "timeoutMs";
+
     private final ObjectMapper mapper;
     private final HttpClient http = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5)).build();
 
@@ -38,7 +42,7 @@ public class HttpJsonProvider implements ChannelProvider {
     @Override
     public SendResult send(ProviderConfig config, Outbound message) {
         Map<String, String> s = config.getSettings();
-        String url = s.get("url");
+        String url = s.get(URL);
         if (url == null || url.isBlank()) throw new TransientSendException("HTTP provider setting 'url' is missing");
 
         Map<String, Object> payload = new LinkedHashMap<>();
@@ -50,10 +54,11 @@ public class HttpJsonProvider implements ChannelProvider {
 
         try {
             HttpRequest.Builder req = HttpRequest.newBuilder(URI.create(url))
-                    .timeout(Duration.ofMillis(Long.parseLong(s.getOrDefault("timeoutMs", "10000"))))
+                    .timeout(Duration.ofMillis(Long.parseLong(s.getOrDefault(TIMEOUT_MS, "10000"))))
                     .header("Content-Type", "application/json")
                     .POST(HttpRequest.BodyPublishers.ofString(mapper.writeValueAsString(payload)));
-            if (s.get("authHeader") != null && !s.get("authHeader").isBlank()) req.header("Authorization", s.get("authHeader"));
+            String authHeader = s.get(AUTH_HEADER);
+            if (authHeader != null && !authHeader.isBlank()) req.header("Authorization", authHeader);
 
             HttpResponse<String> res = http.send(req.build(), HttpResponse.BodyHandlers.ofString());
             int code = res.statusCode();
@@ -81,6 +86,7 @@ public class HttpJsonProvider implements ChannelProvider {
     }
 
     private static String abbreviate(String s) {
-        return s == null ? "" : s.length() > 200 ? s.substring(0, 200) + "..." : s;
+        if (s == null) return "";
+        return s.length() > 200 ? s.substring(0, 200) + "..." : s;
     }
 }

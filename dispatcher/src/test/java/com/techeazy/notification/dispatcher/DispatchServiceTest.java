@@ -58,7 +58,7 @@ class DispatchServiceTest {
         req.setBody("Hi {{name}}");
         when(requests.findById(message.getRequestId())).thenReturn(Optional.of(req));
 
-        when(rateLimits.checkDelivery(any(), any())).thenReturn(Decision.ALLOWED);
+        when(rateLimits.checkDelivery(any(), any())).thenReturn(Decision.GRANTED);
         when(messages.claim(eq(id), any(), any())).thenReturn(1);
         when(providers.isAvailable(any())).thenReturn(true);
     }

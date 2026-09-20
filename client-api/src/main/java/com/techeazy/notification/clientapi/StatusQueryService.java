@@ -74,7 +74,7 @@ public class StatusQueryService {
     }
 
     private static PageRequest pageRequest(int page, int size, Sort sort) {
-        int s = Math.min(Math.max(size, 1), MAX_PAGE_SIZE);
+        int s = Math.clamp(size, 1, MAX_PAGE_SIZE);
         PageRequest pr = PageRequest.of(Math.max(page, 0), s);
         return sort == null ? pr : pr.withSort(sort);
     }

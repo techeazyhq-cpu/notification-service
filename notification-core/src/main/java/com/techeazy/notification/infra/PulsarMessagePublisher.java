@@ -48,7 +48,7 @@ public class PulsarMessagePublisher implements MessagePublisher {
                     .key(clientId.toString())
                     .value(payload)
                     .sendAsync()
-                    .thenApply(id -> (Void) null);
+                    .thenAccept(id -> { /* only completion matters; the broker message id is not needed */ });
         } catch (Exception e) {
             return CompletableFuture.failedFuture(e);
         }
@@ -70,6 +70,6 @@ public class PulsarMessagePublisher implements MessagePublisher {
 
     @PreDestroy
     void close() {
-        producers.values().forEach(p -> p.closeAsync());
+        producers.values().forEach(Producer::closeAsync);
     }
 }

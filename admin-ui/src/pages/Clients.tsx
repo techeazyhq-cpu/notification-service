@@ -9,7 +9,7 @@ export default function Clients() {
   const [issued, setIssued] = useState<{ name: string; apiKey: string } | null>(null);
   const [formError, setFormError] = useState('');
 
-  async function create(e: React.FormEvent) {
+  async function create(e: React.SubmitEvent<HTMLFormElement>) {
     e.preventDefault();
     try {
       const r = await api<{ client: Client; apiKey: string }>('POST', '/clients', { name, allowedChannels: channels });
@@ -41,8 +41,8 @@ export default function Clients() {
         <div className="notice">
           API key for <b>{issued.name}</b> — copy it now, it is not shown again:<br />
           <span className="mono">{issued.apiKey}</span>{' '}
-          <button onClick={() => navigator.clipboard.writeText(issued.apiKey)}>Copy</button>{' '}
-          <button className="link" onClick={() => setIssued(null)}>Dismiss</button>
+          <button type="button" onClick={() => navigator.clipboard.writeText(issued.apiKey)}>Copy</button>{' '}
+          <button type="button" className="link" onClick={() => setIssued(null)}>Dismiss</button>
         </div>
       )}
       <form className="card row" onSubmit={create}>
@@ -50,7 +50,7 @@ export default function Clients() {
         {CHANNELS.map((ch) => (
           <label className="check" key={ch}><input type="checkbox" checked={channels.includes(ch)} onChange={() => toggleChannel(ch)} />{ch}</label>
         ))}
-        <button className="primary" disabled={!channels.length}>Create client</button>
+        <button type="submit" className="primary" disabled={!channels.length}>Create client</button>
         {formError && <span className="error">{formError}</span>}
       </form>
       {error && <p className="error">{error}</p>}
@@ -65,8 +65,8 @@ export default function Clients() {
                 <td>{c.allowedChannels.join(', ')}</td>
                 <td className="mono">{c.apiKeyPrefix}…</td>
                 <td>
-                  <button onClick={() => toggle(c)}>{c.status === 'ACTIVE' ? 'Disable' : 'Enable'}</button>{' '}
-                  <button onClick={() => rotate(c)}>Rotate key</button>
+                  <button type="button" onClick={() => toggle(c)}>{c.status === 'ACTIVE' ? 'Disable' : 'Enable'}</button>{' '}
+                  <button type="button" onClick={() => rotate(c)}>Rotate key</button>
                 </td>
               </tr>
             ))}

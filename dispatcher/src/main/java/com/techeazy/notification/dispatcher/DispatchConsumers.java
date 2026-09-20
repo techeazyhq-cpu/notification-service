@@ -17,10 +17,12 @@ import org.springframework.stereotype.Component;
 import com.techeazy.notification.dispatcher.provider.ProviderRegistry;
 import org.springframework.scheduling.annotation.Scheduled;
 
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.TimeUnit;
@@ -87,28 +89,13 @@ public class DispatchConsumers {
     private void handle(Consumer<byte[]> consumer, Message<byte[]> msg, Channel channel) {
         try {
             Envelope env = mapper.readValue(msg.getData(), Envelope.class);
-            long deadline = System.currentTimeMillis() + props.getMaxRateLimitWaitSeconds() * 1000;
-            while (true) {
-                Outcome outcome = dispatch.process(env.messageId());
-                switch (outcome) {
-                    case Outcome.Done d -> consumer.acknowledge(msg);
-                    case Outcome.Retry r -> consumer.reconsumeLater(msg, r.delay().toMillis(), TimeUnit.MILLISECONDS);
-                    case Outcome.RateLimited r -> {
-                        if (System.currentTimeMillis() + r.waitMillis() > deadline) {
-                            consumer.negativeAcknowledge(msg); // hand back; another worker or a later delivery retries
-                        } else {
-                            Thread.sleep(Math.max(r.waitMillis(), 10)); // backpressure: hold the message, do not spin
-                            continue;
-                        }
-                    }
-                    case Outcome.Unavailable u -> {
-                        // Circuit open: hold the message until a provider recovers. No deadline and no nack, because
-                        // redelivery counts would push a healthy message into the dead-letter topic during a long outage.
-                        Thread.sleep(u.waitMillis());
-                        continue;
-                    }
-                }
-                return;
+            Outcome outcome = processWithBackpressure(env.messageId());
+            if (outcome instanceof Outcome.Done) {
+                consumer.acknowledge(msg);
+            } else if (outcome instanceof Outcome.Retry(Duration delay)) {
+                consumer.reconsumeLater(msg, delay.toMillis(), TimeUnit.MILLISECONDS);
+            } else {
+                consumer.negativeAcknowledge(msg); // rate-limit wait budget spent: hand back for another worker or a later delivery
             }
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
@@ -117,6 +104,34 @@ public class DispatchConsumers {
             log.error("Unexpected error handling broker message {} on {}; negative-acking", msg.getMessageId(), channel, e);
             consumer.negativeAcknowledge(msg);
         }
+    }
+
+    /**
+     * Processes the message, holding it (backpressure, no spinning) while it is rate limited or every provider's
+     * circuit is open. Returns the first outcome that needs the broker to act on it.
+     */
+    private Outcome processWithBackpressure(UUID messageId) throws InterruptedException {
+        long deadline = System.currentTimeMillis() + props.getMaxRateLimitWaitSeconds() * 1000;
+        Outcome outcome = dispatch.process(messageId);
+        long wait = holdMillis(outcome, deadline);
+        while (wait >= 0) {
+            Thread.sleep(Math.max(wait, 10));
+            outcome = dispatch.process(messageId);
+            wait = holdMillis(outcome, deadline);
+        }
+        return outcome;
+    }
+
+    /**
+     * How long to keep holding the message, or -1 when the outcome is final. Circuit-open holds have no deadline and
+     * are never nacked: redelivery counts would push a healthy message into the dead-letter topic during a long outage.
+     */
+    private static long holdMillis(Outcome outcome, long deadline) {
+        if (outcome instanceof Outcome.Unavailable(long waitMillis)) return waitMillis;
+        if (outcome instanceof Outcome.RateLimited(long waitMillis) && System.currentTimeMillis() + waitMillis <= deadline) {
+            return waitMillis;
+        }
+        return -1;
     }
 
     /**
@@ -142,6 +157,6 @@ public class DispatchConsumers {
 
     @PreDestroy
     void stop() {
-        consumers.forEach(c -> c.closeAsync());
+        consumers.forEach(Consumer::closeAsync);
     }
 }

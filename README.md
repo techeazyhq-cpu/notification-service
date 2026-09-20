@@ -62,6 +62,18 @@ Circuit breaker drill (SMS): `curl -X POST "localhost:9000/admin/fail?status=503
 | `tools/catcher` | SMS/WhatsApp/Push gateway stand-in |
 | `docs` | Design, ADR, draw.io container diagram |
 
+## Static analysis
+
+Sonar findings are kept at zero. To reproduce locally with a throwaway SonarQube (`admin`/`admin`, UI on `:9001`):
+
+```bash
+docker run -d --name sonarqube-local -p 9001:9000 -e SONAR_SEARCH_JAVAADDITIONALOPTS=-Dnode.store.allow_mmap=false sonarqube:community
+# create a token in the UI (My Account > Security), then:
+mvn package org.sonarsource.scanner.maven:sonar-maven-plugin:sonar -Dsonar.host.url=http://localhost:9001 -Dsonar.token=<token> -Dsonar.projectKey=notification-service
+```
+
+JaCoCo reports are written to `*/target/site/jacoco/` by `mvn test` and picked up by Sonar.
+
 ## Test
 
 ```bash

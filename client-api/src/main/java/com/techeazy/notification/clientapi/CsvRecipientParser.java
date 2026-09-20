@@ -19,6 +19,9 @@ import java.util.Map;
  */
 final class CsvRecipientParser {
 
+    /** Byte order mark that spreadsheet tools prepend to UTF-8 CSV files; it ends up glued to the first header. */
+    private static final char BOM = 0xFEFF;
+
     record Row(String recipient, Map<String, String> variables) {}
 
     private CsvRecipientParser() {}
@@ -28,19 +31,19 @@ final class CsvRecipientParser {
                 .setHeader().setSkipHeaderRecord(true).setIgnoreEmptyLines(true).setTrim(true).build();
         try (CSVParser parser = format.parse(new InputStreamReader(in, StandardCharsets.UTF_8))) {
             String recipientHeader = parser.getHeaderNames().stream()
-                    .filter(h -> h.replace("﻿", "").trim().equalsIgnoreCase("recipient"))
+                    .filter(h -> h.replace(String.valueOf(BOM), "").trim().equalsIgnoreCase("recipient"))
                     .findFirst()
                     .orElseThrow(() -> ApiException.badRequest("CSV must have a 'recipient' header column"));
             List<Row> rows = new ArrayList<>();
-            for (CSVRecord record : parser) {
+            for (CSVRecord csvRow : parser) {
                 if (rows.size() >= maxRows) {
                     throw ApiException.badRequest("CSV exceeds the maximum of " + maxRows + " recipients");
                 }
                 Map<String, String> vars = new LinkedHashMap<>();
                 for (String header : parser.getHeaderNames()) {
-                    if (!header.equals(recipientHeader) && record.isSet(header)) vars.put(header, record.get(header));
+                    if (!header.equals(recipientHeader) && csvRow.isSet(header)) vars.put(header, csvRow.get(header));
                 }
-                rows.add(new Row(record.get(recipientHeader), vars));
+                rows.add(new Row(csvRow.get(recipientHeader), vars));
             }
             return rows;
         }

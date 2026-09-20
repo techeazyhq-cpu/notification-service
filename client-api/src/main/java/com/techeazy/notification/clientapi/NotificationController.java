@@ -2,8 +2,8 @@ package com.techeazy.notification.clientapi;
 
 import com.techeazy.notification.clientapi.Dtos.*;
 import com.techeazy.notification.clientapi.IngestPersister.Recipient;
+import com.techeazy.notification.clientapi.IngestService.SubmitCommand;
 import com.techeazy.notification.domain.Channel;
-import com.techeazy.notification.domain.Client;
 import com.techeazy.notification.domain.MessageStatus;
 import com.techeazy.notification.domain.RequestKind;
 import io.swagger.v3.oas.annotations.Operation;
@@ -39,32 +39,32 @@ public class NotificationController {
                     + "Send an Idempotency-Key header to make retries safe.")
     @PostMapping
     public ResponseEntity<SubmitResponse> send(
-            @RequestAttribute(ClientAuthFilter.CLIENT_ATTRIBUTE) Client client,
+            @RequestAttribute(ClientAuthFilter.CLIENT_ATTRIBUTE) AuthenticatedClient client,
             @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
             @Valid @RequestBody SendRequest req) {
         var recipients = List.of(new Recipient(req.recipient(), req.variables()));
-        return respond(ingest.submit(client, RequestKind.SINGLE, req.channel(), req.templateName(), req.subject(),
-                req.body(), recipients, req.clientReference(), idempotencyKey));
+        return respond(ingest.submit(client, new SubmitCommand(RequestKind.SINGLE, req.channel(), req.templateName(),
+                req.subject(), req.body(), recipients, req.clientReference(), idempotencyKey)));
     }
 
     @Operation(summary = "Send to many recipients (JSON body)",
             description = "Each recipient may carry its own template variables.")
     @PostMapping("/bulk")
     public ResponseEntity<SubmitResponse> bulk(
-            @RequestAttribute(ClientAuthFilter.CLIENT_ATTRIBUTE) Client client,
+            @RequestAttribute(ClientAuthFilter.CLIENT_ATTRIBUTE) AuthenticatedClient client,
             @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
             @Valid @RequestBody BulkRequest req) {
         List<Recipient> recipients = new ArrayList<>(req.recipients().size());
         req.recipients().forEach(r -> recipients.add(new Recipient(r.recipient(), r.variables())));
-        return respond(ingest.submit(client, RequestKind.BULK, req.channel(), req.templateName(), req.subject(),
-                req.body(), recipients, req.clientReference(), idempotencyKey));
+        return respond(ingest.submit(client, new SubmitCommand(RequestKind.BULK, req.channel(), req.templateName(),
+                req.subject(), req.body(), recipients, req.clientReference(), idempotencyKey)));
     }
 
     @Operation(summary = "Send to many recipients (CSV upload)",
             description = "CSV with a header row. The 'recipient' column is the address; other columns become template variables.")
     @PostMapping(value = "/bulk/upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<SubmitResponse> bulkUpload(
-            @RequestAttribute(ClientAuthFilter.CLIENT_ATTRIBUTE) Client client,
+            @RequestAttribute(ClientAuthFilter.CLIENT_ATTRIBUTE) AuthenticatedClient client,
             @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
             @RequestPart("file") MultipartFile file,
             @Parameter(description = "EMAIL, SMS, WHATSAPP or PUSH") @RequestParam Channel channel,
@@ -76,32 +76,32 @@ public class NotificationController {
         List<Recipient> recipients = CsvRecipientParser.parse(file.getInputStream(), ingest.maxBulkRecipients()).stream()
                 .map(r -> new Recipient(r.recipient(), r.variables())).toList();
         if (recipients.isEmpty()) throw ApiException.badRequest("CSV contains no recipients");
-        return respond(ingest.submit(client, RequestKind.BULK, channel, templateName, subject, body, recipients,
-                clientReference, idempotencyKey));
+        return respond(ingest.submit(client, new SubmitCommand(RequestKind.BULK, channel, templateName, subject, body,
+                recipients, clientReference, idempotencyKey)));
     }
 
     @Operation(summary = "Get request status with per-status message counts")
     @GetMapping("/{requestId}")
-    public RequestView get(@RequestAttribute(ClientAuthFilter.CLIENT_ATTRIBUTE) Client client, @PathVariable UUID requestId) {
-        return status.get(client.getId(), requestId);
+    public RequestView get(@RequestAttribute(ClientAuthFilter.CLIENT_ATTRIBUTE) AuthenticatedClient client, @PathVariable UUID requestId) {
+        return status.get(client.id(), requestId);
     }
 
     @Operation(summary = "List per-recipient messages of a request", description = "Filter by status; paged.")
     @GetMapping("/{requestId}/messages")
-    public PageView<MessageView> messages(@RequestAttribute(ClientAuthFilter.CLIENT_ATTRIBUTE) Client client,
+    public PageView<MessageView> messages(@RequestAttribute(ClientAuthFilter.CLIENT_ATTRIBUTE) AuthenticatedClient client,
                                           @PathVariable UUID requestId,
                                           @RequestParam(required = false) MessageStatus status,
                                           @RequestParam(defaultValue = "0") int page,
                                           @RequestParam(defaultValue = "50") int size) {
-        return this.status.messages(client.getId(), requestId, status, page, size);
+        return this.status.messages(client.id(), requestId, status, page, size);
     }
 
     @Operation(summary = "List your recent requests")
     @GetMapping
-    public PageView<RequestView> list(@RequestAttribute(ClientAuthFilter.CLIENT_ATTRIBUTE) Client client,
+    public PageView<RequestView> list(@RequestAttribute(ClientAuthFilter.CLIENT_ATTRIBUTE) AuthenticatedClient client,
                                       @RequestParam(defaultValue = "0") int page,
                                       @RequestParam(defaultValue = "20") int size) {
-        return status.list(client.getId(), page, size);
+        return status.list(client.id(), page, size);
     }
 
     private static ResponseEntity<SubmitResponse> respond(SubmitResponse r) {

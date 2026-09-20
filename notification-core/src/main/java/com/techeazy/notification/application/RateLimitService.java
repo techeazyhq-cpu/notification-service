@@ -47,7 +47,7 @@ public class RateLimitService {
 
     /** One token per message delivery: the client's own quota first, then the platform-wide channel cap. */
     public Decision checkDelivery(UUID clientId, Channel channel) {
-        Decision worst = Decision.ALLOWED;
+        Decision worst = Decision.GRANTED;
         Optional<RateLimitPolicy> client = find(RateLimitScope.CLIENT_CHANNEL, clientId, channel);
         if (client.isPresent()) {
             worst = merge(worst, limiter.tryAcquire("client:" + clientId + ":" + channel,
