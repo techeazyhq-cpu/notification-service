@@ -1,0 +1,33 @@
+server:
+  port: ${SERVER_PORT:8082}
+
+spring:
+  application:
+    name: notification-dispatcher
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/notification}
+    username: ${DB_USER:notification}
+    password: ${DB_PASSWORD:notification}
+  jpa:
+    open-in-view: false
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+
+notification:
+  pulsar:
+    service-url: ${PULSAR_URL:pulsar://localhost:6650}
+  sweeper:
+    enabled: true
+
+dispatcher:
+  consumers-per-channel: ${CONSUMERS_PER_CHANNEL:2}
+  max-attempts: ${MAX_ATTEMPTS:5}
+  base-backoff-seconds: ${BASE_BACKOFF_SECONDS:5}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
