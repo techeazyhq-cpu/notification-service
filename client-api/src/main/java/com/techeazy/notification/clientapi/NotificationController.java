@@ -111,7 +111,7 @@ public class NotificationController {
                        @PathVariable UUID requestId,
                        @RequestParam(required = false) MessageStatus status,
                        HttpServletResponse response) throws IOException {
-        this.status.get(client.id(), requestId); // 404 before any bytes are written
+        this.status.requireOwned(client.id(), requestId);
         response.setContentType("text/csv;charset=UTF-8");
         response.setHeader("Content-Disposition", "attachment; filename=\"request-" + requestId
                 + (status == null ? "" : "-" + status.name().toLowerCase(Locale.ROOT)) + ".csv\"");

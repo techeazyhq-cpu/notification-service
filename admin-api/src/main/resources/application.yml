@@ -21,6 +21,9 @@ notification:
   pulsar:
     service-url: ${PULSAR_URL:pulsar://localhost:6650}
 
+billing:
+  payment-terms-days: ${BILLING_PAYMENT_TERMS_DAYS:30}
+
 admin:
   username: ${ADMIN_USERNAME:admin}
   password: ${ADMIN_PASSWORD:admin}

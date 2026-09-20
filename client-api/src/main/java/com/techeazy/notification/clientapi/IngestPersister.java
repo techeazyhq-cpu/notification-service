@@ -15,7 +15,9 @@ import java.util.List;
 import java.util.UUID;
 
 /**
- * Writes the request and all of its messages atomically as PENDING (the outbox state).
+ * Writes the request and all of its messages atomically as PENDING (the outbox state). The admission step runs in the
+ * same transaction after the request is stored and before any message is, so if it refuses (or anything later fails)
+ * nothing is kept.
  * Uses persist() directly: assigned UUIDs would make Spring Data's save() issue a SELECT per row.
  */
 @Component
@@ -29,8 +31,9 @@ public class IngestPersister {
     private EntityManager em;
 
     @Transactional
-    public List<NotificationMessage> persist(NotificationRequest request, List<Recipient> recipients) {
+    public List<NotificationMessage> persist(NotificationRequest request, List<Recipient> recipients, Runnable admission) {
         em.persist(request);
+        admission.run();
         Instant now = request.getCreatedAt();
         List<NotificationMessage> out = new ArrayList<>(recipients.size());
         int n = 0;

@@ -67,3 +67,12 @@ a.plain:hover { text-decoration: underline; }
 .kv { display: grid; grid-template-columns: max-content 1fr; gap: 4px 16px; margin: 0; }
 .kv dt { color: var(--muted); }
 .kv dd { margin: 0; }
+
+.kv.right { justify-content: end; }
+@media print {
+  nav, .no-print, button { display: none !important; }
+  .shell { display: block; }
+  main { padding: 0; max-width: none; }
+  body { background: #fff; color: #000; }
+  .card { border: none; box-shadow: none; page-break-inside: avoid; }
+}

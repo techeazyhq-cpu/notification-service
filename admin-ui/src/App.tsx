@@ -6,6 +6,9 @@ import Clients from './pages/Clients';
 import Templates from './pages/Templates';
 import Providers from './pages/Providers';
 import RateLimits from './pages/RateLimits';
+import BillingPlans from './pages/BillingPlans';
+import BillingAccounts from './pages/BillingAccounts';
+import BillingInvoices from './pages/BillingInvoices';
 import Messages from './pages/Messages';
 
 function Login({ onDone }: Readonly<{ onDone: () => void }>) {
@@ -57,6 +60,9 @@ export default function App() {
         <NavLink to="/templates">Templates</NavLink>
         <NavLink to="/providers">Providers</NavLink>
         <NavLink to="/rate-limits">Rate limits</NavLink>
+        <NavLink to="/billing/plans">Billing plans</NavLink>
+        <NavLink to="/billing/accounts">Billing accounts</NavLink>
+        <NavLink to="/billing/invoices">Invoices</NavLink>
         <button type="button" className="link" onClick={() => { auth.clear(); setAuthed(false); }}>Sign out</button>
       </nav>
       <main>
@@ -68,6 +74,9 @@ export default function App() {
           <Route path="/templates" element={<Templates />} />
           <Route path="/providers" element={<Providers />} />
           <Route path="/rate-limits" element={<RateLimits />} />
+          <Route path="/billing/plans" element={<BillingPlans />} />
+          <Route path="/billing/accounts" element={<BillingAccounts />} />
+          <Route path="/billing/invoices" element={<BillingInvoices />} />
         </Routes>
       </main>
     </div>

@@ -7,3 +7,5 @@ databaseChangeLog:
       file: db/changelog/changes/002-client-tracking-indexes.sql
   - include:
       file: db/changelog/changes/003-client-owned-templates.sql
+  - include:
+      file: db/changelog/changes/004-billing.sql

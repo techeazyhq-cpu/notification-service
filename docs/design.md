@@ -181,6 +181,24 @@ Rules: names are 2-64 characters (letters, digits, `.` `-` `_`) and unique per o
 
 **Content snapshot.** When a request is accepted, the template's subject and body are copied onto the request and the dispatcher renders from that copy (`template_id` remains as a reference only, and becomes `NULL` if the template is deleted). Editing or deleting a template therefore can never change or break a bulk that is already queued, or rewrite history. Verified with a 2,000-recipient bulk whose template was edited and then deleted while 1,960 messages were still queued: all 2,000 went out with the original text. See ADR-002. The admin UI lists every template with its owner for support, but only shared ones can be changed there.
 
+### 4.3 Billing
+
+Clients are billed per message that reaches `SENT`. Each client has at most one billing account: a **plan** (per-channel unit price and monthly free allowance, monthly platform fee, tax rate, one currency) and a **mode**. No account means not billed. Decisions and trade-offs are in ADR-004.
+
+| Method | Path | Purpose |
+|---|---|---|
+| GET | `/v1/billing/account` | Plan, mode, status, credit balance or spend cap |
+| GET | `/v1/billing/usage?month=YYYY-MM` | Billable usage and estimated charge for the month |
+| GET | `/v1/billing/invoices[/{id}]` | Own invoices (drafts are never shown; another client's is `404`) |
+| GET | `/v1/billing/invoices/{id}/export` | CSV |
+| GET | `/v1/billing/ledger` | Prepaid credit movements |
+
+Admin: `/api/admin/billing/plans`, `/accounts`, `/accounts/{clientId}/credit` (top-up or adjustment, idempotent by reference), `/accounts/{clientId}/ledger`, `/invoices`, `/invoices/generate`, `/invoices/{id}/issue|payments|void|export`.
+
+**Prepaid.** Accepting a request reserves its worst-case cost with one atomic conditional debit inside the ingest transaction; `402 INSUFFICIENT_CREDIT` leaves nothing stored. A settlement job (dispatcher, every 10 s) charges what was SENT and refunds the rest. **Postpaid.** Usage is read from `notification_message`; a soft monthly cap gives `402 SPEND_CAP_EXCEEDED`; invoices are generated per closed UTC month (draft, then issued with number `INV-YYYY-NNNNNN`, then paid or void). Suspended accounts get `403 ACCOUNT_SUSPENDED`. Money is a string plus currency in every payload.
+
+Settings: `billing.payment-terms-days`, `billing.settlement.*` and `billing.invoicing.*` (dispatcher runs both jobs; auto-issue is off by default).
+
 ### 4.1 Client tracking UI
 
 `client-ui` is a read-only SPA for API clients (audience and sign-in differ from the admin UI, so it is a separate app). It signs in with the client's own API key and uses only the Client API: `GET /v1/me`, `/v1/notifications` (filters: channel, clientReference), `/v1/notifications/summary`, `/v1/notifications/{id}`, `/{id}/messages` (filters: status, recipient) and `/{id}/messages/export` (CSV, optional status). It polls every 3-5 s and stops polling a request once it reaches a final status. CORS for a separately hosted UI is a servlet filter ordered before API-key authentication (`client-api.cors-origins`), so preflight requests and 401/429 responses are handled correctly.
@@ -189,7 +207,7 @@ Known limitation: the browser holds a key that can also *send*. It is kept in `s
 
 ## 5. Data
 
-PostgreSQL, schema owned by the `db-migration` job (Liquibase changesets in `db-migration/src/main/resources/db/changelog/`, see ADR-003): `client`, `template`, `provider_config`, `rate_limit_policy`, `notification_request`, `notification_message`. The job runs before the services, can preview (`update-sql`), validate and roll back, and the services only validate the schema at start-up. Notable choices: UUID primary keys assigned by the app (JDBC batching without a round trip); partial unique index for idempotency keys; indexes on `(request_id, status)` for status counts and `(status, updated_at)` for the sweeper. API keys are stored only as SHA-256 hashes (keys are 256-bit random, so an unsalted hash suffices for lookup).
+PostgreSQL, schema owned by the `db-migration` job (Liquibase changesets in `db-migration/src/main/resources/db/changelog/`, see ADR-003): `client`, `template`, `provider_config`, `rate_limit_policy`, `notification_request`, `notification_message`, and for billing `billing_plan`, `billing_plan_rate`, `billing_account`, `credit_ledger_entry`, `credit_hold`, `invoice`, `invoice_line`, `invoice_payment`. The job runs before the services, can preview (`update-sql`), validate and roll back, and the services only validate the schema at start-up. Notable choices: UUID primary keys assigned by the app (JDBC batching without a round trip); partial unique index for idempotency keys; indexes on `(request_id, status)` for status counts and `(status, updated_at)` for the sweeper. API keys are stored only as SHA-256 hashes (keys are 256-bit random, so an unsalted hash suffices for lookup).
 
 ## 6. Cross-cutting
 

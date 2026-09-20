@@ -1,6 +1,11 @@
 package com.techeazy.notification.clientapi;
 
 import com.techeazy.notification.application.OutboxPublisher;
+import com.techeazy.notification.billing.application.Admission;
+import com.techeazy.notification.billing.application.AdmissionControl;
+import com.techeazy.notification.billing.domain.HoldScope;
+import com.techeazy.notification.billing.domain.InsufficientCreditException;
+import com.techeazy.notification.billing.domain.Money;
 import com.techeazy.notification.clientapi.IngestPersister.Recipient;
 import com.techeazy.notification.clientapi.IngestService.SubmitCommand;
 import com.techeazy.notification.domain.Channel;
@@ -32,13 +37,14 @@ class IngestServiceTest {
     IngestPersister persister = mock(IngestPersister.class);
     OutboxPublisher outbox = mock(OutboxPublisher.class);
     StatusQueryService status = mock(StatusQueryService.class);
-    IngestService service = new IngestService(templates, requests, persister, outbox, status, 100);
+    AdmissionControl admission = mock(AdmissionControl.class);
+    IngestService service =new IngestService(templates, requests, persister, outbox, status, admission, 100);
 
     AuthenticatedClient me = new AuthenticatedClient(UUID.randomUUID(), "acme", Set.of(Channel.SMS, Channel.EMAIL));
 
     @BeforeEach
     void setUp() {
-        when(persister.persist(any(), any())).thenReturn(List.of());
+        when(persister.persist(any(), any(), any())).thenReturn(List.of());
     }
 
     Template template(UUID owner, String name, String body) {
@@ -61,7 +67,7 @@ class IngestServiceTest {
 
     private NotificationRequest persistedRequest() {
         ArgumentCaptor<NotificationRequest> captor = ArgumentCaptor.forClass(NotificationRequest.class);
-        verify(persister).persist(captor.capture(), any());
+        verify(persister).persist(captor.capture(), any(), any());
         return captor.getValue();
     }
 
@@ -147,7 +153,7 @@ class IngestServiceTest {
 
         service.submit(me, byTemplate("hi", List.of(to("+14155550101", null))));
 
-        verify(persister).persist(any(), any());
+        verify(persister).persist(any(), any(), any());
     }
 
     @Test
@@ -156,6 +162,57 @@ class IngestServiceTest {
                 "Code {{code}}", List.of(to("+14155550101", Map.of())), null, null);
         assertThatThrownBy(() -> service.submit(me, inline))
                 .isInstanceOf(ApiException.class).hasMessageContaining("missing code");
+    }
+
+    private void runAdmissionInsideThePersistStep() {
+        when(persister.persist(any(), any(), any())).thenAnswer(invocation -> {
+            invocation.<Runnable>getArgument(2).run();
+            return List.of();
+        });
+    }
+
+    @Test
+    void billingAdmissionRunsInsideTheStoringStepForThisRequest() {
+        runAdmissionInsideThePersistStep();
+        SubmitCommand command = new SubmitCommand(RequestKind.BULK, Channel.SMS, null, null, "hi",
+                List.of(to("+14155550101", Map.of()), to("+14155550102", Map.of())), null, null);
+
+        service.submit(me, command);
+
+        NotificationRequest request = persistedRequest();
+        verify(admission).admit(new Admission(me.id(), Channel.SMS, 2, HoldScope.REQUEST, request.getId()));
+    }
+
+    @Test
+    void aRefusedAdmissionStopsTheRequestBeforeAnythingIsPublished() {
+        runAdmissionInsideThePersistStep();
+        doThrow(new InsufficientCreditException(Money.of("1", "USD"), Money.of("5", "USD"))).when(admission).admit(any());
+        SubmitCommand command = new SubmitCommand(RequestKind.SINGLE, Channel.SMS, null, null, "hi",
+                List.of(to("+14155550101", Map.of())), null, null);
+
+        assertThatThrownBy(() -> service.submit(me, command)).isInstanceOf(InsufficientCreditException.class);
+
+        verifyNoInteractions(outbox);
+    }
+
+    @Test
+    void aRepeatedIdempotencyKeyReturnsTheOriginalWithoutAdmittingOrChargingAgain() {
+        NotificationRequest original = new NotificationRequest();
+        original.setId(UUID.randomUUID());
+        original.setKind(RequestKind.SINGLE);
+        original.setTotal(1);
+        original.setCreatedAt(java.time.Instant.now());
+        when(requests.findByClientIdAndIdempotencyKey(me.id(), "key-1")).thenReturn(Optional.of(original));
+        when(status.view(original)).thenReturn(new Dtos.RequestView(original.getId(), RequestKind.SINGLE, Channel.SMS,
+                com.techeazy.notification.domain.RequestStatus.PROCESSING, 1, null, null, original.getCreatedAt()));
+        SubmitCommand command = new SubmitCommand(RequestKind.SINGLE, Channel.SMS, null, null, "hi",
+                List.of(to("+14155550101", Map.of())), null, "key-1");
+
+        Dtos.SubmitResponse response = service.submit(me, command);
+
+        assertThat(response.idempotentReplay()).isTrue();
+        assertThat(response.requestId()).isEqualTo(original.getId());
+        verifyNoInteractions(persister, admission, outbox);
     }
 
     @Test

@@ -23,6 +23,14 @@ notification:
   sweeper:
     enabled: true
 
+billing:
+  payment-terms-days: ${BILLING_PAYMENT_TERMS_DAYS:30}
+  settlement:
+    enabled: ${BILLING_SETTLEMENT_ENABLED:true}
+  invoicing:
+    enabled: ${BILLING_INVOICING_ENABLED:true}
+    auto-issue: ${BILLING_AUTO_ISSUE:false}
+
 dispatcher:
   consumers-per-channel: ${CONSUMERS_PER_CHANNEL:2}
   max-attempts: ${MAX_ATTEMPTS:5}

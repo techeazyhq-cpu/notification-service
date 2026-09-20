@@ -1,5 +1,12 @@
 package com.techeazy.notification.clientapi;
 
+import com.techeazy.notification.billing.domain.AccountSuspendedException;
+import com.techeazy.notification.billing.domain.BillingException;
+import com.techeazy.notification.billing.domain.BillingNotFoundException;
+import com.techeazy.notification.billing.domain.InsufficientCreditException;
+import com.techeazy.notification.billing.domain.InvalidBillingDataException;
+import com.techeazy.notification.billing.domain.InvalidBillingStateException;
+import com.techeazy.notification.billing.domain.SpendCapExceededException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
@@ -23,6 +30,40 @@ public class ApiExceptionHandler {
     @ExceptionHandler(ApiException.class)
     ResponseEntity<ErrorBody> api(ApiException e) {
         return ResponseEntity.status(e.status()).body(new ErrorBody(e.code(), e.getMessage()));
+    }
+
+    @ExceptionHandler(InsufficientCreditException.class)
+    ResponseEntity<ErrorBody> insufficientCredit(InsufficientCreditException e) {
+        return billing(HttpStatus.PAYMENT_REQUIRED, "INSUFFICIENT_CREDIT", e);
+    }
+
+    @ExceptionHandler(SpendCapExceededException.class)
+    ResponseEntity<ErrorBody> spendCap(SpendCapExceededException e) {
+        return billing(HttpStatus.PAYMENT_REQUIRED, "SPEND_CAP_EXCEEDED", e);
+    }
+
+    @ExceptionHandler(AccountSuspendedException.class)
+    ResponseEntity<ErrorBody> suspended(AccountSuspendedException e) {
+        return billing(HttpStatus.FORBIDDEN, "ACCOUNT_SUSPENDED", e);
+    }
+
+    @ExceptionHandler(BillingNotFoundException.class)
+    ResponseEntity<ErrorBody> billingNotFound(BillingNotFoundException e) {
+        return billing(HttpStatus.NOT_FOUND, "NOT_FOUND", e);
+    }
+
+    @ExceptionHandler(InvalidBillingStateException.class)
+    ResponseEntity<ErrorBody> billingConflict(InvalidBillingStateException e) {
+        return billing(HttpStatus.CONFLICT, "INVALID_STATE", e);
+    }
+
+    @ExceptionHandler(InvalidBillingDataException.class)
+    ResponseEntity<ErrorBody> billingInvalid(InvalidBillingDataException e) {
+        return billing(HttpStatus.BAD_REQUEST, "INVALID_REQUEST", e);
+    }
+
+    private static ResponseEntity<ErrorBody> billing(HttpStatus status, String code, BillingException e) {
+        return ResponseEntity.status(status).body(new ErrorBody(code, e.getMessage()));
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)

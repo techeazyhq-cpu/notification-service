@@ -76,11 +76,18 @@ Circuit breaker drill (SMS): `curl -X POST "localhost:9000/admin/fail?status=503
 |---|---|
 | `notification-core` | Domain entities, repositories, Pulsar publisher, Redis rate limiter, outbox sweeper |
 | `db-migration` | One-shot Liquibase job that owns the schema: `update`, `update-sql`, `status`, `validate`, `history`, rollback |
+| `billing` | Plans, postpaid invoices, prepaid credit; clean-architecture module with ArchUnit rules (ADR-004) |
 | `client-api` / `admin-api` / `dispatcher` | The three Spring Boot deployables |
 | `admin-ui` | React + Vite admin SPA |
 | `client-ui` | React + Vite SPA for API clients: track requests, manage their own templates |
 | `tools/catcher` | SMS/WhatsApp/Push gateway stand-in |
 | `docs` | Design, ADRs, draw.io container diagram |
+
+## Billing
+
+Admin UI: **Billing plans** (prices, free allowance, platform fee, tax), **Billing accounts** (assign a plan, postpaid or prepaid, spend cap, top up credit), **Invoices** (generate a closed month, issue, record payment, void, CSV). Client UI: **Billing** (account, usage, invoices, prepaid ledger; invoices print to PDF from the browser).
+
+Prepaid clients get `402 INSUFFICIENT_CREDIT` when a request cannot be reserved; postpaid clients with a cap get `402 SPEND_CAP_EXCEEDED`; suspended accounts get `403`. The dispatcher runs the settlement job (`billing.settlement.*`) and the monthly invoice generator (`billing.invoicing.*`). See ADR-004 for the rules and limits.
 
 ## Database migrations
 

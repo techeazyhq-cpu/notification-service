@@ -67,7 +67,7 @@ public class StatusQueryService {
 
     public PageView<MessageView> messages(UUID clientId, UUID requestId, MessageStatus status, String recipient,
                                           int page, int size) {
-        findOwned(clientId, requestId); // 404 unless the request belongs to this client
+        findOwned(clientId, requestId);
         Specification<NotificationMessage> spec = (root, query, cb) -> {
             List<Predicate> where = new ArrayList<>();
             where.add(cb.equal(root.get("requestId"), requestId));
@@ -96,6 +96,11 @@ public class StatusQueryService {
             by.put((MessageStatus) row[0], (Long) row[1]);
         }
         return toView(r, by);
+    }
+
+    /** Fails with 404 unless the request belongs to the client, without loading its counts. */
+    public void requireOwned(UUID clientId, UUID requestId) {
+        findOwned(clientId, requestId);
     }
 
     private NotificationRequest findOwned(UUID clientId, UUID requestId) {

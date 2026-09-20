@@ -2,6 +2,9 @@ package com.techeazy.notification.clientapi;
 
 import com.techeazy.notification.application.OutboxPublisher;
 import com.techeazy.notification.application.TemplateRenderer;
+import com.techeazy.notification.billing.application.Admission;
+import com.techeazy.notification.billing.application.AdmissionControl;
+import com.techeazy.notification.billing.domain.HoldScope;
 import com.techeazy.notification.clientapi.Dtos.SubmitResponse;
 import com.techeazy.notification.clientapi.IngestPersister.Recipient;
 import com.techeazy.notification.domain.*;
@@ -21,8 +24,13 @@ import java.util.Set;
 import java.util.UUID;
 
 /**
- * Accept path: validate, persist as PENDING in one transaction, publish to Pulsar, flip to QUEUED.
- * The API answers 202 once the request is durable; delivery outcome is read via the status API.
+ * Accept path: validate, admit against the client's billing account, persist as PENDING in one transaction, publish
+ * to Pulsar, flip to QUEUED. The API answers 202 once the request is durable; delivery outcome is read via the status API.
+ *
+ * <p>Billing admission runs inside the storing transaction, so a refused or failed request leaves no charge behind.
+ * The content of the request is a snapshot taken here, so later template edits or deletes never touch it. Messages
+ * that fail to publish stay PENDING and the outbox sweeper retries them. A repeated Idempotency-Key returns the
+ * original request instead of creating or charging a second one, including when two submissions race.
  */
 @Service
 public class IngestService {
@@ -32,16 +40,18 @@ public class IngestService {
     private final IngestPersister persister;
     private final OutboxPublisher outbox;
     private final StatusQueryService status;
+    private final AdmissionControl admission;
     private final int maxBulkRecipients;
 
     public IngestService(TemplateRepository templates, NotificationRequestRepository requests, IngestPersister persister,
-                         OutboxPublisher outbox, StatusQueryService status,
+                         OutboxPublisher outbox, StatusQueryService status, AdmissionControl admission,
                          @Value("${client-api.max-bulk-recipients:50000}") int maxBulkRecipients) {
         this.templates = templates;
         this.requests = requests;
         this.persister = persister;
         this.outbox = outbox;
         this.status = status;
+        this.admission = admission;
         this.maxBulkRecipients = maxBulkRecipients;
     }
 
@@ -54,55 +64,71 @@ public class IngestService {
                                 List<Recipient> recipients, String clientReference, String idempotencyKey) {}
 
     public SubmitResponse submit(AuthenticatedClient client, SubmitCommand cmd) {
-        RequestKind kind = cmd.kind();
-        Channel channel = cmd.channel();
-        List<Recipient> recipients = cmd.recipients();
-        String idempotencyKey = cmd.idempotencyKey();
+        requireChannelAllowed(client, cmd.channel());
+        requireWithinBulkLimit(cmd.recipients());
+        Content content = resolveContent(client, cmd.channel(), cmd.templateName(), cmd.subject(), cmd.body());
+        validateRecipients(cmd.channel(), cmd.recipients());
+        validateVariables(content, cmd.recipients());
+
+        Optional<NotificationRequest> duplicate = findByIdempotencyKey(client, cmd.idempotencyKey());
+        if (duplicate.isPresent()) {
+            return replay(duplicate.get());
+        }
+
+        NotificationRequest request = newRequest(client, cmd, content);
+        List<NotificationMessage> messages;
+        try {
+            messages = persister.persist(request, cmd.recipients(), () -> admit(client, cmd, request));
+        } catch (DataIntegrityViolationException e) {
+            return findByIdempotencyKey(client, cmd.idempotencyKey()).map(this::replay).orElseThrow(() -> e);
+        }
+        outbox.publishAndMarkQueued(messages);
+        return accepted(request, messages);
+    }
+
+    private void requireChannelAllowed(AuthenticatedClient client, Channel channel) {
         if (!client.allows(channel)) {
             throw new ApiException(HttpStatus.FORBIDDEN, "CHANNEL_NOT_ALLOWED", "Client is not allowed to use channel " + channel);
         }
+    }
+
+    private void requireWithinBulkLimit(List<Recipient> recipients) {
         if (recipients.size() > maxBulkRecipients) {
             throw ApiException.badRequest("At most " + maxBulkRecipients + " recipients per request");
         }
-        Content content = resolveContent(client, channel, cmd.templateName(), cmd.subject(), cmd.body());
-        validateRecipients(channel, recipients);
-        validateVariables(content, recipients);
+    }
 
-        if (idempotencyKey != null) {
-            Optional<NotificationRequest> existing = requests.findByClientIdAndIdempotencyKey(client.id(), idempotencyKey);
-            if (existing.isPresent()) return replay(existing.get());
+    private Optional<NotificationRequest> findByIdempotencyKey(AuthenticatedClient client, String idempotencyKey) {
+        if (idempotencyKey == null) {
+            return Optional.empty();
         }
+        return requests.findByClientIdAndIdempotencyKey(client.id(), idempotencyKey);
+    }
 
+    private NotificationRequest newRequest(AuthenticatedClient client, SubmitCommand cmd, Content content) {
         NotificationRequest request = new NotificationRequest();
         request.setId(UUID.randomUUID());
         request.setClientId(client.id());
-        request.setKind(kind);
-        request.setChannel(channel);
-        // Snapshot of the content as accepted: later template edits or deletes never touch this request.
+        request.setKind(cmd.kind());
+        request.setChannel(cmd.channel());
         request.setTemplateId(content.templateId());
         request.setSubject(content.subject());
         request.setBody(content.body());
-        request.setTotal(recipients.size());
-        request.setIdempotencyKey(idempotencyKey);
+        request.setTotal(cmd.recipients().size());
+        request.setIdempotencyKey(cmd.idempotencyKey());
         request.setClientReference(cmd.clientReference());
         request.setCreatedAt(Instant.now());
+        return request;
+    }
 
-        List<NotificationMessage> messages;
-        try {
-            messages = persister.persist(request, recipients);
-        } catch (DataIntegrityViolationException e) {
-            // Concurrent submit with the same Idempotency-Key lost the race on the unique index.
-            if (idempotencyKey != null) {
-                Optional<NotificationRequest> existing = requests.findByClientIdAndIdempotencyKey(client.id(), idempotencyKey);
-                if (existing.isPresent()) return replay(existing.get());
-            }
-            throw e;
-        }
+    private void admit(AuthenticatedClient client, SubmitCommand cmd, NotificationRequest request) {
+        admission.admit(new Admission(client.id(), cmd.channel(), cmd.recipients().size(), HoldScope.REQUEST, request.getId()));
+    }
 
-        outbox.publishAndMarkQueued(messages); // failures stay PENDING; the sweeper retries them
-
-        List<UUID> ids = kind == RequestKind.SINGLE ? messages.stream().map(NotificationMessage::getId).toList() : null;
-        return new SubmitResponse(request.getId(), kind, RequestStatus.PROCESSING, request.getTotal(), ids, false, request.getCreatedAt());
+    private SubmitResponse accepted(NotificationRequest request, List<NotificationMessage> messages) {
+        List<UUID> ids = request.getKind() == RequestKind.SINGLE ? messages.stream().map(NotificationMessage::getId).toList() : null;
+        return new SubmitResponse(request.getId(), request.getKind(), RequestStatus.PROCESSING, request.getTotal(), ids, false,
+                request.getCreatedAt());
     }
 
     private SubmitResponse replay(NotificationRequest existing) {
