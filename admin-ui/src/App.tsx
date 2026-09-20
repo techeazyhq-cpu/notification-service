@@ -18,7 +18,7 @@
 
 import { useEffect, useState } from 'react';
 import { NavLink, Navigate, Route, Routes } from 'react-router-dom';
-import { api, auth } from './api';
+import { ApiError, auth, signIn, signOut } from './api';
 import Dashboard from './pages/Dashboard';
 import Clients from './pages/Clients';
 import Templates from './pages/Templates';
@@ -28,31 +28,47 @@ import BillingPlans from './pages/BillingPlans';
 import BillingAccounts from './pages/BillingAccounts';
 import BillingInvoices from './pages/BillingInvoices';
 import Messages from './pages/Messages';
+import Account from './pages/Account';
 
 function Login({ onDone }: Readonly<{ onDone: () => void }>) {
   const [user, setUser] = useState('admin');
   const [password, setPassword] = useState('');
+  const [code, setCode] = useState('');
+  const [needCode, setNeedCode] = useState(false);
   const [error, setError] = useState('');
 
   async function submit(e: React.SubmitEvent<HTMLFormElement>) {
     e.preventDefault();
-    auth.set(user, password);
     try {
-      await api('GET', '/dashboard/summary?hours=1');
+      await signIn(user, password, code);
       onDone();
-    } catch {
-      auth.clear();
-      setError('Invalid credentials or Admin API unreachable');
+    } catch (err) {
+      const failure = err as ApiError;
+      if (failure.code === 'OTP_REQUIRED') {
+        setNeedCode(true);
+        setError('');
+      } else if (failure.status === 401 || failure.status === 429) {
+        setError(failure.message);
+        setCode('');
+      } else {
+        setError('Admin API unreachable');
+      }
     }
   }
 
   return (
     <form className="login card" onSubmit={submit}>
       <h1>Notification Admin</h1>
-      <label>Username<input value={user} onChange={(e) => setUser(e.target.value)} autoComplete="username" /></label>
-      <label>Password<input type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="current-password" /></label>
+      <label>Username<input value={user} onChange={(e) => setUser(e.target.value)} autoComplete="username" disabled={needCode} /></label>
+      <label>Password<input type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="current-password" disabled={needCode} /></label>
+      {needCode && (
+        <label>Verification code
+          <input value={code} onChange={(e) => setCode(e.target.value)} inputMode="numeric" autoComplete="one-time-code" placeholder="6-digit code or a recovery code" required />
+        </label>
+      )}
       {error && <p className="error">{error}</p>}
-      <button type="submit" className="primary">Sign in</button>
+      <button type="submit" className="primary">{needCode ? 'Verify' : 'Sign in'}</button>
+      {needCode && <button type="button" className="link" onClick={() => { setNeedCode(false); setCode(''); }}>Back</button>}
     </form>
   );
 }
@@ -81,7 +97,8 @@ export default function App() {
         <NavLink to="/billing/plans">Billing plans</NavLink>
         <NavLink to="/billing/accounts">Billing accounts</NavLink>
         <NavLink to="/billing/invoices">Invoices</NavLink>
-        <button type="button" className="link" onClick={() => { auth.clear(); setAuthed(false); }}>Sign out</button>
+        <NavLink to="/account">My account</NavLink>
+        <button type="button" className="link" onClick={() => { signOut().finally(() => setAuthed(false)); }}>Sign out</button>
       </nav>
       <main>
         <Routes>
@@ -95,6 +112,7 @@ export default function App() {
           <Route path="/billing/plans" element={<BillingPlans />} />
           <Route path="/billing/accounts" element={<BillingAccounts />} />
           <Route path="/billing/invoices" element={<BillingInvoices />} />
+          <Route path="/account" element={<Account />} />
         </Routes>
       </main>
     </div>

@@ -37,7 +37,7 @@ Negative / accepted:
 - Shared database couples the three deployables at the schema level (mitigated by table ownership and a single migration job, see ADR-003).
 - Sweeper-based recovery means a crash can produce a duplicate send after the 5-minute reclaim; providers with idempotency keys should use `messageId`.
 - PostgreSQL is on the hot path for bulk; needs partitioning/retention at volume.
-- Admin auth is HTTP Basic in v0.1 (temporary).
+- Admin auth was HTTP Basic in v0.1 (temporary); replaced by password login with optional two-factor authentication in ADR-005.
 - Rate limiter fails open.
 
 ## Compliance impact

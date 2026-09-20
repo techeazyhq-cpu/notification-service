@@ -56,9 +56,9 @@ class MigrationServiceTest {
     private static final List<String> LEGACY_FLYWAY_SCRIPTS =
             List.of("V1__init.sql", "V2__client_tracking_indexes.sql", "V3__client_owned_templates.sql");
     private static final List<String> EXPECTED_IDS =
-            List.of("001-baseline", "002-client-tracking-indexes", "003-client-owned-templates", "004-billing");
+            List.of("001-baseline", "002-client-tracking-indexes", "003-client-owned-templates", "004-billing", "005-admin-accounts");
     private static final String NOT_COMPARED = "('databasechangelog','databasechangeloglock','flyway_schema_history',"
-            + "'billing_plan','billing_plan_rate','billing_account','credit_ledger_entry','credit_hold','invoice','invoice_line','invoice_payment')";
+            + "'billing_plan','billing_plan_rate','billing_account','credit_ledger_entry','credit_hold','invoice','invoice_line','invoice_payment','admin_user','admin_recovery_code','admin_session')";
     private static final List<String> BILLING_TABLES =
             List.of("billing_plan", "billing_plan_rate", "billing_account", "credit_ledger_entry", "credit_hold", "invoice", "invoice_line", "invoice_payment");
 
@@ -69,7 +69,7 @@ class MigrationServiceTest {
         String db = newDatabase();
         MigrationService service = service(db, false);
 
-        assertThat(service.status()).hasSize(4);
+        assertThat(service.status()).hasSize(5);
         service.update();
 
         assertThat(service.status()).isEmpty();
@@ -79,7 +79,7 @@ class MigrationServiceTest {
                 .contains("client", "template", "provider_config", "rate_limit_policy", "notification_request", "notification_message");
 
         service.update();
-        assertThat(service.history()).hasSize(4);
+        assertThat(service.history()).hasSize(5);
         service.validate();
     }
 
@@ -106,7 +106,7 @@ class MigrationServiceTest {
 
         service.update();
 
-        assertThat(service.history()).extracting(HistoryEntry::type).containsExactly("MARK_RAN", "MARK_RAN", "MARK_RAN", "EXECUTED");
+        assertThat(service.history()).extracting(HistoryEntry::type).containsExactly("MARK_RAN", "MARK_RAN", "MARK_RAN", "EXECUTED", "EXECUTED");
         assertThat(service.status()).isEmpty();
         assertThat(schemaSignature(db)).isEqualTo(before);
         assertThat(query(db, "select count(*)::text from notification_request")).containsExactly("1");
@@ -126,7 +126,7 @@ class MigrationServiceTest {
                 + "('00000000-0000-0000-0000-0000000000c1', '00000000-0000-0000-0000-00000000000a', 'mine', 'SMS', 'x', now(), now())");
         execute(db, "update notification_request set template_id = '00000000-0000-0000-0000-0000000000c1'");
 
-        service.rollbackCount(2);
+        service.rollbackCount(3);
 
         assertThat(query(db, "select column_name from information_schema.columns where table_name='template' and column_name='client_id'")).isEmpty();
         assertThat(query(db, "select count(*)::text from template")).containsExactly("2"); // the two shared ones; the client-owned one is gone
@@ -149,7 +149,7 @@ class MigrationServiceTest {
 
         assertThatThrownBy(() -> service.rollbackCount(1)).hasMessageContaining("disabled");
         assertThatThrownBy(() -> service.rollbackToTag("anything")).hasMessageContaining("disabled");
-        assertThat(service.history()).hasSize(4);
+        assertThat(service.history()).hasSize(5);
     }
 
     @Test
@@ -162,11 +162,29 @@ class MigrationServiceTest {
         service.update();
 
         String tag = service.history().stream().map(HistoryEntry::tag).filter(t -> t != null && t.startsWith("pre-")).findFirst().orElseThrow();
-        assertThat(service.history()).hasSize(4);
+        assertThat(service.history()).hasSize(5);
 
         service.rollbackToTag(tag);
 
-        assertThat(service.history()).extracting(HistoryEntry::id).containsExactlyElementsOf(EXPECTED_IDS.subList(0, 3));
+        assertThat(service.history()).extracting(HistoryEntry::id).containsExactlyElementsOf(EXPECTED_IDS.subList(0, 4));
+    }
+
+    @Test
+    void theAdminAccountsChangesetRemovesItsTablesWhenRolledBackAndCanBeReapplied() throws Exception {
+        String db = newDatabase();
+        MigrationService service = service(db, true);
+        service.update();
+        assertThat(query(db, "select table_name from information_schema.tables where table_schema = 'public' and table_name in ('admin_user','admin_recovery_code','admin_session')")).hasSize(3);
+
+        service.rollbackCount(1);
+
+        assertThat(query(db, "select table_name from information_schema.tables where table_schema = 'public' and table_name in ('admin_user','admin_recovery_code','admin_session')")).isEmpty();
+        assertThat(service.history()).hasSize(4);
+
+        service.update();
+
+        assertThat(query(db, "select table_name from information_schema.tables where table_schema = 'public' and table_name in ('admin_user','admin_recovery_code','admin_session')")).hasSize(3);
+        assertThat(service.history()).extracting(HistoryEntry::id).containsExactlyElementsOf(EXPECTED_IDS);
     }
 
     @Test
@@ -176,7 +194,7 @@ class MigrationServiceTest {
         service.update();
         assertThat(billingTablesPresent(db)).containsExactlyInAnyOrderElementsOf(BILLING_TABLES);
 
-        service.rollbackCount(1);
+        service.rollbackCount(2);
 
         assertThat(billingTablesPresent(db)).isEmpty();
         assertThat(query(db, "select indexname from pg_indexes where indexname = 'ix_message_sent_usage'")).isEmpty();

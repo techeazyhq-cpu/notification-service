@@ -27,11 +27,13 @@ import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
-import org.springframework.security.core.userdetails.User;
+import com.techeazy.notification.adminapi.auth.AdminAuthService;
+import com.techeazy.notification.adminapi.auth.BearerTokenFilter;
+import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.crypto.factory.PasswordEncoderFactories;
 import org.springframework.security.crypto.password.PasswordEncoder;
-import org.springframework.security.provisioning.InMemoryUserDetailsManager;
+import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.HttpStatusEntryPoint;
 import org.springframework.http.HttpStatus;
@@ -42,8 +44,9 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 import java.util.List;
 
 /**
- * HTTP Basic with a single configured admin. Deliberately simple for this first cut; the intended
- * production setup is OIDC with role-based access (see docs/adr-001).
+ * Administrators sign in at {@code /api/admin/auth/login} (password, plus a TOTP code when two-factor authentication is
+ * enabled) and then send the returned session token as a Bearer token. Accounts live in the database (see ADR-005);
+ * the intended production setup for many administrators is OIDC with role-based access (see ADR-001).
  */
 @Configuration
 @EnableWebSecurity
@@ -55,21 +58,19 @@ class SecurityConfig {
     }
 
     @Bean
-    UserDetailsService users(PasswordEncoder encoder,
-                             @Value("${admin.username}") String username,
-                             @Value("${admin.password}") String password) {
-        return new InMemoryUserDetailsManager(User.withUsername(username).password(encoder.encode(password)).roles("ADMIN").build());
+    UserDetailsService noPasswordLogin() {
+        return username -> {
+            throw new UsernameNotFoundException("Password login is handled by /api/admin/auth/login");
+        };
     }
 
     /**
-     * CSRF protection is off on purpose: the API is stateless (no session, no cookies) and every request carries an
-     * explicit Authorization header set by the SPA, so a forged cross-site request has no credentials to ride on.
-     * The 401 entry point below returns no WWW-Authenticate challenge, which stops browsers from prompting for and
-     * then caching Basic credentials (the only way the browser could attach them on its own).
+     * CSRF protection is off on purpose: the API is stateless (no cookies) and every request carries an explicit
+     * Authorization header set by the SPA, so a forged cross-site request has no credentials to ride on.
      */
     @Bean
     @SuppressWarnings("java:S4502") // reviewed: stateless header-authenticated API, see Javadoc
-    SecurityFilterChain chain(HttpSecurity http) throws Exception {
+    SecurityFilterChain chain(HttpSecurity http, AdminAuthService auth) throws Exception {
         http.csrf(AbstractHttpConfigurer::disable)
                 .cors(Customizer.withDefaults())
                 .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
@@ -78,9 +79,11 @@ class SecurityConfig {
                         .dispatcherTypeMatchers(DispatcherType.ERROR).permitAll()
                         .requestMatchers("/actuator/health", "/actuator/prometheus").permitAll()
                         .requestMatchers("/swagger-ui/**", "/swagger-ui.html", "/v3/api-docs/**").permitAll()
+                        .requestMatchers("/api/admin/auth/login").permitAll()
                         .requestMatchers("/api/**").hasRole("ADMIN")
                         .anyRequest().denyAll())
-                .httpBasic(basic -> basic.authenticationEntryPoint(new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED)));
+                .addFilterBefore(new BearerTokenFilter(auth), UsernamePasswordAuthenticationFilter.class)
+                .exceptionHandling(e -> e.authenticationEntryPoint(new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED)));
         return http.build();
     }
 
