@@ -18,15 +18,30 @@
 
 // Seeds a local environment through the Admin API: catcher providers, sample templates, a demo client.
 //   node scripts/seed.mjs
-// Env: ADMIN_URL (http://localhost:8081), ADMIN_USER/ADMIN_PASSWORD (admin/admin),
+// Env: ADMIN_URL (http://localhost:8081), ADMIN_USER/ADMIN_PASSWORD (admin/admin, or your changed password),
+//      ADMIN_OTP (a current two-factor code, only if two-factor authentication is enabled),
 //      SMTP_HOST/SMTP_PORT (mailpit/1025) and CATCHER_URL (http://catcher:9000) are the addresses the
 //      *dispatcher* uses, i.e. Docker service names when the stack runs in Compose. When running the
 //      dispatcher on your host instead, use SMTP_HOST=localhost CATCHER_URL=http://localhost:9000.
 const ADMIN = process.env.ADMIN_URL || 'http://localhost:8081'; // NOSONAR: plain-HTTP default is for local development only
-const auth = 'Basic ' + Buffer.from(`${process.env.ADMIN_USER || 'admin'}:${process.env.ADMIN_PASSWORD || 'admin'}`).toString('base64');
+let auth = '';
 const SMTP_HOST = process.env.SMTP_HOST || 'mailpit';
 const SMTP_PORT = process.env.SMTP_PORT || '1025';
 const CATCHER = process.env.CATCHER_URL || 'http://catcher:9000'; // NOSONAR: in-cluster catcher for local development only
+
+async function signIn() {
+  const res = await fetch(ADMIN + '/api/admin/auth/login', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      username: process.env.ADMIN_USER || 'admin',
+      password: process.env.ADMIN_PASSWORD || 'admin',
+      verificationCode: process.env.ADMIN_OTP || null,
+    }),
+  });
+  if (!res.ok) throw new Error(`Sign-in failed: ${res.status} ${await res.text()}`);
+  auth = 'Bearer ' + (await res.json()).token;
+}
 
 async function api(method, path, body) {
   const res = await fetch(ADMIN + '/api/admin' + path, {
@@ -47,6 +62,7 @@ async function ensure(path, name, body) {
   return created;
 }
 
+await signIn();
 await ensure('/providers', 'mailpit-smtp', {
   channel: 'EMAIL', name: 'mailpit-smtp', type: 'SMTP', enabled: true, priority: 10,
   settings: { host: SMTP_HOST, port: SMTP_PORT, from: 'no-reply@notify.local' },

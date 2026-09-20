@@ -23,13 +23,37 @@ export type Channel = (typeof CHANNELS)[number];
 
 export const auth = {
   get: () => sessionStorage.getItem(KEY),
-  set: (user: string, password: string) => sessionStorage.setItem(KEY, 'Basic ' + btoa(`${user}:${password}`)),
+  set: (token: string) => sessionStorage.setItem(KEY, 'Bearer ' + token),
   clear: () => sessionStorage.removeItem(KEY),
 };
 
 export class ApiError extends Error {
-  constructor(public status: number, message: string) {
+  constructor(public status: number, message: string, public code?: string) {
     super(message);
+  }
+}
+
+export interface LoginResult { token: string; expiresAt: string; twoFactorEnabled: boolean; initialPassword: boolean }
+export interface Account { username: string; twoFactorEnabled: boolean; recoveryCodesRemaining: number; initialPassword: boolean }
+export interface TwoFactorSetup { secret: string; otpauthUri: string }
+
+export async function signIn(username: string, password: string, verificationCode: string): Promise<LoginResult> {
+  const res = await fetch('/api/admin/auth/login', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ username, password, verificationCode: verificationCode || null }),
+  });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) throw new ApiError(res.status, body.message || `HTTP ${res.status}`, body.code);
+  auth.set(body.token);
+  return body as LoginResult;
+}
+
+export async function signOut(): Promise<void> {
+  try {
+    await fetch('/api/admin/auth/logout', { method: 'POST', headers: { Authorization: auth.get() ?? '' } });
+  } finally {
+    auth.clear();
   }
 }
 
@@ -47,12 +71,14 @@ export async function api<T = unknown>(method: string, path: string, body?: unkn
   const text = await res.text();
   if (!res.ok) {
     let message = text;
+    let code: string | undefined;
     try {
       const j = JSON.parse(text);
       message = j.message || j.error || text;
+      code = j.code;
       if (j.errors?.length) message = j.errors.map((e: { defaultMessage: string; field: string }) => `${e.field} ${e.defaultMessage}`).join('; ');
     } catch { /* keep raw text */ }
-    throw new ApiError(res.status, message || `HTTP ${res.status}`);
+    throw new ApiError(res.status, message || `HTTP ${res.status}`, code);
   }
   return (text ? JSON.parse(text) : null) as T;
 }

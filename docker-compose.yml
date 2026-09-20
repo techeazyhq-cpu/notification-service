@@ -99,6 +99,7 @@ services:
       <<: *svc-env
       ADMIN_USERNAME: admin
       ADMIN_PASSWORD: admin
+      ADMIN_TWO_FACTOR_KEY: ${ADMIN_TWO_FACTOR_KEY:-development-only-change-me}
     depends_on: *svc-deps
 
   dispatcher:

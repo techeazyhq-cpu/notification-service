@@ -42,6 +42,12 @@ billing:
 admin:
   username: ${ADMIN_USERNAME:admin}
   password: ${ADMIN_PASSWORD:admin}
+  two-factor-key: ${ADMIN_TWO_FACTOR_KEY:development-only-change-me}
+  issuer: ${ADMIN_ISSUER:Notification Admin}
+  session-idle-minutes: ${ADMIN_SESSION_IDLE_MINUTES:30}
+  session-max-hours: ${ADMIN_SESSION_MAX_HOURS:12}
+  max-failed-attempts: ${ADMIN_MAX_FAILED_ATTEMPTS:5}
+  lockout-minutes: ${ADMIN_LOCKOUT_MINUTES:15}
   cors-origins: ${ADMIN_CORS_ORIGINS:http://localhost:5173}
 
 management:
