@@ -30,7 +30,7 @@ COPY billing/src billing/src
 COPY ${MODULE}/src ${MODULE}/src
 RUN --mount=type=cache,target=/root/.m2 mvn -q -B -DskipTests package -pl ${MODULE} -am
 
-FROM eclipse-temurin:21-jre
+FROM eclipse-temurin:24-jre
 ARG MODULE
 RUN useradd --system --uid 1001 app
 USER app
