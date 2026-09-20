@@ -124,6 +124,22 @@ Delivery limits apply in the dispatcher, so a bulk request is *accepted* fast an
 
 `ChannelProvider` SPI with two implementations: `SmtpProvider` and `HttpJsonProvider` (generic JSON gateway). Configs live in the DB and are edited in the admin UI. Locally, Mailpit captures email and `tools/catcher` captures SMS/WhatsApp/Push. Real vendors (Twilio, Meta WhatsApp Cloud API, FCM/APNs, SES) are added as new `ChannelProvider` beans or through `HttpJsonProvider` when the gateway accepts our JSON.
 
+### 3.4 Circuit breaker (provider failures)
+
+Each provider config (SMTP relay, SMS/WhatsApp/Push gateway) has its own Resilience4j circuit breaker in the dispatcher. It exists so a dead or hung gateway is not hammered, does not tie up worker threads on timeouts, and does not burn the retry budget of messages that were never at fault.
+
+| Aspect | Behaviour |
+|---|---|
+| What counts as failure | `TransientSendException` only (timeouts, connection errors, 5xx, 429, SMTP errors). `PermanentSendException` (bad recipient, 4xx) is ignored: it says nothing about provider health |
+| Opens when | ≥ 50 % of the last 20 calls failed (min 10 calls) or ≥ 80 % were slower than 8 s |
+| While open | Calls are rejected instantly; traffic fails over to the next provider of the channel by priority |
+| All providers of a channel open | Dispatcher **pauses that channel's Pulsar consumers** (backlog waits in Pulsar). Messages already in hand are held, not failed: the claim is released and **no attempt is counted**, so an outage cannot push messages to `FAILED` |
+| Recovery | After 30 s the circuit goes half-open, 3 probe calls are allowed; success closes it and consumers resume, a failed probe re-opens it |
+| Admin edits a provider | That provider's breaker is reset, so a corrected config is tried immediately |
+| Visibility | `GET :8082/actuator/providerhealth`, Prometheus `resilience4j_circuitbreaker_*`, WARN log on every state change |
+
+All thresholds are configurable (`dispatcher.circuit-breaker.*`, env `CB_*`), and `CB_ENABLED=false` disables it. State is per dispatcher instance (each instance learns independently, which is fine because they probe independently); it is not shared through Redis.
+
 ## 4. API contract (Client API)
 
 OpenAPI is served at `/v3/api-docs`, Swagger UI at `/swagger-ui.html`. All calls need `X-API-Key`.
@@ -159,7 +175,7 @@ PostgreSQL (Flyway `V1__init.sql`): `client`, `template`, `provider_config`, `ra
 
 **Observability.** Actuator health and Prometheus metrics on every service; dispatcher counter `notification.dispatch{channel,outcome}` (`sent`, `retry`, `rate_limited`, `failed_permanent`, `failed_exhausted`). Recommended SLIs: accept success rate and latency; time from `PENDING` to `SENT` (p95); backlog size; FAILED ratio per channel. Add trace-id propagation into the Pulsar envelope next.
 
-**Resilience.** Broker down → ingest still returns `202` (rows stay `PENDING`, sweeper catches up). Provider down → retries with backoff, then failover to the next provider, then `FAILED` with admin re-queue. Worker crash → sweeper reclaims after 5 min. Redis down → limiter fails open. Poison messages → DLQ topic.
+**Resilience.** Broker down → ingest still returns `202` (rows stay `PENDING`, sweeper catches up). Provider down → circuit breaker (below), then retries with backoff, then failover to the next provider, then `FAILED` with admin re-queue. Worker crash → sweeper reclaims after 5 min. Redis down → limiter fails open. Poison messages → DLQ topic.
 
 **Compliance.** Recipient data is personal data: keep it in one store, add a retention job (delete messages after N days) and per-client erasure before production; document lawful basis and opt-out handling with the calling applications (this service sends what it is asked to). Not legal advice — confirm with your DPO.
 

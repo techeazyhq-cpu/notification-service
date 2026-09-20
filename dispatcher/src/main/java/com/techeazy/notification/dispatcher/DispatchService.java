@@ -37,7 +37,11 @@ public class DispatchService {
         record RateLimited(long waitMillis) implements Outcome {}
         /** Transient failure; redeliver after the delay. */
         record Retry(Duration delay) implements Outcome {}
+        /** Every provider of the channel has an open circuit; hold the message, no attempt was spent. */
+        record Unavailable(long waitMillis) implements Outcome {}
     }
+
+    static final long UNAVAILABLE_POLL_MS = 2000;
 
     private final NotificationMessageRepository messages;
     private final NotificationRequestRepository requests;
@@ -69,6 +73,12 @@ public class DispatchService {
             return new Outcome.Done(); // duplicate delivery, or another worker owns it
         }
 
+        // Checked before the rate limit and the claim so an outage costs neither a token nor an attempt.
+        if (!providers.isAvailable(m.getChannel())) {
+            count(m.getChannel(), "circuit_open");
+            return new Outcome.Unavailable(UNAVAILABLE_POLL_MS);
+        }
+
         Decision d = rateLimits.checkDelivery(m.getClientId(), m.getChannel());
         if (!d.allowed()) {
             count(m.getChannel(), "rate_limited");
@@ -86,6 +96,11 @@ public class DispatchService {
             messages.markSent(messageId, result.providerMessageId(), Instant.now());
             count(m.getChannel(), "sent");
             return new Outcome.Done();
+        } catch (ProviderRegistry.ProvidersUnavailableException e) {
+            // Circuit opened between the availability check and the send: undo the claim, do not count the attempt.
+            messages.release(messageId, Instant.now());
+            count(m.getChannel(), "circuit_open");
+            return new Outcome.Unavailable(UNAVAILABLE_POLL_MS);
         } catch (PermanentSendException | TemplateRenderer.MissingVariableException e) {
             messages.markFailedOrRetry(messageId, MessageStatus.FAILED, truncate(e.getMessage()), Instant.now());
             count(m.getChannel(), "failed_permanent");

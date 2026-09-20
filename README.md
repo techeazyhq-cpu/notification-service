@@ -48,6 +48,10 @@ curl "localhost:8080/v1/notifications/<requestId>/messages?status=FAILED" -H "X-
 Failure drills: `curl -X POST "localhost:9000/admin/fail?status=503&count=3"` makes the next 3 SMS/WhatsApp/Push sends fail
 (watch them go `RETRYING` then `SENT`); a recipient ending in `0400` gets a permanent `400` and ends `FAILED`.
 
+Circuit breaker drill (SMS): `curl -X POST "localhost:9000/admin/fail?status=503&count=100000"`, send ~15 SMS, then
+`curl localhost:8082/actuator/providerhealth` shows `catcher-sms` `OPEN`; messages stay queued (not `FAILED`). Clear it with
+`curl -X POST "localhost:9000/admin/fail?count=0"`: after ~30 s the breaker half-opens, closes, and the backlog is delivered.
+
 ## Layout
 
 | Path | What |

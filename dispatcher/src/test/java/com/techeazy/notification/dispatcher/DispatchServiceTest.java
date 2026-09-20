@@ -60,6 +60,28 @@ class DispatchServiceTest {
 
         when(rateLimits.checkDelivery(any(), any())).thenReturn(Decision.ALLOWED);
         when(messages.claim(eq(id), any(), any())).thenReturn(1);
+        when(providers.isAvailable(any())).thenReturn(true);
+    }
+
+    @Test
+    void openCircuitHoldsTheMessageWithoutSpendingATokenOrAnAttempt() {
+        when(providers.isAvailable(Channel.SMS)).thenReturn(false);
+
+        assertThat(service.process(id)).isEqualTo(new Outcome.Unavailable(DispatchService.UNAVAILABLE_POLL_MS));
+
+        verifyNoInteractions(rateLimits);
+        verify(messages, never()).claim(any(), any(), any());
+        verify(providers, never()).send(any());
+    }
+
+    @Test
+    void circuitOpeningMidSendReleasesTheClaimInsteadOfCountingAnAttempt() {
+        when(providers.send(any())).thenThrow(new ProviderRegistry.ProvidersUnavailableException(Channel.SMS));
+
+        assertThat(service.process(id)).isInstanceOf(Outcome.Unavailable.class);
+
+        verify(messages).release(eq(id), any());
+        verify(messages, never()).markFailedOrRetry(any(), any(), any(), any());
     }
 
     @Test
@@ -78,7 +100,7 @@ class DispatchServiceTest {
 
         assertThat(service.process(id)).isInstanceOf(Outcome.Done.class);
 
-        verifyNoInteractions(providers);
+        verify(providers, never()).send(any());
         verify(messages, never()).claim(any(), any(), any());
     }
 
@@ -88,7 +110,7 @@ class DispatchServiceTest {
 
         assertThat(service.process(id)).isInstanceOf(Outcome.Done.class);
 
-        verifyNoInteractions(providers);
+        verify(providers, never()).send(any());
     }
 
     @Test
@@ -98,7 +120,7 @@ class DispatchServiceTest {
         assertThat(service.process(id)).isEqualTo(new Outcome.RateLimited(250));
 
         verify(messages, never()).claim(any(), any(), any());
-        verifyNoInteractions(providers);
+        verify(providers, never()).send(any());
     }
 
     @Test
@@ -137,7 +159,7 @@ class DispatchServiceTest {
 
         assertThat(service.process(id)).isInstanceOf(Outcome.Done.class);
 
-        verifyNoInteractions(providers);
+        verify(providers, never()).send(any());
         verify(messages).markFailedOrRetry(eq(id), eq(MessageStatus.FAILED), contains("name"), any());
     }
 }
