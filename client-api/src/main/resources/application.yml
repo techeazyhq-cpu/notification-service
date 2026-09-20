@@ -1,0 +1,41 @@
+server:
+  port: ${SERVER_PORT:8080}
+
+spring:
+  application:
+    name: notification-client-api
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/notification}
+    username: ${DB_USER:notification}
+    password: ${DB_PASSWORD:notification}
+  jpa:
+    open-in-view: false
+    properties:
+      hibernate:
+        jdbc:
+          batch_size: 500
+        order_inserts: true
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+  servlet:
+    multipart:
+      max-file-size: 20MB
+      max-request-size: 20MB
+
+notification:
+  pulsar:
+    service-url: ${PULSAR_URL:pulsar://localhost:6650}
+
+client-api:
+  max-bulk-recipients: ${MAX_BULK_RECIPIENTS:50000}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html

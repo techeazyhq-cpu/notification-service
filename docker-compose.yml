@@ -1,0 +1,83 @@
+# Infra only:            docker compose up -d
+# Infra + all services:  docker compose --profile app up -d --build
+name: notification-service
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: notification
+      POSTGRES_USER: notification
+      POSTGRES_PASSWORD: notification
+    ports: ["5432:5432"]
+    volumes: [pgdata:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U notification"]
+      interval: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    ports: ["6379:6379"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      retries: 10
+
+  pulsar:
+    image: apachepulsar/pulsar:3.3.3
+    command: bin/pulsar standalone -nfw -nss
+    environment:
+      PULSAR_MEM: "-Xms512m -Xmx768m -XX:MaxDirectMemorySize=512m"
+    ports: ["6650:6650", "8088:8080"]
+    volumes: [pulsardata:/pulsar/data]
+    healthcheck:
+      test: ["CMD-SHELL", "bin/pulsar-admin brokers healthcheck || exit 1"]
+      interval: 10s
+      timeout: 10s
+      retries: 20
+      start_period: 30s
+
+  # Email catcher: SMTP on 1025, web UI on http://localhost:8025
+  mailpit:
+    image: axllent/mailpit:latest
+    ports: ["1025:1025", "8025:8025"]
+
+  # SMS / WhatsApp / Push catcher: web UI on http://localhost:9000
+  catcher:
+    build: ./tools/catcher
+    ports: ["9000:9000"]
+
+  client-api:
+    profiles: [app]
+    build: { context: ., args: { MODULE: client-api } }
+    ports: ["8080:8080"]
+    environment: &svc-env
+      DB_URL: jdbc:postgresql://postgres:5432/notification
+      REDIS_HOST: redis
+      PULSAR_URL: pulsar://pulsar:6650
+    depends_on: &svc-deps
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+      pulsar: { condition: service_healthy }
+
+  admin-api:
+    profiles: [app]
+    build: { context: ., args: { MODULE: admin-api } }
+    ports: ["8081:8081"]
+    environment:
+      <<: *svc-env
+      ADMIN_USERNAME: admin
+      ADMIN_PASSWORD: admin
+    depends_on: *svc-deps
+
+  dispatcher:
+    profiles: [app]
+    build: { context: ., args: { MODULE: dispatcher } }
+    ports: ["8082:8082"]
+    environment: *svc-env
+    depends_on: *svc-deps
+
+volumes:
+  pgdata:
+  pulsardata:
