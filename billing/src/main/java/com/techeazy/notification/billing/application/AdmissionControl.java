@@ -18,9 +18,9 @@
 
 package com.techeazy.notification.billing.application;
 
-import com.techeazy.notification.billing.application.port.AccountRepository;
+import com.techeazy.notification.billing.application.port.AccountLookup;
 import com.techeazy.notification.billing.application.port.CreditStore;
-import com.techeazy.notification.billing.application.port.PlanRepository;
+import com.techeazy.notification.billing.application.port.PlanLookup;
 import com.techeazy.notification.billing.application.port.UsageReader;
 import com.techeazy.notification.billing.domain.AccountSuspendedException;
 import com.techeazy.notification.billing.domain.BillingAccount;
@@ -59,14 +59,14 @@ import java.util.Map;
  */
 public class AdmissionControl {
 
-    private final AccountRepository accounts;
-    private final PlanRepository plans;
+    private final AccountLookup accounts;
+    private final PlanLookup plans;
     private final CreditStore credits;
     private final UsageReader usage;
     private final InvoiceCalculator calculator;
     private final Clock clock;
 
-    public AdmissionControl(AccountRepository accounts, PlanRepository plans, CreditStore credits, UsageReader usage,
+    public AdmissionControl(AccountLookup accounts, PlanLookup plans, CreditStore credits, UsageReader usage,
                             InvoiceCalculator calculator, Clock clock) {
         this.accounts = accounts;
         this.plans = plans;

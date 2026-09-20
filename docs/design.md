@@ -110,6 +110,10 @@ A draw.io version of this view is in [`container.drawio`](container.drawio).
 
 Only the **message id** travels through Pulsar. Recipient addresses and variables stay in PostgreSQL, which keeps personal data out of the broker, its retry/DLQ topics and its backups (erasure = delete rows).
 
+### 3.1.1 Write-path latency
+
+Accepting a request is timed per stage (`notification.ingest.stage{stage=auth|rate_limit|content|sender|persist|publish}`). To keep the path short, the template lookup and the billing account and plan reads are cached for 5 seconds, the PENDING to QUEUED update is batched off the request path (`QueuedMarker`), and the client API pool is 20 connections. Measured on a laptop this about doubled ingest throughput and halved median latency; the staleness windows and the crash behaviour are in ADR-008.
+
 ### 3.2 Rate limiting
 
 Token buckets in Redis, evaluated in one Lua script using Redis server time (no clock-skew between nodes). Three scopes, all admin-managed and cached for 10 s:

@@ -20,18 +20,11 @@ package com.techeazy.notification.billing.application.port;
 
 import com.techeazy.notification.billing.domain.Plan;
 
-import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
-public interface PlanRepository extends PlanLookup {
+/** Read-only access to a plan by id; the only part of the plan store the send path needs. */
+public interface PlanLookup {
 
-    Plan save(Plan plan);
-
-    @Override
     Optional<Plan> findById(UUID id);
-
-    Optional<Plan> findByName(String name);
-
-    List<Plan> findAll();
 }

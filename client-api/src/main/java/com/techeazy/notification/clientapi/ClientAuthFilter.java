@@ -26,6 +26,8 @@ import com.techeazy.notification.application.RateLimitService;
 import com.techeazy.notification.domain.Client;
 import com.techeazy.notification.persistence.ClientRepository;
 import com.techeazy.notification.port.RateLimiter.Decision;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.Timer;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -49,13 +51,17 @@ public class ClientAuthFilter extends OncePerRequestFilter {
     private final ClientRepository clients;
     private final RateLimitService rateLimits;
     private final ObjectMapper mapper;
+    private final Timer authTimer;
+    private final Timer rateLimitTimer;
     private final Cache<String, Optional<AuthenticatedClient>> cache = Caffeine.newBuilder()
             .expireAfterWrite(Duration.ofSeconds(30)).maximumSize(10_000).build();
 
-    public ClientAuthFilter(ClientRepository clients, RateLimitService rateLimits, ObjectMapper mapper) {
+    public ClientAuthFilter(ClientRepository clients, RateLimitService rateLimits, ObjectMapper mapper, MeterRegistry meters) {
         this.clients = clients;
         this.rateLimits = rateLimits;
         this.mapper = mapper;
+        this.authTimer = Timer.builder("notification.ingest.stage").tag("stage", "auth").publishPercentiles(0.5, 0.95, 0.99).register(meters);
+        this.rateLimitTimer = Timer.builder("notification.ingest.stage").tag("stage", "rate_limit").publishPercentiles(0.5, 0.95, 0.99).register(meters);
     }
 
     @Override
@@ -72,12 +78,12 @@ public class ClientAuthFilter extends OncePerRequestFilter {
             reject(res, HttpStatus.UNAUTHORIZED, "UNAUTHORIZED", "Missing X-API-Key header", null);
             return;
         }
-        Optional<AuthenticatedClient> client = cache.get(ApiKeys.hash(key), this::lookup);
+        Optional<AuthenticatedClient> client = authTimer.record(() -> cache.get(ApiKeys.hash(key), this::lookup));
         if (client.isEmpty()) {
             reject(res, HttpStatus.UNAUTHORIZED, "UNAUTHORIZED", "Invalid or disabled API key", null);
             return;
         }
-        Decision d = rateLimits.checkClientApi(client.get().id());
+        Decision d = rateLimitTimer.record(() -> rateLimits.checkClientApi(client.get().id()));
         if (!d.allowed()) {
             long seconds = Math.max(1, (d.waitMillis() + 999) / 1000);
             reject(res, HttpStatus.TOO_MANY_REQUESTS, "RATE_LIMITED", "API rate limit exceeded", seconds);

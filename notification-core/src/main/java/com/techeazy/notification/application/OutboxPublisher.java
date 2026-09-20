@@ -46,10 +46,12 @@ public class OutboxPublisher {
 
     private final MessagePublisher publisher;
     private final NotificationMessageRepository messages;
+    private final QueuedMarker queuedMarker;
 
-    public OutboxPublisher(MessagePublisher publisher, NotificationMessageRepository messages) {
+    public OutboxPublisher(MessagePublisher publisher, NotificationMessageRepository messages, QueuedMarker queuedMarker) {
         this.publisher = publisher;
         this.messages = messages;
+        this.queuedMarker = queuedMarker;
     }
 
     /** @return ids that were confirmed published */
@@ -61,6 +63,16 @@ public class OutboxPublisher {
             if (!ok.isEmpty()) messages.markQueued(ok, Instant.now());
             confirmed.addAll(ok);
         }
+        return confirmed;
+    }
+
+    /**
+     * Publishes and returns as soon as the broker has confirmed; the PENDING to QUEUED update is batched by
+     * {@link QueuedMarker}. Used on the request path, where waiting for a second database round trip only adds latency.
+     */
+    public List<UUID> publishAndMarkQueuedLater(List<NotificationMessage> batch) {
+        List<UUID> confirmed = publishOnly(batch);
+        queuedMarker.markLater(confirmed);
         return confirmed;
     }
 

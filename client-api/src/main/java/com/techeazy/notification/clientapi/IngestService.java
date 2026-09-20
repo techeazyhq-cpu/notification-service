@@ -28,6 +28,8 @@ import com.techeazy.notification.clientapi.IngestPersister.Recipient;
 import com.techeazy.notification.domain.*;
 import com.techeazy.notification.persistence.NotificationRequestRepository;
 import com.techeazy.notification.persistence.TemplateRepository;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.Timer;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
@@ -40,6 +42,8 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Supplier;
 
 /**
  * Accept path: validate, admit against the client's billing account, persist as PENDING in one transaction, publish
@@ -53,7 +57,7 @@ import java.util.UUID;
 @Service
 public class IngestService {
 
-    private final TemplateRepository templates;
+    private final TemplateCache templates;
     private final NotificationRequestRepository requests;
     private final IngestPersister persister;
     private final OutboxPublisher outbox;
@@ -61,10 +65,12 @@ public class IngestService {
     private final AdmissionControl admission;
     private final SenderService senders;
     private final int maxBulkRecipients;
+    private final MeterRegistry meters;
+    private final Map<String, Timer> stageTimers = new ConcurrentHashMap<>();
 
-    public IngestService(TemplateRepository templates, NotificationRequestRepository requests, IngestPersister persister,
+    public IngestService(TemplateCache templates, NotificationRequestRepository requests, IngestPersister persister,
                          OutboxPublisher outbox, StatusQueryService status, AdmissionControl admission,
-                         SenderService senders,
+                         SenderService senders, MeterRegistry meters,
                          @Value("${client-api.max-bulk-recipients:50000}") int maxBulkRecipients) {
         this.templates = templates;
         this.requests = requests;
@@ -73,6 +79,7 @@ public class IngestService {
         this.status = status;
         this.admission = admission;
         this.senders = senders;
+        this.meters = meters;
         this.maxBulkRecipients = maxBulkRecipients;
     }
 
@@ -93,10 +100,10 @@ public class IngestService {
     public SubmitResponse submit(AuthenticatedClient client, SubmitCommand cmd) {
         requireChannelAllowed(client, cmd.channel());
         requireWithinBulkLimit(cmd.recipients());
-        Content content = resolveContent(client, cmd.channel(), cmd.templateName(), cmd.subject(), cmd.body());
+        Content content = timed("content", () -> resolveContent(client, cmd.channel(), cmd.templateName(), cmd.subject(), cmd.body()));
         validateRecipients(cmd.channel(), cmd.recipients());
         validateVariables(content, cmd.recipients());
-        Optional<SenderAddress> sender = senders.resolve(client, cmd.channel(), cmd.from());
+        Optional<SenderAddress> sender = timed("sender", () -> senders.resolve(client, cmd.channel(), cmd.from()));
 
         Optional<NotificationRequest> duplicate = findByIdempotencyKey(client, cmd.idempotencyKey());
         if (duplicate.isPresent()) {
@@ -110,12 +117,22 @@ public class IngestService {
         });
         List<NotificationMessage> messages;
         try {
-            messages = persister.persist(request, cmd.recipients(), () -> admit(client, cmd, request));
+            messages = timed("persist", () -> persister.persist(request, cmd.recipients(), () -> admit(client, cmd, request)));
         } catch (DataIntegrityViolationException e) {
             return findByIdempotencyKey(client, cmd.idempotencyKey()).map(this::replay).orElseThrow(() -> e);
         }
-        outbox.publishAndMarkQueued(messages);
+        timed("publish", () -> outbox.publishAndMarkQueuedLater(messages));
         return accepted(request, messages);
+    }
+
+    private <T> T timed(String stage, Supplier<T> work) {
+        Timer.Sample sample = Timer.start(meters);
+        try {
+            return work.get();
+        } finally {
+            sample.stop(stageTimers.computeIfAbsent(stage, s -> Timer.builder("notification.ingest.stage").tag("stage", s)
+                    .publishPercentiles(0.5, 0.95, 0.99).register(meters)));
+        }
     }
 
     private void requireChannelAllowed(AuthenticatedClient client, Channel channel) {
@@ -174,13 +191,12 @@ public class IngestService {
     /** The client's own template wins over a shared one of the same name. */
     private Content resolveContent(AuthenticatedClient client, Channel channel, String templateName, String subject, String body) {
         if (templateName != null && !templateName.isBlank()) {
-            Template t = templates.findByClientIdAndName(client.id(), templateName)
-                    .or(() -> templates.findByClientIdIsNullAndName(templateName))
+            TemplateCache.TemplateContent t = templates.find(client.id(), templateName)
                     .orElseThrow(() -> ApiException.badRequest("Unknown template '" + templateName + "'"));
-            if (t.getChannel() != channel) {
-                throw ApiException.badRequest("Template '" + templateName + "' is for channel " + t.getChannel() + ", not " + channel);
+            if (t.channel() != channel) {
+                throw ApiException.badRequest("Template '" + templateName + "' is for channel " + t.channel() + ", not " + channel);
             }
-            return new Content(t.getId(), t.getSubject(), t.getBody());
+            return new Content(t.id(), t.subject(), t.body());
         }
         if (body == null || body.isBlank()) throw ApiException.badRequest("Provide either templateName or body");
         if (channel == Channel.EMAIL && (subject == null || subject.isBlank())) {
