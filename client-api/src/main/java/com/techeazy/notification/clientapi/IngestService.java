@@ -46,33 +46,40 @@ public class IngestService {
         return maxBulkRecipients;
     }
 
-    public SubmitResponse submit(Client client, RequestKind kind, Channel channel, String templateName, String subject,
-                                 String body, List<Recipient> recipients, String clientReference, String idempotencyKey) {
+    /** Everything a caller supplies for one submission; {@code idempotencyKey} and content fields may be null. */
+    public record SubmitCommand(RequestKind kind, Channel channel, String templateName, String subject, String body,
+                                List<Recipient> recipients, String clientReference, String idempotencyKey) {}
+
+    public SubmitResponse submit(AuthenticatedClient client, SubmitCommand cmd) {
+        RequestKind kind = cmd.kind();
+        Channel channel = cmd.channel();
+        List<Recipient> recipients = cmd.recipients();
+        String idempotencyKey = cmd.idempotencyKey();
         if (!client.allows(channel)) {
             throw new ApiException(HttpStatus.FORBIDDEN, "CHANNEL_NOT_ALLOWED", "Client is not allowed to use channel " + channel);
         }
         if (recipients.size() > maxBulkRecipients) {
             throw ApiException.badRequest("At most " + maxBulkRecipients + " recipients per request");
         }
-        Template template = resolveContent(channel, templateName, subject, body);
+        Template template = resolveContent(channel, cmd.templateName(), cmd.subject(), cmd.body());
         validateRecipients(channel, recipients);
 
         if (idempotencyKey != null) {
-            Optional<NotificationRequest> existing = requests.findByClientIdAndIdempotencyKey(client.getId(), idempotencyKey);
+            Optional<NotificationRequest> existing = requests.findByClientIdAndIdempotencyKey(client.id(), idempotencyKey);
             if (existing.isPresent()) return replay(existing.get());
         }
 
         NotificationRequest request = new NotificationRequest();
         request.setId(UUID.randomUUID());
-        request.setClientId(client.getId());
+        request.setClientId(client.id());
         request.setKind(kind);
         request.setChannel(channel);
         request.setTemplateId(template == null ? null : template.getId());
-        request.setSubject(template == null ? subject : null);
-        request.setBody(template == null ? body : null);
+        request.setSubject(template == null ? cmd.subject() : null);
+        request.setBody(template == null ? cmd.body() : null);
         request.setTotal(recipients.size());
         request.setIdempotencyKey(idempotencyKey);
-        request.setClientReference(clientReference);
+        request.setClientReference(cmd.clientReference());
         request.setCreatedAt(Instant.now());
 
         List<NotificationMessage> messages;
@@ -81,7 +88,7 @@ public class IngestService {
         } catch (DataIntegrityViolationException e) {
             // Concurrent submit with the same Idempotency-Key lost the race on the unique index.
             if (idempotencyKey != null) {
-                Optional<NotificationRequest> existing = requests.findByClientIdAndIdempotencyKey(client.getId(), idempotencyKey);
+                Optional<NotificationRequest> existing = requests.findByClientIdAndIdempotencyKey(client.id(), idempotencyKey);
                 if (existing.isPresent()) return replay(existing.get());
             }
             throw e;

@@ -1,69 +1,75 @@
 package com.techeazy.notification.adminapi;
 
 import com.techeazy.notification.application.OutboxPublisher;
+import com.techeazy.notification.domain.Channel;
+import com.techeazy.notification.domain.Client;
 import com.techeazy.notification.domain.MessageStatus;
 import com.techeazy.notification.domain.NotificationMessage;
+import com.techeazy.notification.persistence.ClientRepository;
 import com.techeazy.notification.persistence.NotificationMessageRepository;
+import jakarta.persistence.criteria.Predicate;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.http.HttpStatus;
-import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 /** Cross-client message search and manual re-queue of FAILED messages. */
 @RestController
 @RequestMapping("/api/admin/messages")
 class MessagesController {
 
-    record Row(UUID id, UUID requestId, UUID clientId, String clientName, String channel, String recipient,
-               String status, int attempts, String lastError, String providerMessageId, Instant createdAt, Instant sentAt) {}
+    private static final char LIKE_ESCAPE = '\\';
+
+    record Row(UUID id, UUID requestId, UUID clientId, String clientName, Channel channel, String recipient,
+               MessageStatus status, int attempts, String lastError, String providerMessageId, Instant createdAt,
+               Instant sentAt) {}
 
     record Page(List<Row> items, int page, int size, long totalItems) {}
 
-    private final JdbcTemplate jdbc;
     private final NotificationMessageRepository messages;
+    private final ClientRepository clients;
     private final OutboxPublisher outbox;
 
-    MessagesController(JdbcTemplate jdbc, NotificationMessageRepository messages, OutboxPublisher outbox) {
-        this.jdbc = jdbc;
+    MessagesController(NotificationMessageRepository messages, ClientRepository clients, OutboxPublisher outbox) {
         this.messages = messages;
+        this.clients = clients;
         this.outbox = outbox;
     }
 
     @GetMapping
-    Page search(@RequestParam(required = false) String status, @RequestParam(required = false) String channel,
+    Page search(@RequestParam(required = false) MessageStatus status, @RequestParam(required = false) Channel channel,
                 @RequestParam(required = false) UUID clientId, @RequestParam(required = false) UUID requestId,
                 @RequestParam(required = false) String recipient,
                 @RequestParam(defaultValue = "0") int page, @RequestParam(defaultValue = "50") int size) {
-        int s = Math.min(Math.max(size, 1), 200);
-        int p = Math.max(page, 0);
-        StringBuilder where = new StringBuilder(" where 1=1");
-        List<Object> args = new ArrayList<>();
-        if (status != null && !status.isBlank()) { where.append(" and m.status = ?"); args.add(status); }
-        if (channel != null && !channel.isBlank()) { where.append(" and m.channel = ?"); args.add(channel); }
-        if (clientId != null) { where.append(" and m.client_id = ?"); args.add(clientId); }
-        if (requestId != null) { where.append(" and m.request_id = ?"); args.add(requestId); }
-        if (recipient != null && !recipient.isBlank()) { where.append(" and m.recipient ilike ?"); args.add("%" + recipient.trim() + "%"); }
+        int pageSize = Math.clamp(size, 1, 200);
+        int pageNo = Math.max(page, 0);
 
-        Long total = jdbc.queryForObject("select count(*) from notification_message m" + where, Long.class, args.toArray());
-        List<Object> pageArgs = new ArrayList<>(args);
-        pageArgs.add(s);
-        pageArgs.add(p * s);
-        List<Row> rows = jdbc.query("""
-                select m.id, m.request_id, m.client_id, c.name, m.channel, m.recipient, m.status, m.attempts,
-                       m.last_error, m.provider_message_id, m.created_at, m.sent_at
-                from notification_message m join client c on c.id = m.client_id""" + where
-                        + " order by m.created_at desc limit ? offset ?",
-                (rs, i) -> new Row(rs.getObject(1, UUID.class), rs.getObject(2, UUID.class), rs.getObject(3, UUID.class),
-                        rs.getString(4), rs.getString(5), rs.getString(6), rs.getString(7), rs.getInt(8), rs.getString(9),
-                        rs.getString(10), rs.getTimestamp(11).toInstant(),
-                        rs.getTimestamp(12) == null ? null : rs.getTimestamp(12).toInstant()),
-                pageArgs.toArray());
-        return new Page(rows, p, s, total == null ? 0 : total);
+        Specification<NotificationMessage> spec = (root, query, cb) -> {
+            List<Predicate> where = new ArrayList<>();
+            if (status != null) where.add(cb.equal(root.get("status"), status));
+            if (channel != null) where.add(cb.equal(root.get("channel"), channel));
+            if (clientId != null) where.add(cb.equal(root.get("clientId"), clientId));
+            if (requestId != null) where.add(cb.equal(root.get("requestId"), requestId));
+            if (recipient != null && !recipient.isBlank()) {
+                where.add(cb.like(cb.lower(root.get("recipient")), "%" + escapeLike(recipient.trim().toLowerCase()) + "%", LIKE_ESCAPE));
+            }
+            return cb.and(where.toArray(new Predicate[0]));
+        };
+
+        var result = messages.findAll(spec, PageRequest.of(pageNo, pageSize, Sort.by(Sort.Direction.DESC, "createdAt")));
+        Map<UUID, String> names = clients.findAllById(result.getContent().stream().map(NotificationMessage::getClientId).distinct().toList())
+                .stream().collect(Collectors.toMap(Client::getId, Client::getName, (a, b) -> a));
+        List<Row> rows = result.getContent().stream().map(m -> toRow(m, names)).toList();
+        return new Page(rows, pageNo, pageSize, result.getTotalElements());
     }
 
     @PostMapping("/{id}/retry")
@@ -77,5 +83,16 @@ class MessagesController {
             m.setStatus(MessageStatus.PENDING);
             outbox.publishAndMarkQueued(List.of(m)); // if the broker is down it stays PENDING for the sweeper
         }
+    }
+
+    private static Row toRow(NotificationMessage m, Map<UUID, String> clientNames) {
+        return new Row(m.getId(), m.getRequestId(), m.getClientId(), clientNames.getOrDefault(m.getClientId(), "unknown"),
+                m.getChannel(), m.getRecipient(), m.getStatus(), m.getAttempts(), m.getLastError(),
+                m.getProviderMessageId(), m.getCreatedAt(), m.getSentAt());
+    }
+
+    /** Recipients may contain % or _ (e.g. plus-addressed emails); treat them literally. */
+    private static String escapeLike(String s) {
+        return s.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_");
     }
 }

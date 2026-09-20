@@ -10,8 +10,8 @@ const RANGES = [
 const STATUSES = ['SENT', 'FAILED', 'RETRYING', 'PROCESSING', 'QUEUED', 'PENDING'];
 const COLORS: Record<string, string> = { SENT: 'var(--ok)', FAILED: 'var(--bad)', other: 'var(--info)' };
 
-function Chart({ points }: { points: Point[] }) {
-  const buckets = [...new Set(points.map((p) => p.bucket))].sort();
+function Chart({ points }: Readonly<{ points: Point[] }>) {
+  const buckets = [...new Set(points.map((p) => p.bucket))].sort((a, b) => a.localeCompare(b));
   const series = buckets.map((b) => {
     const at = points.filter((p) => p.bucket === b);
     const sum = (f: (p: Point) => boolean) => at.filter(f).reduce((a, p) => a + p.count, 0);

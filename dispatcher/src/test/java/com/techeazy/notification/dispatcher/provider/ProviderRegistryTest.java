@@ -20,6 +20,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Supplier;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.awaitility.Awaitility.await;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -120,15 +121,13 @@ class ProviderRegistryTest {
     }
 
     @Test
-    void recoversThroughHalfOpenWhenTheProviderComesBack() throws Exception {
+    void recoversThroughHalfOpenWhenTheProviderComesBack() {
         withProviders(config("sms-primary", ProviderType.HTTP_JSON, 10));
         failTimes(4);
         assertThat(registry.isAvailable(Channel.SMS)).isFalse();
 
         primary.behaviour = () -> new SendResult("recovered");
-        long deadline = System.currentTimeMillis() + 3000;
-        while (!registry.isAvailable(Channel.SMS) && System.currentTimeMillis() < deadline) Thread.sleep(25);
-        assertThat(registry.isAvailable(Channel.SMS)).as("half-open after the wait").isTrue();
+        await().atMost(Duration.ofSeconds(3)).until(() -> registry.isAvailable(Channel.SMS)); // half-open after the wait
 
         assertThat(registry.send(message).providerMessageId()).isEqualTo("recovered");
         assertThat(registry.send(message).providerMessageId()).isEqualTo("recovered");
@@ -136,12 +135,11 @@ class ProviderRegistryTest {
     }
 
     @Test
-    void aFailedProbeReopensTheCircuit() throws Exception {
+    void aFailedProbeReopensTheCircuit() {
         withProviders(config("sms-primary", ProviderType.HTTP_JSON, 10));
         failTimes(4);
 
-        long deadline = System.currentTimeMillis() + 3000;
-        while (!registry.isAvailable(Channel.SMS) && System.currentTimeMillis() < deadline) Thread.sleep(25);
+        await().atMost(Duration.ofSeconds(3)).until(() -> registry.isAvailable(Channel.SMS));
 
         failTimes(2); // both half-open probes fail; provider is still down
         assertThat(registry.isAvailable(Channel.SMS)).isFalse();

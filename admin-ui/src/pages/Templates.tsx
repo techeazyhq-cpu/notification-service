@@ -10,7 +10,7 @@ export default function Templates() {
   const [editing, setEditing] = useState<string | null>(null);
   const [formError, setFormError] = useState('');
 
-  async function save(e: React.FormEvent) {
+  async function save(e: React.SubmitEvent<HTMLFormElement>) {
     e.preventDefault();
     try {
       await (editing ? api('PUT', `/templates/${editing}`, form) : api('POST', '/templates', form));
@@ -32,7 +32,7 @@ export default function Templates() {
       <form className="card" onSubmit={save}>
         <div className="row">
           <label>Name<input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required /></label>
-          <label>Channel
+          <label><span>Channel</span>
             <select value={form.channel} onChange={(e) => setForm({ ...form, channel: e.target.value as Channel })}>
               {CHANNELS.map((c) => <option key={c}>{c}</option>)}
             </select>
@@ -43,7 +43,7 @@ export default function Templates() {
           <textarea value={form.body} onChange={(e) => setForm({ ...form, body: e.target.value })} required />
         </label>
         <div className="row" style={{ marginTop: 12 }}>
-          <button className="primary">{editing ? 'Save changes' : 'Create template'}</button>
+          <button type="submit" className="primary">{editing ? 'Save changes' : 'Create template'}</button>
           {editing && <button type="button" onClick={() => { setEditing(null); setForm(EMPTY); }}>Cancel</button>}
           {formError && <span className="error">{formError}</span>}
         </div>
@@ -57,7 +57,7 @@ export default function Templates() {
               <tr key={t.id}>
                 <td>{t.name}</td><td>{t.channel}</td><td>{t.subject}</td>
                 <td className="mono">{t.body.length > 80 ? t.body.slice(0, 80) + '…' : t.body}</td>
-                <td><button onClick={() => edit(t)}>Edit</button> <button className="danger" onClick={() => remove(t)}>Delete</button></td>
+                <td><button type="button" onClick={() => edit(t)}>Edit</button> <button type="button" className="danger" onClick={() => remove(t)}>Delete</button></td>
               </tr>
             ))}
             {data?.length === 0 && <tr><td colSpan={5} className="muted">No templates yet.</td></tr>}

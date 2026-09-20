@@ -14,7 +14,7 @@ export default function Providers() {
   const [editing, setEditing] = useState<string | null>(null);
   const [formError, setFormError] = useState('');
 
-  async function save(e: React.FormEvent) {
+  async function save(e: React.SubmitEvent<HTMLFormElement>) {
     e.preventDefault();
     const body = { ...form, settings: fromText(form.settings) };
     try {
@@ -34,13 +34,13 @@ export default function Providers() {
       <p className="muted">Per channel, enabled providers are tried in priority order (lowest number first); the dispatcher fails over to the next on transient errors. Changes apply within ~10 seconds.</p>
       <form className="card" onSubmit={save}>
         <div className="row">
-          <label>Channel
+          <label><span>Channel</span>
             <select value={form.channel} onChange={(e) => setForm({ ...form, channel: e.target.value as Channel })}>
               {CHANNELS.map((c) => <option key={c}>{c}</option>)}
             </select>
           </label>
           <label>Name<input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required /></label>
-          <label>Type
+          <label><span>Type</span>
             <select value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value as Provider['type'] })}>
               <option>SMTP</option><option>HTTP_JSON</option>
             </select>
@@ -48,11 +48,11 @@ export default function Providers() {
           <label>Priority<input type="number" value={form.priority} onChange={(e) => setForm({ ...form, priority: Number(e.target.value) })} style={{ width: 90 }} /></label>
           <label className="check"><input type="checkbox" checked={form.enabled} onChange={(e) => setForm({ ...form, enabled: e.target.checked })} />Enabled</label>
         </div>
-        <label style={{ marginTop: 12 }}>Settings (key=value per line; SMTP: host, port, from, username, password, starttls, html — HTTP_JSON: url, authHeader, timeoutMs)
+        <label style={{ marginTop: 12 }}><span>Settings (key=value per line; SMTP: host, port, from, username, password, starttls, html — HTTP_JSON: url, authHeader, timeoutMs)</span>
           <textarea value={form.settings} onChange={(e) => setForm({ ...form, settings: e.target.value })} />
         </label>
         <div className="row" style={{ marginTop: 12 }}>
-          <button className="primary">{editing ? 'Save changes' : 'Add provider'}</button>
+          <button type="submit" className="primary">{editing ? 'Save changes' : 'Add provider'}</button>
           {editing && <button type="button" onClick={() => { setEditing(null); setForm(EMPTY); }}>Cancel</button>}
           {formError && <span className="error">{formError}</span>}
         </div>
@@ -67,7 +67,7 @@ export default function Providers() {
                 <td>{p.channel}</td><td>{p.name}</td><td>{p.type}</td><td>{p.priority}</td>
                 <td><span className={`badge ${p.enabled ? 'ACTIVE' : 'DISABLED'}`}>{p.enabled ? 'ON' : 'OFF'}</span></td>
                 <td className="mono">{toText(p.settings).replaceAll('\n', ' · ')}</td>
-                <td><button onClick={() => toggle(p)}>{p.enabled ? 'Disable' : 'Enable'}</button> <button onClick={() => edit(p)}>Edit</button> <button className="danger" onClick={() => remove(p)}>Delete</button></td>
+                <td><button type="button" onClick={() => toggle(p)}>{p.enabled ? 'Disable' : 'Enable'}</button> <button type="button" onClick={() => edit(p)}>Edit</button> <button type="button" className="danger" onClick={() => remove(p)}>Delete</button></td>
               </tr>
             ))}
             {data?.length === 0 && <tr><td colSpan={7} className="muted">No providers configured — nothing can be delivered.</td></tr>}

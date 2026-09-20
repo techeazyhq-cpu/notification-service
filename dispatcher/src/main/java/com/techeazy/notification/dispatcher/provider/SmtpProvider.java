@@ -19,6 +19,14 @@ import java.util.concurrent.ConcurrentHashMap;
 @Component
 public class SmtpProvider implements ChannelProvider {
 
+    private static final String HOST = "host";
+    private static final String PORT = "port";
+    private static final String FROM = "from";
+    private static final String USERNAME = "username";
+    private static final String PASSWORD = "password";
+    private static final String STARTTLS = "starttls";
+    private static final String HTML = "html";
+
     private record Key(java.util.UUID id, java.time.Instant updatedAt) {}
 
     private final Map<Key, JavaMailSenderImpl> senders = new ConcurrentHashMap<>();
@@ -31,7 +39,7 @@ public class SmtpProvider implements ChannelProvider {
     @Override
     public SendResult send(ProviderConfig config, Outbound message) {
         Map<String, String> s = config.getSettings();
-        String from = require(s, "from");
+        String from = require(s, FROM);
         try {
             JavaMailSenderImpl sender = senders.computeIfAbsent(new Key(config.getId(), config.getUpdatedAt()), k -> build(s));
             MimeMessage mime = sender.createMimeMessage();
@@ -39,39 +47,43 @@ public class SmtpProvider implements ChannelProvider {
             helper.setFrom(from);
             helper.setTo(message.recipient());
             helper.setSubject(message.subject() == null ? "" : message.subject());
-            helper.setText(message.body(), Boolean.parseBoolean(s.getOrDefault("html", "false")));
+            helper.setText(message.body(), Boolean.parseBoolean(s.getOrDefault(HTML, "false")));
             sender.send(mime);
             return new SendResult(mime.getMessageID());
         } catch (MailParseException e) {
             throw new PermanentSendException("Invalid email: " + e.getMessage(), e);
-        } catch (jakarta.mail.MessagingException e) {
-            throw fail(e);
-        } catch (org.springframework.mail.MailException e) {
+        } catch (jakarta.mail.MessagingException | org.springframework.mail.MailException e) {
             throw fail(e);
         }
     }
 
     private static RuntimeException fail(Exception e) {
-        for (Throwable t = e; t != null; t = t.getCause()) {
-            if (t instanceof AddressException) return new PermanentSendException("Invalid email address: " + t.getMessage(), e);
-        }
+        if (hasAddressError(e)) return new PermanentSendException("Invalid email address: " + e.getMessage(), e);
         return new TransientSendException("SMTP send failed: " + e.getMessage(), e);
+    }
+
+    /** True if the exception, or anything in its cause chain, is a malformed-address error. */
+    private static boolean hasAddressError(Throwable error) {
+        if (error instanceof AddressException) return true;
+        Throwable cause = error.getCause();
+        return cause != null && hasAddressError(cause);
     }
 
     private static JavaMailSenderImpl build(Map<String, String> s) {
         JavaMailSenderImpl sender = new JavaMailSenderImpl();
-        sender.setHost(require(s, "host"));
-        sender.setPort(Integer.parseInt(s.getOrDefault("port", "25")));
+        sender.setHost(require(s, HOST));
+        sender.setPort(Integer.parseInt(s.getOrDefault(PORT, "25")));
         Properties p = sender.getJavaMailProperties();
         p.put("mail.smtp.connectiontimeout", "5000");
         p.put("mail.smtp.timeout", "10000");
         p.put("mail.smtp.writetimeout", "10000");
-        if (s.get("username") != null && !s.get("username").isBlank()) {
-            sender.setUsername(s.get("username"));
-            sender.setPassword(s.get("password"));
+        String username = s.get(USERNAME);
+        if (username != null && !username.isBlank()) {
+            sender.setUsername(username);
+            sender.setPassword(s.get(PASSWORD));
             p.put("mail.smtp.auth", "true");
         }
-        if (Boolean.parseBoolean(s.getOrDefault("starttls", "false"))) p.put("mail.smtp.starttls.enable", "true");
+        if (Boolean.parseBoolean(s.getOrDefault(STARTTLS, "false"))) p.put("mail.smtp.starttls.enable", "true");
         return sender;
     }
 

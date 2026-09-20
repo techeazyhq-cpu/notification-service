@@ -48,8 +48,8 @@ public class RedisRateLimiter implements RateLimiter {
     @Override
     public Decision tryAcquire(String key, double ratePerSecond, int burst) {
         List<?> r = redis.execute(script, List.of("rl:" + key), Double.toString(ratePerSecond), Integer.toString(burst));
-        if (r == null || r.size() < 2) return Decision.ALLOWED; // fail open: never block traffic on limiter faults
+        if (r == null || r.size() < 2) return Decision.GRANTED; // fail open: never block traffic on limiter faults
         boolean allowed = ((Number) r.get(0)).longValue() == 1;
-        return allowed ? Decision.ALLOWED : new Decision(false, ((Number) r.get(1)).longValue());
+        return allowed ? Decision.GRANTED : new Decision(false, ((Number) r.get(1)).longValue());
     }
 }

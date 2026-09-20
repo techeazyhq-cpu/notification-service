@@ -4,11 +4,11 @@
 //      SMTP_HOST/SMTP_PORT (mailpit/1025) and CATCHER_URL (http://catcher:9000) are the addresses the
 //      *dispatcher* uses, i.e. Docker service names when the stack runs in Compose. When running the
 //      dispatcher on your host instead, use SMTP_HOST=localhost CATCHER_URL=http://localhost:9000.
-const ADMIN = process.env.ADMIN_URL || 'http://localhost:8081';
+const ADMIN = process.env.ADMIN_URL || 'http://localhost:8081'; // NOSONAR: plain-HTTP default is for local development only
 const auth = 'Basic ' + Buffer.from(`${process.env.ADMIN_USER || 'admin'}:${process.env.ADMIN_PASSWORD || 'admin'}`).toString('base64');
 const SMTP_HOST = process.env.SMTP_HOST || 'mailpit';
 const SMTP_PORT = process.env.SMTP_PORT || '1025';
-const CATCHER = process.env.CATCHER_URL || 'http://catcher:9000';
+const CATCHER = process.env.CATCHER_URL || 'http://catcher:9000'; // NOSONAR: in-cluster catcher for local development only
 
 async function api(method, path, body) {
   const res = await fetch(ADMIN + '/api/admin' + path, {
@@ -48,8 +48,8 @@ await ensure('/templates', 'otp-sms', { name: 'otp-sms', channel: 'SMS', body: '
 await ensure('/templates', 'order-whatsapp', { name: 'order-whatsapp', channel: 'WHATSAPP', body: 'Hi {{name}}, your order {{orderId}} has shipped.' });
 await ensure('/templates', 'promo-push', { name: 'promo-push', channel: 'PUSH', subject: 'Flash sale', body: '{{name}}, 20% off today only.' });
 
-const existingClient = (await api('GET', '/clients')).find((c) => c.name === 'demo-app');
-if (existingClient) {
+const clientExists = (await api('GET', '/clients')).some((c) => c.name === 'demo-app');
+if (clientExists) {
   console.log('= /clients/demo-app exists (API key is only shown at creation; rotate it in the admin UI if lost)');
 } else {
   const { apiKey } = await api('POST', '/clients', { name: 'demo-app', allowedChannels: ['EMAIL', 'SMS', 'WHATSAPP', 'PUSH'] });

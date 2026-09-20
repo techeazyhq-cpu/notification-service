@@ -8,12 +8,12 @@ import Providers from './pages/Providers';
 import RateLimits from './pages/RateLimits';
 import Messages from './pages/Messages';
 
-function Login({ onDone }: { onDone: () => void }) {
+function Login({ onDone }: Readonly<{ onDone: () => void }>) {
   const [user, setUser] = useState('admin');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
 
-  async function submit(e: React.FormEvent) {
+  async function submit(e: React.SubmitEvent<HTMLFormElement>) {
     e.preventDefault();
     auth.set(user, password);
     try {
@@ -28,10 +28,10 @@ function Login({ onDone }: { onDone: () => void }) {
   return (
     <form className="login card" onSubmit={submit}>
       <h1>Notification Admin</h1>
-      <label>Username<input value={user} onChange={(e) => setUser(e.target.value)} autoFocus /></label>
-      <label>Password<input type="password" value={password} onChange={(e) => setPassword(e.target.value)} /></label>
+      <label>Username<input value={user} onChange={(e) => setUser(e.target.value)} autoComplete="username" /></label>
+      <label>Password<input type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="current-password" /></label>
       {error && <p className="error">{error}</p>}
-      <button className="primary">Sign in</button>
+      <button type="submit" className="primary">Sign in</button>
     </form>
   );
 }
@@ -57,7 +57,7 @@ export default function App() {
         <NavLink to="/templates">Templates</NavLink>
         <NavLink to="/providers">Providers</NavLink>
         <NavLink to="/rate-limits">Rate limits</NavLink>
-        <button className="link" onClick={() => { auth.clear(); setAuthed(false); }}>Sign out</button>
+        <button type="button" className="link" onClick={() => { auth.clear(); setAuthed(false); }}>Sign out</button>
       </nav>
       <main>
         <Routes>

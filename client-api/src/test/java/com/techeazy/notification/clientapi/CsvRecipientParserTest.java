@@ -11,6 +11,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class CsvRecipientParserTest {
 
+    private static final char BOM = 0xFEFF;
+
     private static ByteArrayInputStream csv(String s) {
         return new ByteArrayInputStream(s.getBytes(StandardCharsets.UTF_8));
     }
@@ -27,19 +29,21 @@ class CsvRecipientParserTest {
 
     @Test
     void toleratesUtf8BomAndBlankLines() throws Exception {
-        var rows = CsvRecipientParser.parse(csv("﻿recipient\n\na@example.com\n\n"), 100);
+        var rows = CsvRecipientParser.parse(csv(BOM + "recipient\n\na@example.com\n\n"), 100);
         assertThat(rows).extracting(CsvRecipientParser.Row::recipient).containsExactly("a@example.com");
     }
 
     @Test
     void requiresRecipientHeader() {
-        assertThatThrownBy(() -> CsvRecipientParser.parse(csv("email\na@example.com\n"), 100))
+        var input = csv("email\na@example.com\n");
+        assertThatThrownBy(() -> CsvRecipientParser.parse(input, 100))
                 .isInstanceOf(ApiException.class).hasMessageContaining("recipient");
     }
 
     @Test
     void enforcesRowLimit() {
-        assertThatThrownBy(() -> CsvRecipientParser.parse(csv("recipient\na@x.io\nb@x.io\nc@x.io\n"), 2))
+        var input = csv("recipient\na@x.io\nb@x.io\nc@x.io\n");
+        assertThatThrownBy(() -> CsvRecipientParser.parse(input, 2))
                 .isInstanceOf(ApiException.class).hasMessageContaining("maximum");
     }
 }
