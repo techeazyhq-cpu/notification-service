@@ -10,6 +10,8 @@ spring:
     password: ${DB_PASSWORD:notification}
   jpa:
     open-in-view: false
+    hibernate:
+      ddl-auto: validate
   data:
     redis:
       host: ${REDIS_HOST:localhost}

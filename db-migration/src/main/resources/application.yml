@@ -1,0 +1,17 @@
+spring:
+  application:
+    name: notification-db-migration
+  main:
+    web-application-type: none
+    banner-mode: off
+  liquibase:
+    enabled: false   # Liquibase is driven by MigrationService, not by Spring Boot's start-up hook
+
+migration:
+  url: ${DB_URL:jdbc:postgresql://localhost:5432/notification}
+  username: ${DB_USER:notification}
+  password: ${DB_PASSWORD:notification}
+  contexts: ${MIGRATION_CONTEXTS:}
+  tag-before-update: ${MIGRATION_TAG_BEFORE_UPDATE:true}
+  allow-rollback: ${MIGRATION_ALLOW_ROLLBACK:false}
+  connect-retries: ${MIGRATION_CONNECT_RETRIES:30}

@@ -80,7 +80,7 @@ class MessagesController {
         }
         if (messages.requeueFailed(id, Instant.now()) == 1) {
             m.setStatus(MessageStatus.PENDING);
-            outbox.publishAndMarkQueued(List.of(m)); // if the broker is down it stays PENDING for the sweeper
+            outbox.publishAndMarkQueued(List.of(m));
         }
     }
 
