@@ -165,6 +165,12 @@ curl -X POST localhost:8080/v1/notifications \
   -d '{"channel":"SMS","recipient":"+14155550123","templateName":"otp-sms","variables":{"code":"481516"}}'
 ```
 
+### 4.1 Client tracking UI
+
+`client-ui` is a read-only SPA for API clients (audience and sign-in differ from the admin UI, so it is a separate app). It signs in with the client's own API key and uses only the Client API: `GET /v1/me`, `/v1/notifications` (filters: channel, clientReference), `/v1/notifications/summary`, `/v1/notifications/{id}`, `/{id}/messages` (filters: status, recipient) and `/{id}/messages/export` (CSV, optional status). It polls every 3-5 s and stops polling a request once it reaches a final status. CORS for a separately hosted UI is a servlet filter ordered before API-key authentication (`client-api.cors-origins`), so preflight requests and 401/429 responses are handled correctly.
+
+Known limitation: the browser holds a key that can also *send*. It is kept in `sessionStorage` only, but a read-only credential (portal tokens or OIDC users mapped to a client) is the proper fix and is listed in the next steps.
+
 ## 5. Data
 
 PostgreSQL (Flyway `V1__init.sql`): `client`, `template`, `provider_config`, `rate_limit_policy`, `notification_request`, `notification_message`. Notable choices: UUID primary keys assigned by the app (JDBC batching without a round trip); partial unique index for idempotency keys; indexes on `(request_id, status)` for status counts and `(status, updated_at)` for the sweeper. API keys are stored only as SHA-256 hashes (keys are 256-bit random, so an unsalted hash suffices for lookup).
@@ -206,3 +212,4 @@ PostgreSQL (Flyway `V1__init.sql`): `client`, `template`, `provider_config`, `ra
 4. OIDC for admin (roles: viewer/operator/admin); audit log of admin changes.
 5. Trace propagation; SLO dashboards and alerts; load test against the targets in §1.
 6. Async bulk ingestion for files above the synchronous cap.
+7. Read-only credentials for the client tracking UI (portal tokens or OIDC), instead of the sending API key.

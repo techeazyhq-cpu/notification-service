@@ -26,6 +26,16 @@ public interface NotificationMessageRepository
     @Query("select m.status, count(m) from NotificationMessage m where m.requestId = :requestId group by m.status")
     List<Object[]> countByStatus(@Param("requestId") UUID requestId);
 
+    /** Status counts for many requests in one round trip: rows of [requestId, status, count]. */
+    @Query("select m.requestId, m.status, count(m) from NotificationMessage m where m.requestId in :requestIds "
+            + "group by m.requestId, m.status")
+    List<Object[]> countByStatusForRequests(@Param("requestIds") Collection<UUID> requestIds);
+
+    /** A client's message counts since a point in time: rows of [channel, status, count]. */
+    @Query("select m.channel, m.status, count(m) from NotificationMessage m "
+            + "where m.clientId = :clientId and m.createdAt >= :since group by m.channel, m.status")
+    List<Object[]> countByChannelAndStatus(@Param("clientId") UUID clientId, @Param("since") Instant since);
+
     /**
      * Atomic claim: only one worker can move a message into PROCESSING, which makes redelivery
      * and duplicate Pulsar deliveries harmless. Returns 1 if this caller owns the message.
