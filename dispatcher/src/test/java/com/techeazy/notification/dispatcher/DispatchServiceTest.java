@@ -157,7 +157,7 @@ class DispatchServiceTest {
 
         assertThat(service.process(id)).isInstanceOf(Outcome.Done.class);
 
-        verify(messages).markFailedOrRetry(eq(id), eq(MessageStatus.FAILED), contains("Gave up after 3"), any());
+        verify(messages).markFailed(eq(id), eq(FailureKind.EXHAUSTED), contains("Gave up after 3"), any());
     }
 
     @Test
@@ -166,7 +166,7 @@ class DispatchServiceTest {
 
         assertThat(service.process(id)).isInstanceOf(Outcome.Done.class);
 
-        verify(messages).markFailedOrRetry(eq(id), eq(MessageStatus.FAILED), contains("invalid recipient"), any());
+        verify(messages).markFailed(eq(id), eq(FailureKind.PERMANENT), contains("invalid recipient"), any());
     }
 
     @Test
@@ -176,6 +176,6 @@ class DispatchServiceTest {
         assertThat(service.process(id)).isInstanceOf(Outcome.Done.class);
 
         verify(providers, never()).send(any());
-        verify(messages).markFailedOrRetry(eq(id), eq(MessageStatus.FAILED), contains("name"), any());
+        verify(messages).markFailed(eq(id), eq(FailureKind.PERMANENT), contains("name"), any());
     }
 }

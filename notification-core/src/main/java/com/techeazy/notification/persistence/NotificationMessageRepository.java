@@ -70,7 +70,7 @@ public interface NotificationMessageRepository
     @Modifying
     @Query("""
             update NotificationMessage m set m.status = com.techeazy.notification.domain.MessageStatus.SENT,
-                   m.providerMessageId = :providerId, m.lastError = null, m.sentAt = :now, m.updatedAt = :now
+                   m.providerMessageId = :providerId, m.lastError = null, m.failureKind = null, m.sentAt = :now, m.updatedAt = :now
             where m.id = :id""")
     int markSent(@Param("id") UUID id, @Param("providerId") String providerId, @Param("now") Instant now);
 
@@ -79,6 +79,29 @@ public interface NotificationMessageRepository
     @Query("update NotificationMessage m set m.status = :status, m.lastError = :error, m.updatedAt = :now where m.id = :id")
     int markFailedOrRetry(@Param("id") UUID id, @Param("status") MessageStatus status,
                           @Param("error") String error, @Param("now") Instant now);
+
+    /** Ends a message as FAILED with the reason it will not be delivered without intervention. */
+    @Transactional
+    @Modifying
+    @Query("""
+            update NotificationMessage m set m.status = com.techeazy.notification.domain.MessageStatus.FAILED,
+                   m.failureKind = :kind, m.lastError = :error, m.updatedAt = :now
+            where m.id = :id""")
+    int markFailed(@Param("id") UUID id, @Param("kind") com.techeazy.notification.domain.FailureKind kind,
+                   @Param("error") String error, @Param("now") Instant now);
+
+    /**
+     * Records a message the broker gave up on. Only messages still in flight change, so a message that was delivered
+     * or already failed is never overwritten by a late dead letter.
+     */
+    @Transactional
+    @Modifying
+    @Query("""
+            update NotificationMessage m set m.status = com.techeazy.notification.domain.MessageStatus.FAILED,
+                   m.failureKind = com.techeazy.notification.domain.FailureKind.DEAD_LETTERED, m.lastError = :error, m.updatedAt = :now
+            where m.id = :id and m.status in :inFlight""")
+    int markDeadLettered(@Param("id") UUID id, @Param("inFlight") Collection<MessageStatus> inFlight,
+                         @Param("error") String error, @Param("now") Instant now);
 
     /**
      * Gives back a claim taken for an attempt that never reached a provider (circuit open): the message returns
@@ -105,7 +128,7 @@ public interface NotificationMessageRepository
     @Modifying
     @Query("""
             update NotificationMessage m set m.status = com.techeazy.notification.domain.MessageStatus.PENDING,
-                   m.attempts = 0, m.updatedAt = :now
+                   m.attempts = 0, m.failureKind = null, m.reprocessCount = m.reprocessCount + 1, m.updatedAt = :now
             where m.id = :id and m.status = com.techeazy.notification.domain.MessageStatus.FAILED""")
     int requeueFailed(@Param("id") UUID id, @Param("now") Instant now);
 

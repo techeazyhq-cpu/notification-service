@@ -132,6 +132,10 @@ Off by default. `VIRTUAL_THREADS_ENABLED=true` turns them on for the Client and 
 
 A daily job (dispatcher) limits how long personal data is kept: recipient, variables and error text of finished messages are erased after `RETENTION_PERSONAL_DATA_DAYS` (90), the message records are deleted after `RETENTION_DELETE_DAYS` (400) and idempotency keys cleared after `RETENTION_IDEMPOTENCY_DAYS` (7); 0 switches a step off; `RETENTION_CRON` (`0 30 2 * * *`) and `RETENTION_ENABLED` control the schedule. Clients erase a recipient with `POST /v1/privacy/erasure` (or the **Privacy** page in the client UI); operators use **Privacy** in the admin UI, for one client or all. Messages still being delivered are never erased and erased messages cannot be retried. See ADR-009.
 
+## Dead letters and reprocessing
+
+Messages that end FAILED are the dead-letter queue. Open **Dead letters** in the admin UI to see them by kind (PERMANENT: fix the cause first; EXHAUSTED and DEAD_LETTERED: safe to resend), filter by client, channel or error text, and reprocess selected messages or up to 200 matching ones. Messages the broker dead-lettered (`notification-<channel>-dlq` topics) are recorded automatically. API: `GET /api/admin/dead-letters`, `GET /api/admin/dead-letters/summary`, `POST /api/admin/dead-letters/reprocess`. Prepaid clients are charged again for the new attempt. See ADR-010.
+
 ## Static analysis
 
 Sonar findings are kept at zero. To reproduce locally with a throwaway SonarQube (`admin`/`admin`, UI on `:9001`):

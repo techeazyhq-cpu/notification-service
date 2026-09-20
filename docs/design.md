@@ -114,6 +114,10 @@ Only the **message id** travels through Pulsar. Recipient addresses and variable
 
 Accepting a request is timed per stage (`notification.ingest.stage{stage=auth|rate_limit|content|sender|persist|publish}`). To keep the path short, the template lookup and the billing account and plan reads are cached for 5 seconds, the PENDING to QUEUED update is batched off the request path (`QueuedMarker`), and the client API pool is 20 connections. Measured on a laptop this about doubled ingest throughput and halved median latency; the staleness windows and the crash behaviour are in ADR-008.
 
+### 3.1.2 Dead letters and reprocessing
+
+A message that ends FAILED is a dead letter, classified as PERMANENT (rejected: bad recipient, missing variable), EXHAUSTED (all attempts failed for a temporary reason) or DEAD_LETTERED (the broker gave up). The dispatcher reads each channel's broker dead-letter topic and records those messages too. Operators see the queue in the admin UI (**Dead letters**: summary, filters, selection) and reprocess in bulk through `POST /api/admin/dead-letters/reprocess`: each message is re-queued in its own transaction with credit reserved for prepaid clients, erased or changed messages are refused and reported, and the rest are published. See ADR-010.
+
 ### 3.2 Rate limiting
 
 Token buckets in Redis, evaluated in one Lua script using Redis server time (no clock-skew between nodes). Three scopes, all admin-managed and cached for 10 s:

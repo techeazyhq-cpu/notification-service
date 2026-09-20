@@ -118,12 +118,12 @@ public class DispatchService {
             count(m.getChannel(), "circuit_open");
             return new Outcome.Unavailable(UNAVAILABLE_POLL_MS);
         } catch (PermanentSendException | TemplateRenderer.MissingVariableException e) {
-            messages.markFailedOrRetry(messageId, MessageStatus.FAILED, truncate(e.getMessage()), Instant.now());
+            messages.markFailed(messageId, FailureKind.PERMANENT, truncate(e.getMessage()), Instant.now());
             count(m.getChannel(), "failed_permanent");
             return new Outcome.Done();
         } catch (RuntimeException e) {
             if (attempt >= props.getMaxAttempts()) {
-                messages.markFailedOrRetry(messageId, MessageStatus.FAILED,
+                messages.markFailed(messageId, FailureKind.EXHAUSTED,
                         truncate("Gave up after " + attempt + " attempts: " + e.getMessage()), Instant.now());
                 count(m.getChannel(), "failed_exhausted");
                 return new Outcome.Done();

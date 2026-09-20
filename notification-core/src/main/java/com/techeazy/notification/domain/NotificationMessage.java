@@ -44,6 +44,8 @@ public class NotificationMessage {
     @Enumerated(EnumType.STRING) private MessageStatus status;
     private int attempts;
     private String lastError;
+    @Enumerated(EnumType.STRING) private FailureKind failureKind;
+    private int reprocessCount;
     private String providerMessageId;
     private Instant createdAt;
     private Instant updatedAt;
