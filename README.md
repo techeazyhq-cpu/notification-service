@@ -133,3 +133,7 @@ mvn test                       # unit tests; the db-migration tests use a real P
 cd admin-ui && npm run build   # type-check + build the UI
 cd client-ui && npm run build  # likewise for the client tracker
 ```
+
+## License
+
+Copyright 2026 Vasantha Kumar (vasantha.kumar@hotmail.com). Licensed under the [Apache License, Version 2.0](LICENSE); see [NOTICE](NOTICE). Every source file carries the license header and author.
