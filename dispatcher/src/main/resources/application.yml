@@ -21,8 +21,8 @@ spring:
     name: notification-dispatcher
   datasource:
     url: ${DB_URL:jdbc:postgresql://localhost:5432/notification}
-    username: ${DB_USER:notification}
-    password: ${DB_PASSWORD:notification}
+    username: ${DB_USER:notification_app}
+    password: ${DB_PASSWORD:notification_app}
   jpa:
     open-in-view: false
     hibernate:
@@ -33,6 +33,7 @@ spring:
       port: ${REDIS_PORT:6379}
 
 notification:
+  secrets-key: ${SECRETS_ENCRYPTION_KEY:development-only-change-me}
   pulsar:
     service-url: ${PULSAR_URL:pulsar://localhost:6650}
   sweeper:

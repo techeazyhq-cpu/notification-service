@@ -23,6 +23,8 @@ import com.techeazy.notification.dispatcher.provider.ChannelProvider.*;
 import com.techeazy.notification.domain.Channel;
 import com.techeazy.notification.domain.ProviderConfig;
 import com.techeazy.notification.domain.ProviderType;
+import com.techeazy.notification.infra.AesGcmCipher;
+import com.techeazy.notification.infra.ProviderSecrets;
 import com.techeazy.notification.persistence.ProviderConfigRepository;
 import io.github.resilience4j.circuitbreaker.CircuitBreaker;
 import io.github.resilience4j.circuitbreaker.CircuitBreakerConfig;
@@ -64,6 +66,7 @@ class ProviderRegistryTest {
     Stub primary = new Stub(ProviderType.HTTP_JSON);
     Stub backup = new Stub(ProviderType.SMTP);
     ProviderConfigRepository repo = mock(ProviderConfigRepository.class);
+    ProviderSecrets secrets = new ProviderSecrets(new AesGcmCipher("test-key"));
     CircuitBreakerRegistry breakers;
     ProviderRegistry registry;
     Outbound message = new Outbound(UUID.randomUUID(), Channel.SMS, "+14155550123", null, "hi");
@@ -82,7 +85,7 @@ class ProviderRegistryTest {
 
     void withProviders(ProviderConfig... configs) {
         when(repo.findByChannelAndEnabledTrueOrderByPriorityAsc(Channel.SMS)).thenReturn(List.of(configs));
-        registry = new ProviderRegistry(List.of(primary, backup), repo, breakers, new DispatcherProperties());
+        registry = new ProviderRegistry(List.of(primary, backup), repo, secrets, breakers, new DispatcherProperties());
     }
 
     /**
@@ -194,7 +197,7 @@ class ProviderRegistryTest {
         props.getCircuitBreaker().setEnabled(false);
         when(repo.findByChannelAndEnabledTrueOrderByPriorityAsc(Channel.SMS))
                 .thenReturn(List.of(config("sms-primary", ProviderType.HTTP_JSON, 10)));
-        registry = new ProviderRegistry(List.of(primary, backup), repo, breakers, props);
+        registry = new ProviderRegistry(List.of(primary, backup), repo, secrets, breakers, props);
 
         failTimes(10);
         assertThat(primary.calls.get()).isEqualTo(10);

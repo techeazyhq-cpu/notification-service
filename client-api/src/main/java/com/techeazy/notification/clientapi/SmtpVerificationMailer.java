@@ -21,6 +21,7 @@ package com.techeazy.notification.clientapi;
 import com.techeazy.notification.domain.Channel;
 import com.techeazy.notification.domain.ProviderConfig;
 import com.techeazy.notification.domain.ProviderType;
+import com.techeazy.notification.infra.ProviderSecrets;
 import com.techeazy.notification.infra.SmtpSenderFactory;
 import com.techeazy.notification.persistence.ProviderConfigRepository;
 import jakarta.mail.internet.MimeMessage;
@@ -43,9 +44,11 @@ public class SmtpVerificationMailer implements VerificationMailer {
     private static final Logger LOG = LoggerFactory.getLogger(SmtpVerificationMailer.class);
 
     private final ProviderConfigRepository providers;
+    private final ProviderSecrets secrets;
 
-    public SmtpVerificationMailer(ProviderConfigRepository providers) {
+    public SmtpVerificationMailer(ProviderConfigRepository providers, ProviderSecrets secrets) {
         this.providers = providers;
+        this.secrets = secrets;
     }
 
     @Override
@@ -53,10 +56,11 @@ public class SmtpVerificationMailer implements VerificationMailer {
         ProviderConfig provider = firstSmtpProvider().orElseThrow(() -> new ApiException(HttpStatus.SERVICE_UNAVAILABLE,
                 "EMAIL_NOT_AVAILABLE", "No e-mail provider is configured, so the confirmation e-mail cannot be sent"));
         try {
-            JavaMailSenderImpl sender = SmtpSenderFactory.build(provider.getSettings());
+            var settings = secrets.decryptForUse(provider.getSettings());
+            JavaMailSenderImpl sender = SmtpSenderFactory.build(settings);
             MimeMessage mime = sender.createMimeMessage();
             MimeMessageHelper helper = new MimeMessageHelper(mime, "UTF-8");
-            helper.setFrom(provider.getSettings().get("from"));
+            helper.setFrom(settings.get("from"));
             helper.setTo(toAddress);
             helper.setSubject("Confirm this sender address for " + clientName);
             helper.setText("Someone using the notification account \"" + clientName + "\" asked to send e-mail from " + toAddress

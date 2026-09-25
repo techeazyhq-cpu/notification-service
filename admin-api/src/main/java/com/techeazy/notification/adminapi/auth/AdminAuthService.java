@@ -83,8 +83,10 @@ public class AdminAuthService {
         this.decoyHash = encoder.encode(UUID.randomUUID().toString());
     }
 
-    void bootstrap(String username, String password) {
+    /** @param beforeCreating runs only when an administrator is actually about to be created (an empty user store) */
+    void bootstrap(String username, String password, Runnable beforeCreating) {
         if (users.count() == 0) {
+            beforeCreating.run();
             users.insert(new AdminUser(UUID.randomUUID(), username, encoder.encode(password), null, null, false, 0, null), clock.instant());
         }
     }
