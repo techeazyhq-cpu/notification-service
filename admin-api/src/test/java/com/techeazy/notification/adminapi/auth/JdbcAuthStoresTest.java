@@ -73,7 +73,7 @@ class JdbcAuthStoresTest {
     }
 
     private static AdminUser newUser(String name) {
-        AdminUser user = new AdminUser(UUID.randomUUID(), name, "{bcrypt}hash", null, null, false, 0, null);
+        AdminUser user = new AdminUser(UUID.randomUUID(), name, "{bcrypt}hash", null, null, false, 0, null, AdminRole.ADMIN);
         users.insert(user, NOW);
         return user;
     }

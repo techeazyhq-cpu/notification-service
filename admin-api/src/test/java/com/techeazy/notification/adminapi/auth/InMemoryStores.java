@@ -53,20 +53,36 @@ final class InMemoryStores {
         }
 
         @Override
+        public List<AdminUser> findAll() {
+            return byId.values().stream().sorted(java.util.Comparator.comparing(AdminUser::username)).toList();
+        }
+
+        @Override
         public void insert(AdminUser user, Instant now) {
             byId.put(user.id(), user);
         }
 
         @Override
+        public void updateRole(UUID id, AdminRole role) {
+            AdminUser u = byId.get(id);
+            byId.put(id, new AdminUser(id, u.username(), u.passwordHash(), u.passwordChangedAt(), u.totpSecret(), u.totpEnabled(), u.totpLastStep(), u.lockedUntil(), role));
+        }
+
+        @Override
+        public boolean delete(UUID id) {
+            return byId.remove(id) != null;
+        }
+
+        @Override
         public void updatePassword(UUID id, String passwordHash, Instant now) {
             AdminUser u = byId.get(id);
-            byId.put(id, new AdminUser(id, u.username(), passwordHash, now, u.totpSecret(), u.totpEnabled(), u.totpLastStep(), u.lockedUntil()));
+            byId.put(id, new AdminUser(id, u.username(), passwordHash, now, u.totpSecret(), u.totpEnabled(), u.totpLastStep(), u.lockedUntil(), u.role()));
         }
 
         @Override
         public void saveTotp(UUID id, String encryptedSecret, boolean enabled) {
             AdminUser u = byId.get(id);
-            byId.put(id, new AdminUser(id, u.username(), u.passwordHash(), u.passwordChangedAt(), encryptedSecret, enabled, u.totpLastStep(), u.lockedUntil()));
+            byId.put(id, new AdminUser(id, u.username(), u.passwordHash(), u.passwordChangedAt(), encryptedSecret, enabled, u.totpLastStep(), u.lockedUntil(), u.role()));
         }
 
         @Override
@@ -75,7 +91,7 @@ final class InMemoryStores {
             if (u.totpLastStep() >= step) {
                 return false;
             }
-            byId.put(id, new AdminUser(id, u.username(), u.passwordHash(), u.passwordChangedAt(), u.totpSecret(), u.totpEnabled(), step, u.lockedUntil()));
+            byId.put(id, new AdminUser(id, u.username(), u.passwordHash(), u.passwordChangedAt(), u.totpSecret(), u.totpEnabled(), step, u.lockedUntil(), u.role()));
             return true;
         }
 
@@ -85,7 +101,7 @@ final class InMemoryStores {
             if (count >= maxAttempts) {
                 failures.put(id, 0);
                 AdminUser u = byId.get(id);
-                byId.put(id, new AdminUser(id, u.username(), u.passwordHash(), u.passwordChangedAt(), u.totpSecret(), u.totpEnabled(), u.totpLastStep(), lockedUntilWhenExceeded));
+                byId.put(id, new AdminUser(id, u.username(), u.passwordHash(), u.passwordChangedAt(), u.totpSecret(), u.totpEnabled(), u.totpLastStep(), lockedUntilWhenExceeded, u.role()));
             }
         }
 
@@ -93,7 +109,7 @@ final class InMemoryStores {
         public void clearFailures(UUID id) {
             failures.remove(id);
             AdminUser u = byId.get(id);
-            byId.put(id, new AdminUser(id, u.username(), u.passwordHash(), u.passwordChangedAt(), u.totpSecret(), u.totpEnabled(), u.totpLastStep(), null));
+            byId.put(id, new AdminUser(id, u.username(), u.passwordHash(), u.passwordChangedAt(), u.totpSecret(), u.totpEnabled(), u.totpLastStep(), null, u.role()));
         }
 
         @Override

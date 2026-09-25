@@ -29,6 +29,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.List;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -68,8 +69,72 @@ class AdminAuthServiceTest {
         AdminAuthService.Login login = auth.login("admin", PASSWORD, null);
 
         assertThat(login.twoFactorEnabled()).isFalse();
+        assertThat(login.role()).isEqualTo(AdminRole.ADMIN);
         assertThat(auth.authenticate(login.token())).get().extracting(AdminAuthService.AuthenticatedSession::username).isEqualTo("admin");
         assertThat(auth.authenticate("not-a-token")).isEmpty();
+    }
+
+    @Test
+    void bootstrapCreatesTheFirstAdministratorWithTheAdminRole() {
+        assertThat(auth.listAdmins()).singleElement().extracting(AdminAuthService.AdminSummary::role).isEqualTo(AdminRole.ADMIN);
+    }
+
+    @Test
+    void createAdminAddsAViewerOrOperatorWhoCanSignIn() {
+        auth.createAdmin("viewer-1", "a decent password", AdminRole.VIEWER);
+
+        AdminAuthService.Login login = auth.login("viewer-1", "a decent password", null);
+
+        assertThat(login.role()).isEqualTo(AdminRole.VIEWER);
+        assertThat(auth.listAdmins()).extracting(AdminAuthService.AdminSummary::username).contains("admin", "viewer-1");
+    }
+
+    @Test
+    void createAdminRejectsADuplicateUsernameOrAWeakPassword() {
+        auth.createAdmin("operator-1", "a decent password", AdminRole.OPERATOR);
+
+        assertThat(catchAuth(() -> auth.createAdmin("operator-1", "another decent password", AdminRole.OPERATOR)).code())
+                .isEqualTo("INVALID_STATE");
+        assertThat(catchAuth(() -> auth.createAdmin("operator-2", "short", AdminRole.OPERATOR)).code())
+                .isEqualTo("INVALID_REQUEST");
+    }
+
+    @Test
+    void authenticateReflectsARoleChangeWithoutRequiringSignInAgain() {
+        AdminAuthService.AdminSummary viewer = auth.createAdmin("viewer-2", "a decent password", AdminRole.VIEWER);
+        String token = auth.login("viewer-2", "a decent password", null).token();
+        assertThat(auth.authenticate(token)).get().extracting(AdminAuthService.AuthenticatedSession::role).isEqualTo(AdminRole.VIEWER);
+
+        auth.changeRole(viewer.id(), AdminRole.OPERATOR);
+
+        assertThat(auth.authenticate(token)).get().extracting(AdminAuthService.AuthenticatedSession::role).isEqualTo(AdminRole.OPERATOR);
+    }
+
+    @Test
+    void changeRoleAndDeleteAdminProtectTheLastAdministrator() {
+        assertThat(catchAuth(() -> auth.changeRole(adminId(), AdminRole.VIEWER)).code()).isEqualTo("INVALID_STATE");
+        assertThat(catchAuth(() -> auth.deleteAdmin("admin", adminId())).code()).isEqualTo("INVALID_STATE");
+    }
+
+    @Test
+    void deleteAdminRefusesToDeleteYourOwnAccountEvenWhenNotTheLastOne() {
+        auth.createAdmin("admin-2", "a decent password", AdminRole.ADMIN);
+
+        assertThat(catchAuth(() -> auth.deleteAdmin("admin", adminId())).code()).isEqualTo("INVALID_STATE");
+    }
+
+    @Test
+    void deleteAdminRemovesASecondAdministrator() {
+        AdminAuthService.AdminSummary second = auth.createAdmin("admin-3", "a decent password", AdminRole.ADMIN);
+
+        auth.deleteAdmin("admin", second.id());
+
+        assertThat(auth.listAdmins()).extracting(AdminAuthService.AdminSummary::username).doesNotContain("admin-3");
+        assertThat(catchAuth(() -> auth.login("admin-3", "a decent password", null)).code()).isEqualTo("INVALID_CREDENTIALS");
+    }
+
+    private UUID adminId() {
+        return auth.listAdmins().stream().filter(a -> a.username().equals("admin")).findFirst().orElseThrow().id();
     }
 
     @Test
