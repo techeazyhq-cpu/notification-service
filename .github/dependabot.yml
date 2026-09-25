@@ -6,23 +6,44 @@ updates:
     open-pull-requests-limit: 5
     groups:
       spring: { patterns: ["org.springframework*"] }
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
   - package-ecosystem: npm
     directory: /admin-ui
     schedule: { interval: weekly }
     open-pull-requests-limit: 5
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
   - package-ecosystem: npm
     directory: /client-ui
     schedule: { interval: weekly }
     open-pull-requests-limit: 5
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
   - package-ecosystem: docker
     directory: /
     schedule: { interval: weekly }
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
   - package-ecosystem: docker
     directory: /admin-ui
     schedule: { interval: weekly }
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
   - package-ecosystem: docker
     directory: /client-ui
     schedule: { interval: weekly }
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
   - package-ecosystem: github-actions
     directory: /
     schedule: { interval: weekly }
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
