@@ -63,7 +63,7 @@
     <springdoc.version>2.8.17</springdoc.version>
     <!-- Spring Boot 3.3 manages an older Testcontainers whose Docker client is rejected by Docker Engine 29 (min API 1.40) -->
     <testcontainers.version>1.21.4</testcontainers.version>
-    <resilience4j.version>2.2.0</resilience4j.version>
+    <resilience4j.version>2.4.0</resilience4j.version>
     <jacoco.version>0.8.15</jacoco.version>
     <archunit.version>1.3.0</archunit.version>
   </properties>
