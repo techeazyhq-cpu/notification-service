@@ -74,6 +74,8 @@ services:
       DB_URL: jdbc:postgresql://postgres:5432/notification
       DB_USER: notification
       DB_PASSWORD: notification
+      # Without this, the job refuses to run with the default DB_PASSWORD above (see MigrationApplication).
+      SPRING_PROFILES_ACTIVE: local
     depends_on:
       postgres: { condition: service_healthy }
 
@@ -86,6 +88,12 @@ services:
       REDIS_HOST: redis
       PULSAR_URL: pulsar://pulsar:6650
       VIRTUAL_THREADS_ENABLED: ${VIRTUAL_THREADS_ENABLED:-false}
+      # Encrypts provider secrets (SMTP password, gateway auth header) at rest; must be the same value on every
+      # service, since admin-api encrypts with it and client-api/dispatcher decrypt with it. See ADR-013.
+      SECRETS_ENCRYPTION_KEY: ${SECRETS_ENCRYPTION_KEY:-development-only-change-me}
+      # Without this, a service refuses to start with the default DB_PASSWORD/ADMIN_PASSWORD/keys above
+      # (see notification-core's InsecureDefaults and ADR-013).
+      SPRING_PROFILES_ACTIVE: local
     depends_on: &svc-deps
       db-migrate: { condition: service_completed_successfully }
       postgres: { condition: service_healthy }
