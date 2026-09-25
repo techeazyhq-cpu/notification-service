@@ -24,8 +24,12 @@ services:
       POSTGRES_DB: notification
       POSTGRES_USER: notification
       POSTGRES_PASSWORD: notification
+      DB_APP_USER: ${DB_APP_USER:-notification_app}
+      DB_APP_PASSWORD: ${DB_APP_PASSWORD:-notification_app}
     ports: ["5432:5432"]
-    volumes: [pgdata:/var/lib/postgresql/data]
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./scripts/postgres-init:/docker-entrypoint-initdb.d:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U notification"]
       interval: 5s
@@ -83,6 +87,10 @@ services:
     ports: ["8080:8080"]
     environment: &svc-env
       DB_URL: jdbc:postgresql://postgres:5432/notification
+      # DML-only role: these three services never run DDL, so they don't get the schema-owning
+      # notification/notification credentials the migration job uses. See ADR-012.
+      DB_USER: ${DB_APP_USER:-notification_app}
+      DB_PASSWORD: ${DB_APP_PASSWORD:-notification_app}
       REDIS_HOST: redis
       PULSAR_URL: pulsar://pulsar:6650
       VIRTUAL_THREADS_ENABLED: ${VIRTUAL_THREADS_ENABLED:-false}
