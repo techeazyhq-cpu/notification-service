@@ -25,6 +25,7 @@ import com.techeazy.notification.dispatcher.provider.ChannelProvider.*;
 import com.techeazy.notification.domain.Channel;
 import com.techeazy.notification.domain.ProviderConfig;
 import com.techeazy.notification.domain.ProviderType;
+import com.techeazy.notification.infra.ProviderSecrets;
 import com.techeazy.notification.persistence.ProviderConfigRepository;
 import io.github.resilience4j.circuitbreaker.CallNotPermittedException;
 import io.github.resilience4j.circuitbreaker.CircuitBreaker;
@@ -66,13 +67,15 @@ public class ProviderRegistry {
     private final boolean breakerEnabled;
     private final Map<String, Instant> breakerVersions = new HashMap<>();
 
-    public ProviderRegistry(List<ChannelProvider> impls, ProviderConfigRepository repo,
+    public ProviderRegistry(List<ChannelProvider> impls, ProviderConfigRepository repo, ProviderSecrets secrets,
                             CircuitBreakerRegistry breakers, DispatcherProperties props) {
         impls.forEach(p -> providers.put(p.type(), p));
         this.breakers = breakers;
         this.breakerEnabled = props.getCircuitBreaker().isEnabled();
         this.configs = Caffeine.newBuilder().expireAfterWrite(Duration.ofSeconds(10))
-                .build(repo::findByChannelAndEnabledTrueOrderByPriorityAsc);
+                .build(channel -> repo.findByChannelAndEnabledTrueOrderByPriorityAsc(channel).stream()
+                        .peek(cfg -> cfg.setSettings(secrets.decryptForUse(cfg.getSettings())))
+                        .toList());
     }
 
     /** False only when the channel has providers and all of their circuits are open. */
