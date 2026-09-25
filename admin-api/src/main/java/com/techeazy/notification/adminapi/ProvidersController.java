@@ -21,6 +21,7 @@ package com.techeazy.notification.adminapi;
 import com.techeazy.notification.domain.Channel;
 import com.techeazy.notification.domain.ProviderConfig;
 import com.techeazy.notification.domain.ProviderType;
+import com.techeazy.notification.infra.ProviderSecrets;
 import com.techeazy.notification.persistence.ProviderConfigRepository;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
@@ -36,7 +37,6 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.UUID;
 
 /** Provider configs. Secret-looking settings are masked on read; sending the mask back keeps the stored value. */
@@ -45,7 +45,6 @@ import java.util.UUID;
 class ProvidersController {
 
     static final String MASK = "********";
-    private static final Set<String> SECRET_KEYS = Set.of("password", "authheader", "apikey", "token", "secret");
 
     record ProviderInput(@NotNull Channel channel, @NotBlank @Size(max = 120) String name, @NotNull ProviderType type,
                          Map<String, String> settings, boolean enabled, Integer priority) {}
@@ -54,9 +53,11 @@ class ProvidersController {
                         boolean enabled, int priority, Instant updatedAt) {}
 
     private final ProviderConfigRepository repo;
+    private final ProviderSecrets secrets;
 
-    ProvidersController(ProviderConfigRepository repo) {
+    ProvidersController(ProviderConfigRepository repo, ProviderSecrets secrets) {
         this.repo = repo;
+        this.secrets = secrets;
     }
 
     @GetMapping
@@ -91,13 +92,13 @@ class ProvidersController {
         repo.deleteById(id);
     }
 
-    private static void apply(ProviderConfig p, ProviderInput in) {
+    private void apply(ProviderConfig p, ProviderInput in) {
         Map<String, String> merged = new HashMap<>(in.settings() == null ? Map.of() : in.settings());
         merged.replaceAll((k, v) -> MASK.equals(v) ? p.getSettings().getOrDefault(k, "") : v);
         p.setChannel(in.channel());
         p.setName(in.name());
         p.setType(in.type());
-        p.setSettings(merged);
+        p.setSettings(secrets.encryptForStorage(merged));
         p.setEnabled(in.enabled());
         p.setPriority(in.priority() == null ? 100 : in.priority());
         p.setUpdatedAt(Instant.now());
@@ -105,7 +106,7 @@ class ProvidersController {
 
     private static ProviderView view(ProviderConfig p) {
         Map<String, String> masked = new HashMap<>(p.getSettings());
-        masked.replaceAll((k, v) -> SECRET_KEYS.contains(k.toLowerCase()) && v != null && !v.isEmpty() ? MASK : v);
+        masked.replaceAll((k, v) -> ProviderSecrets.SECRET_KEYS.contains(k.toLowerCase()) && v != null && !v.isEmpty() ? MASK : v);
         return new ProviderView(p.getId(), p.getChannel(), p.getName(), p.getType(), masked, p.isEnabled(), p.getPriority(), p.getUpdatedAt());
     }
 }

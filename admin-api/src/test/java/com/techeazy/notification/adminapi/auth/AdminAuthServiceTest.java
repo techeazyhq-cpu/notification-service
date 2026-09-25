@@ -53,15 +53,35 @@ class AdminAuthServiceTest {
         AuthSettings settings = new AuthSettings("Notification Admin", Duration.ofMinutes(30), Duration.ofHours(12), 3, Duration.ofMinutes(15));
         auth = new AdminAuthService(users, sessions, PasswordEncoderFactories.createDelegatingPasswordEncoder(),
                 new SecretCipher("test-key", new SecureRandom()), totp, clock, settings, new SecureRandom());
-        auth.bootstrap("admin", PASSWORD);
+        auth.bootstrap("admin", PASSWORD, () -> { });
     }
 
     @Test
     void bootstrapCreatesTheFirstAdministratorOnlyOnce() {
-        auth.bootstrap("someone-else", "another-password");
+        auth.bootstrap("someone-else", "another-password", () -> { });
 
         assertThat(users.count()).isEqualTo(1);
         assertThat(auth.account("admin").initialPassword()).isTrue();
+    }
+
+    @Test
+    void bootstrapRunsTheGivenCheckOnlyWhenAboutToCreateTheFirstAdministrator() {
+        InMemoryStores.Users emptyUsers = new InMemoryStores.Users();
+        AdminAuthService fresh = new AdminAuthService(emptyUsers, new InMemoryStores.Sessions(emptyUsers),
+                PasswordEncoderFactories.createDelegatingPasswordEncoder(), new SecretCipher("test-key", new SecureRandom()),
+                totp, clock, new AuthSettings("Notification Admin", Duration.ofMinutes(30), Duration.ofHours(12), 3, Duration.ofMinutes(15)),
+                new SecureRandom());
+
+        assertThatThrownBy(() -> fresh.bootstrap("admin", "admin", () -> { throw new IllegalStateException("rejected"); }))
+                .isInstanceOf(IllegalStateException.class);
+        assertThat(emptyUsers.count()).isZero();
+
+        fresh.bootstrap("admin", "admin", () -> { });
+        assertThat(emptyUsers.count()).isEqualTo(1);
+
+        // an administrator already exists, so the check is not run again even though the password is still "admin"
+        fresh.bootstrap("someone-else", "admin", () -> { throw new IllegalStateException("must not run"); });
+        assertThat(emptyUsers.count()).isEqualTo(1);
     }
 
     @Test

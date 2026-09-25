@@ -108,6 +108,12 @@ The schema is owned by the `db-migration` job (Liquibase), not by the services. 
 first (`db-migrate`) and the services start only after it succeeds; they run Hibernate `ddl-auto: validate` and refuse to
 start against a missing or outdated schema. Changesets live in `db-migration/src/main/resources/db/changelog/`.
 
+The migration job and the three services connect as different, least-privilege database roles: `db-migrate` owns the
+schema (`notification`, full DDL), while `client-api`, `admin-api` and `dispatcher` connect as `notification_app`, which
+can only read and write rows, never alter or drop anything. `docker compose up -d` creates `notification_app`
+automatically (`scripts/postgres-init/01-create-app-role.sh`, run once by the Postgres image on a fresh volume); against
+an existing database, an operator runs that script's SQL by hand once. See ADR-012.
+
 ```bash
 docker compose run --rm db-migrate status        # what is still to be applied
 docker compose run --rm db-migrate update-sql    # the exact SQL update would run, without running it

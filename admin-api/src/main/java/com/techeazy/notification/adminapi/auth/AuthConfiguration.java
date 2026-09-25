@@ -18,12 +18,14 @@
 
 package com.techeazy.notification.adminapi.auth;
 
+import com.techeazy.notification.config.InsecureDefaults;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.core.env.Environment;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -40,18 +42,17 @@ public class AuthConfiguration {
 
     private static final Logger LOG = LoggerFactory.getLogger(AuthConfiguration.class);
     private static final String DEFAULT_TWO_FACTOR_KEY = "development-only-change-me";
+    private static final String DEFAULT_ADMIN_PASSWORD = "admin";
 
     @Bean
-    AdminAuthService adminAuthService(JdbcClient jdbc, PasswordEncoder encoder,
+    AdminAuthService adminAuthService(Environment env, JdbcClient jdbc, PasswordEncoder encoder,
                                       @Value("${admin.two-factor-key:" + DEFAULT_TWO_FACTOR_KEY + "}") String twoFactorKey,
                                       @Value("${admin.issuer:Notification Admin}") String issuer,
                                       @Value("${admin.session-idle-minutes:30}") long idleMinutes,
                                       @Value("${admin.session-max-hours:12}") long maxHours,
                                       @Value("${admin.max-failed-attempts:5}") int maxFailedAttempts,
                                       @Value("${admin.lockout-minutes:15}") long lockoutMinutes) {
-        if (DEFAULT_TWO_FACTOR_KEY.equals(twoFactorKey)) {
-            LOG.warn("admin.two-factor-key is the development default; set ADMIN_TWO_FACTOR_KEY before real use");
-        }
+        InsecureDefaults.reject(env, "admin.two-factor-key", twoFactorKey, DEFAULT_TWO_FACTOR_KEY);
         SecureRandom random = new SecureRandom();
         AuthSettings settings = new AuthSettings(issuer, Duration.ofMinutes(idleMinutes), Duration.ofHours(maxHours),
                 maxFailedAttempts, Duration.ofMinutes(lockoutMinutes));
@@ -60,10 +61,11 @@ public class AuthConfiguration {
     }
 
     @Bean
-    ApplicationRunner createFirstAdministrator(AdminAuthService auth, @Value("${admin.username}") String username,
+    ApplicationRunner createFirstAdministrator(Environment env, AdminAuthService auth,
+                                               @Value("${admin.username}") String username,
                                                @Value("${admin.password}") String password) {
         return args -> {
-            auth.bootstrap(username, password);
+            auth.bootstrap(username, password, () -> InsecureDefaults.reject(env, "admin.password", password, DEFAULT_ADMIN_PASSWORD));
             LOG.info("Administrator accounts are stored in the database; ADMIN_USERNAME/ADMIN_PASSWORD only seed the first one");
         };
     }
