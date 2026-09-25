@@ -1,0 +1,64 @@
+# Copyright 2026 Vasantha Kumar
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+# @author Vasantha Kumar <vasantha.kumar@hotmail.com>
+#
+# Layer on top of docker-compose.tls.yml for real, publicly-trusted certificates from Let's Encrypt instead of
+# Traefik's self-signed default. Requires: a real domain for each service pointed at this host's public IP, and
+# port 80 reachable from the internet (the ACME HTTP challenge needs it, even though traffic ends up on 443). See
+# ADR-016.
+#
+# Usage: set the four *_DOMAIN variables (below) and ACME_EMAIL in your environment or a .env file, then:
+#   docker compose -f docker-compose.yml -f docker-compose.tls.yml -f docker-compose.tls.letsencrypt.yml \
+#     --profile app --profile tls up -d --build
+name: notification-service
+
+services:
+  traefik:
+    command:
+      - --providers.docker=true
+      - --providers.docker.exposedbydefault=false
+      - --entrypoints.web.address=:80
+      - --entrypoints.websecure.address=:443
+      - --entrypoints.web.http.redirections.entrypoint.to=websecure
+      - --entrypoints.web.http.redirections.entrypoint.scheme=https
+      - --certificatesresolvers.letsencrypt.acme.email=${ACME_EMAIL:?set ACME_EMAIL to your own address}
+      - --certificatesresolvers.letsencrypt.acme.storage=/letsencrypt/acme.json
+      - --certificatesresolvers.letsencrypt.acme.httpchallenge=true
+      - --certificatesresolvers.letsencrypt.acme.httpchallenge.entrypoint=web
+    volumes:
+      - traefik-certs:/letsencrypt
+
+  client-api:
+    labels:
+      - traefik.http.routers.client-api.rule=Host(`${CLIENT_API_DOMAIN:?set CLIENT_API_DOMAIN to a real domain pointed at this host}`)
+      - traefik.http.routers.client-api.tls.certresolver=letsencrypt
+
+  admin-api:
+    labels:
+      - traefik.http.routers.admin-api.rule=Host(`${ADMIN_API_DOMAIN:?set ADMIN_API_DOMAIN to a real domain pointed at this host}`)
+      - traefik.http.routers.admin-api.tls.certresolver=letsencrypt
+
+  admin-ui:
+    labels:
+      - traefik.http.routers.admin-ui.rule=Host(`${ADMIN_UI_DOMAIN:?set ADMIN_UI_DOMAIN to a real domain pointed at this host}`)
+      - traefik.http.routers.admin-ui.tls.certresolver=letsencrypt
+
+  client-ui:
+    labels:
+      - traefik.http.routers.client-ui.rule=Host(`${CLIENT_UI_DOMAIN:?set CLIENT_UI_DOMAIN to a real domain pointed at this host}`)
+      - traefik.http.routers.client-ui.tls.certresolver=letsencrypt
+
+volumes:
+  traefik-certs:

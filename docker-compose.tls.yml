@@ -1,0 +1,81 @@
+# Copyright 2026 Vasantha Kumar
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+# @author Vasantha Kumar <vasantha.kumar@hotmail.com>
+#
+# TLS in front of every public HTTP surface, terminated by Traefik. Works immediately with no domain and no
+# certificate of your own: Traefik's built-in self-signed default certificate covers the *.localhost names below
+# (browsers warn, connections are still encrypted -- fine for evaluating the stack, not for real users). See
+# ADR-016 for why Traefik, why *.localhost, and how to layer real certificates with docker-compose.tls.letsencrypt.yml.
+#
+# Usage: docker compose -f docker-compose.yml -f docker-compose.tls.yml --profile app --profile tls up -d --build
+#   https://client-api.localhost   (was :8080)
+#   https://admin-api.localhost    (was :8081)
+#   https://admin.localhost        (admin-ui, was :5173)
+#   https://app.localhost          (client-ui, was :5174)
+# dispatcher (:8082) is not fronted: it has no client- or admin-facing HTTP surface, only actuator/health for
+# operators on the internal network.
+name: notification-service
+
+services:
+  traefik:
+    image: traefik:v3.7
+    profiles: [tls]
+    command:
+      - --providers.docker=true
+      - --providers.docker.exposedbydefault=false
+      - --entrypoints.web.address=:80
+      - --entrypoints.websecure.address=:443
+      - --entrypoints.web.http.redirections.entrypoint.to=websecure
+      - --entrypoints.web.http.redirections.entrypoint.scheme=https
+    ports: ["80:80", "443:443"]
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    restart: unless-stopped
+
+  client-api:
+    ports: !override []
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.client-api.rule=Host(`${CLIENT_API_DOMAIN:-client-api.localhost}`)
+      - traefik.http.routers.client-api.entrypoints=websecure
+      - traefik.http.routers.client-api.tls=true
+      - traefik.http.services.client-api.loadbalancer.server.port=8080
+
+  admin-api:
+    ports: !override []
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.admin-api.rule=Host(`${ADMIN_API_DOMAIN:-admin-api.localhost}`)
+      - traefik.http.routers.admin-api.entrypoints=websecure
+      - traefik.http.routers.admin-api.tls=true
+      - traefik.http.services.admin-api.loadbalancer.server.port=8081
+
+  admin-ui:
+    ports: !override []
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.admin-ui.rule=Host(`${ADMIN_UI_DOMAIN:-admin.localhost}`)
+      - traefik.http.routers.admin-ui.entrypoints=websecure
+      - traefik.http.routers.admin-ui.tls=true
+      - traefik.http.services.admin-ui.loadbalancer.server.port=8080
+
+  client-ui:
+    ports: !override []
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.client-ui.rule=Host(`${CLIENT_UI_DOMAIN:-app.localhost}`)
+      - traefik.http.routers.client-ui.entrypoints=websecure
+      - traefik.http.routers.client-ui.tls=true
+      - traefik.http.services.client-ui.loadbalancer.server.port=8080

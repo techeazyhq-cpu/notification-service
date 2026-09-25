@@ -128,6 +128,30 @@ docker compose run --rm -e MIGRATION_ALLOW_ROLLBACK=true db-migrate rollback-tag
 
 Off by default. `VIRTUAL_THREADS_ENABLED=true` turns them on for the Client and Admin APIs, but on Java 21 they were slower and stalled under 500 concurrent clients in our test (thread pinning), so they are not recommended yet. Measurements and when to revisit: ADR-006.
 
+## Deploying with TLS
+
+Nothing above uses TLS: it's a local-development stack on plain HTTP. To put the four public HTTP surfaces
+(`client-api`, `admin-api`, `admin-ui`, `client-ui`) behind TLS via a [Traefik](https://traefik.io) reverse proxy:
+
+```bash
+# Self-signed, works immediately with no domain or certificate of your own:
+docker compose -f docker-compose.yml -f docker-compose.tls.yml --profile app --profile tls up -d --build
+```
+
+This serves `https://client-api.localhost`, `https://admin-api.localhost`, `https://admin.localhost` and
+`https://app.localhost` (accept the browser's self-signed warning). For real, publicly-trusted certificates, point
+each service at a real domain and layer the Let's Encrypt overlay on top:
+
+```bash
+export ACME_EMAIL=you@example.com CLIENT_API_DOMAIN=api.example.com ADMIN_API_DOMAIN=admin-api.example.com \
+       ADMIN_UI_DOMAIN=admin.example.com CLIENT_UI_DOMAIN=app.example.com
+docker compose -f docker-compose.yml -f docker-compose.tls.yml -f docker-compose.tls.letsencrypt.yml \
+  --profile app --profile tls up -d --build
+```
+
+`dispatcher` isn't fronted: it has no client- or admin-facing HTTP surface, only actuator health for operators. See
+ADR-016.
+
 ## Continuous integration
 
 GitHub Actions run on every pull request and on `main` (`.github/workflows`):
