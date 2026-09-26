@@ -18,14 +18,22 @@
 
 package com.techeazy.notification.adminapi.auth;
 
-import java.time.Instant;
-import java.util.UUID;
+import java.util.List;
 
-/** An administrator as stored; {@code totpSecret} is encrypted and only meaningful together with {@code totpEnabled}. */
-record AdminUser(UUID id, String username, String passwordHash, Instant passwordChangedAt, String totpSecret,
-                 boolean totpEnabled, long totpLastStep, Instant lockedUntil, AdminRole role) {
+/**
+ * What an administrator may do. Each role includes everything the ones below it can do: {@code ADMIN} can do
+ * everything {@code OPERATOR} can, which includes everything {@code VIEWER} can. See ADR-015 for which endpoints
+ * need which role.
+ */
+public enum AdminRole {
+    VIEWER, OPERATOR, ADMIN;
 
-    boolean lockedAt(Instant now) {
-        return lockedUntil != null && lockedUntil.isAfter(now);
+    /** Spring Security role names (without the {@code ROLE_} prefix) this role should be granted, including implied ones. */
+    List<String> impliedRoleNames() {
+        return switch (this) {
+            case VIEWER -> List.of("VIEWER");
+            case OPERATOR -> List.of("VIEWER", "OPERATOR");
+            case ADMIN -> List.of("VIEWER", "OPERATOR", "ADMIN");
+        };
     }
 }

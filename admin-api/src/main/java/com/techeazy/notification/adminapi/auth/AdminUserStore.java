@@ -32,7 +32,13 @@ interface AdminUserStore {
 
     Optional<AdminUser> findById(UUID id);
 
+    List<AdminUser> findAll();
+
     void insert(AdminUser user, Instant now);
+
+    void updateRole(UUID id, AdminRole role);
+
+    boolean delete(UUID id);
 
     void updatePassword(UUID id, String passwordHash, Instant now);
 

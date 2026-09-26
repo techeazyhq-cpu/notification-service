@@ -31,7 +31,7 @@ import java.util.UUID;
 /** PostgreSQL adapter for {@link AdminUserStore}; every counter update is a single atomic statement. */
 class JdbcAdminUserStore implements AdminUserStore {
 
-    private static final String COLUMNS = "id, username, password_hash, password_changed_at, totp_secret, totp_enabled, totp_last_step, locked_until";
+    private static final String COLUMNS = "id, username, password_hash, password_changed_at, totp_secret, totp_enabled, totp_last_step, locked_until, role";
 
     private final JdbcClient jdbc;
 
@@ -57,10 +57,25 @@ class JdbcAdminUserStore implements AdminUserStore {
     }
 
     @Override
+    public List<AdminUser> findAll() {
+        return jdbc.sql("SELECT " + COLUMNS + " FROM admin_user ORDER BY username").query(JdbcAdminUserStore::map).list();
+    }
+
+    @Override
     public void insert(AdminUser user, Instant now) {
-        jdbc.sql("INSERT INTO admin_user (id, username, password_hash, created_at) VALUES (:id, :username, :hash, :now)")
+        jdbc.sql("INSERT INTO admin_user (id, username, password_hash, created_at, role) VALUES (:id, :username, :hash, :now, :role)")
                 .param("id", user.id()).param("username", user.username()).param("hash", user.passwordHash())
-                .param("now", Timestamp.from(now)).update();
+                .param("now", Timestamp.from(now)).param("role", user.role().name()).update();
+    }
+
+    @Override
+    public void updateRole(UUID id, AdminRole role) {
+        jdbc.sql("UPDATE admin_user SET role = :role WHERE id = :id").param("role", role.name()).param("id", id).update();
+    }
+
+    @Override
+    public boolean delete(UUID id) {
+        return jdbc.sql("DELETE FROM admin_user WHERE id = :id").param("id", id).update() == 1;
     }
 
     @Override
@@ -121,6 +136,6 @@ class JdbcAdminUserStore implements AdminUserStore {
         Timestamp locked = rs.getTimestamp("locked_until");
         return new AdminUser(rs.getObject("id", UUID.class), rs.getString("username"), rs.getString("password_hash"),
                 changed == null ? null : changed.toInstant(), rs.getString("totp_secret"), rs.getBoolean("totp_enabled"),
-                rs.getLong("totp_last_step"), locked == null ? null : locked.toInstant());
+                rs.getLong("totp_last_step"), locked == null ? null : locked.toInstant(), AdminRole.valueOf(rs.getString("role")));
     }
 }

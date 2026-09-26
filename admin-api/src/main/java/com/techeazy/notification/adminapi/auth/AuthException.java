@@ -21,7 +21,7 @@ package com.techeazy.notification.adminapi.auth;
 import org.springframework.http.HttpStatus;
 
 /** A refused authentication or account operation, carrying the stable code and HTTP status the API reports. */
-class AuthException extends RuntimeException {
+public class AuthException extends RuntimeException {
 
     private final transient String code;
     private final transient HttpStatus status;
@@ -32,11 +32,11 @@ class AuthException extends RuntimeException {
         this.status = status;
     }
 
-    String code() {
+    public String code() {
         return code;
     }
 
-    HttpStatus status() {
+    public HttpStatus status() {
         return status;
     }
 
@@ -62,5 +62,9 @@ class AuthException extends RuntimeException {
 
     static AuthException conflict(String message) {
         return new AuthException(HttpStatus.CONFLICT, "INVALID_STATE", message);
+    }
+
+    static AuthException notFound(String message) {
+        return new AuthException(HttpStatus.NOT_FOUND, "NOT_FOUND", message);
     }
 }

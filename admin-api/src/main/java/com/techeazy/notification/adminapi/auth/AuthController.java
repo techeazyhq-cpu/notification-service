@@ -40,7 +40,7 @@ class AuthController {
 
     record LoginRequest(@NotBlank String username, @NotBlank String password, String verificationCode) {}
 
-    record LoginResponse(String token, Instant expiresAt, boolean twoFactorEnabled, boolean initialPassword) {}
+    record LoginResponse(String token, Instant expiresAt, boolean twoFactorEnabled, boolean initialPassword, AdminRole role) {}
 
     record PasswordChange(@NotBlank String currentPassword, @NotBlank String newPassword) {}
 
@@ -59,7 +59,7 @@ class AuthController {
     @PostMapping("/login")
     LoginResponse login(@RequestBody @jakarta.validation.Valid LoginRequest request) {
         AdminAuthService.Login login = auth.login(request.username(), request.password(), request.verificationCode());
-        return new LoginResponse(login.token(), login.expiresAt(), login.twoFactorEnabled(), login.initialPassword());
+        return new LoginResponse(login.token(), login.expiresAt(), login.twoFactorEnabled(), login.initialPassword(), login.role());
     }
 
     @PostMapping("/logout")

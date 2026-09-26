@@ -51,8 +51,10 @@ public class BearerTokenFilter extends OncePerRequestFilter {
         String header = request.getHeader("Authorization");
         if (header != null && header.startsWith(PREFIX)) {
             auth.authenticate(header.substring(PREFIX.length()).trim()).ifPresent(session -> {
+                List<SimpleGrantedAuthority> authorities = session.role().impliedRoleNames().stream()
+                        .map(role -> new SimpleGrantedAuthority("ROLE_" + role)).toList();
                 UsernamePasswordAuthenticationToken authentication = UsernamePasswordAuthenticationToken.authenticated(
-                        session.username(), null, List.of(new SimpleGrantedAuthority("ROLE_ADMIN")));
+                        session.username(), null, authorities);
                 authentication.setDetails(session.tokenHash());
                 SecurityContextHolder.getContext().setAuthentication(authentication);
             });

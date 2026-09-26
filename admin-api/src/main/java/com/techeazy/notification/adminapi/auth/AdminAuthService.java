@@ -52,13 +52,15 @@ public class AdminAuthService {
     private static final String RECOVERY_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
     private static final Duration TOUCH_INTERVAL = Duration.ofMinutes(1);
 
-    record Login(String token, Instant expiresAt, boolean twoFactorEnabled, boolean initialPassword) {}
+    record Login(String token, Instant expiresAt, boolean twoFactorEnabled, boolean initialPassword, AdminRole role) {}
 
-    record Account(String username, boolean twoFactorEnabled, int recoveryCodesRemaining, boolean initialPassword) {}
+    record Account(String username, boolean twoFactorEnabled, int recoveryCodesRemaining, boolean initialPassword, AdminRole role) {}
 
     record TwoFactorSetup(String secret, String otpauthUri) {}
 
-    public record AuthenticatedSession(String username, String tokenHash) {}
+    public record AuthenticatedSession(String username, String tokenHash, AdminRole role) {}
+
+    public record AdminSummary(java.util.UUID id, String username, AdminRole role, boolean locked, boolean totpEnabled) {}
 
     private final AdminUserStore users;
     private final SessionStore sessions;
@@ -87,7 +89,7 @@ public class AdminAuthService {
     void bootstrap(String username, String password, Runnable beforeCreating) {
         if (users.count() == 0) {
             beforeCreating.run();
-            users.insert(new AdminUser(UUID.randomUUID(), username, encoder.encode(password), null, null, false, 0, null), clock.instant());
+            users.insert(new AdminUser(UUID.randomUUID(), username, encoder.encode(password), null, null, false, 0, null, AdminRole.ADMIN), clock.instant());
         }
     }
 
@@ -138,13 +140,57 @@ public class AdminAuthService {
         if (Duration.between(session.lastSeenAt(), now).compareTo(TOUCH_INTERVAL) > 0) {
             sessions.touch(tokenHash, now, expiryFor(session.createdAt(), now));
         }
-        return Optional.of(new AuthenticatedSession(session.username(), tokenHash));
+        // Looked up fresh rather than carried on the session, so a role change takes effect on the next request,
+        // not only after the administrator signs in again.
+        return users.findByUsername(session.username())
+                .map(user -> new AuthenticatedSession(session.username(), tokenHash, user.role()));
     }
 
     Account account(String username) {
         AdminUser user = require(username);
         int remaining = user.totpEnabled() ? users.remainingRecoveryCodes(user.id()) : 0;
-        return new Account(user.username(), user.totpEnabled(), remaining, user.passwordChangedAt() == null);
+        return new Account(user.username(), user.totpEnabled(), remaining, user.passwordChangedAt() == null, user.role());
+    }
+
+    public List<AdminSummary> listAdmins() {
+        Instant now = clock.instant();
+        return users.findAll().stream().map(u -> new AdminSummary(u.id(), u.username(), u.role(), u.lockedAt(now), u.totpEnabled())).toList();
+    }
+
+    public AdminSummary createAdmin(String username, String password, AdminRole role) {
+        if (users.findByUsername(username).isPresent()) {
+            throw AuthException.conflict("That username is already in use");
+        }
+        String violation = PasswordPolicy.violation(password, username);
+        if (violation != null) {
+            throw AuthException.invalid(violation);
+        }
+        UUID id = UUID.randomUUID();
+        users.insert(new AdminUser(id, username, encoder.encode(password), null, null, false, 0, null, role), clock.instant());
+        return new AdminSummary(id, username, role, false, false);
+    }
+
+    public void changeRole(UUID targetId, AdminRole role) {
+        AdminUser target = users.findById(targetId).orElseThrow(() -> AuthException.notFound("No such administrator"));
+        if (target.role() == AdminRole.ADMIN && role != AdminRole.ADMIN && countAdmins() <= 1) {
+            throw AuthException.conflict("There must be at least one administrator");
+        }
+        users.updateRole(targetId, role);
+    }
+
+    public void deleteAdmin(String actingUsername, UUID targetId) {
+        AdminUser target = users.findById(targetId).orElseThrow(() -> AuthException.notFound("No such administrator"));
+        if (target.username().equals(actingUsername)) {
+            throw AuthException.conflict("You cannot delete your own account");
+        }
+        if (target.role() == AdminRole.ADMIN && countAdmins() <= 1) {
+            throw AuthException.conflict("There must be at least one administrator");
+        }
+        users.delete(targetId);
+    }
+
+    private long countAdmins() {
+        return users.findAll().stream().filter(u -> u.role() == AdminRole.ADMIN).count();
     }
 
     void changePassword(String username, String currentPassword, String newPassword, String currentTokenHash) {
@@ -231,7 +277,7 @@ public class AdminAuthService {
         String token = Base64.getUrlEncoder().withoutPadding().encodeToString(raw);
         Instant expiresAt = expiryFor(now, now);
         sessions.create(hashToken(token), user.id(), now, expiresAt);
-        return new Login(token, expiresAt, user.totpEnabled(), user.passwordChangedAt() == null);
+        return new Login(token, expiresAt, user.totpEnabled(), user.passwordChangedAt() == null, user.role());
     }
 
     private Instant expiryFor(Instant createdAt, Instant now) {
