@@ -40,7 +40,7 @@ public class NotificationMessage {
     private UUID clientId;
     @Enumerated(EnumType.STRING) private Channel channel;
     private String recipient;
-    @JdbcTypeCode(SqlTypes.JSON) private Map<String, String> variables = new HashMap<>();
+    @Convert(converter = EncryptedVariablesConverter.class) @JdbcTypeCode(SqlTypes.JSON) private Map<String, String> variables = new HashMap<>();
     @Enumerated(EnumType.STRING) private MessageStatus status;
     private int attempts;
     private String lastError;

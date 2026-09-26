@@ -1,0 +1,152 @@
+# Copyright 2026 Vasantha Kumar
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+# @author Vasantha Kumar <vasantha.kumar@hotmail.com>
+#
+# Encrypts every hop between the services and their datastores: PostgreSQL (TLS only, verify-full), Redis (TLS only)
+# and Pulsar (TLS only, hostname verified). Combine with docker-compose.tls.yml to also encrypt the public edge. See
+# ADR-017. Certificates come from a private CA that a one-shot container creates in a volume; replace them with your
+# own PKI for production.
+#
+# Usage: docker compose -f docker-compose.yml -f docker-compose.encrypted.yml --profile app up -d --build
+name: notification-service
+
+x-ca-mount: &ca-mount
+  type: volume
+  source: certs
+  target: /certs/ca
+  read_only: true
+  volume: { subpath: ca }
+
+services:
+  certs:
+    image: alpine/openssl:latest
+    entrypoint: ["sh", "/gen-certs.sh"]
+    volumes:
+      - ./deploy/tls/gen-certs.sh:/gen-certs.sh:ro
+      - certs:/certs
+    restart: "no"
+
+  postgres:
+    entrypoint:
+      - sh
+      - -c
+      - >-
+        install -m 600 -o postgres -g postgres /certs/postgres/postgres.key /var/lib/postgresql/server.key &&
+        install -m 644 -o postgres -g postgres /certs/postgres/postgres.crt /var/lib/postgresql/server.crt &&
+        exec docker-entrypoint.sh postgres -c ssl=on -c ssl_cert_file=/var/lib/postgresql/server.crt
+        -c ssl_key_file=/var/lib/postgresql/server.key -c ssl_ca_file=/certs/postgres/ca.crt
+        -c hba_file=/certs/postgres/pg_hba.conf
+    volumes:
+      - type: volume
+        source: certs
+        target: /certs/postgres
+        read_only: true
+        volume: { subpath: postgres }
+    depends_on:
+      certs: { condition: service_completed_successfully }
+
+  redis:
+    command:
+      - redis-server
+      - --port
+      - "0"
+      - --tls-port
+      - "6379"
+      - --tls-cert-file
+      - /certs/redis/redis.crt
+      - --tls-key-file
+      - /certs/redis/redis.key
+      - --tls-ca-cert-file
+      - /certs/redis/ca.crt
+      - --tls-auth-clients
+      - "no"
+    healthcheck:
+      test: ["CMD", "redis-cli", "--tls", "--cacert", "/certs/redis/ca.crt", "-h", "redis", "ping"]
+      interval: 5s
+      retries: 10
+    volumes:
+      - type: volume
+        source: certs
+        target: /certs/redis
+        read_only: true
+        volume: { subpath: redis }
+    depends_on:
+      certs: { condition: service_completed_successfully }
+
+  pulsar:
+    command:
+      - sh
+      - -c
+      - bin/apply-config-from-env.py conf/standalone.conf && exec bin/pulsar standalone -nfw -nss
+    environment:
+      PULSAR_MEM: "-Xms512m -Xmx768m -XX:MaxDirectMemorySize=512m"
+      PULSAR_PREFIX_brokerServicePort: ""
+      PULSAR_PREFIX_brokerServicePortTls: "6651"
+      PULSAR_PREFIX_tlsEnabled: "true"
+      PULSAR_PREFIX_tlsCertificateFilePath: /certs/pulsar/pulsar.crt
+      PULSAR_PREFIX_tlsKeyFilePath: /certs/pulsar/pulsar.key.pk8
+      PULSAR_PREFIX_tlsTrustCertsFilePath: /certs/pulsar/ca.crt
+      PULSAR_PREFIX_tlsAllowInsecureConnection: "false"
+      PULSAR_PREFIX_webServicePortTls: "8443"
+      PULSAR_PREFIX_brokerClientTlsEnabled: "true"
+      PULSAR_PREFIX_brokerClientTrustCertsFilePath: /certs/pulsar/ca.crt
+    ports: !override ["8088:8080"]
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fs http://localhost:8080/admin/v2/brokers/ready || exit 1"]
+      interval: 10s
+      timeout: 10s
+      retries: 20
+      start_period: 30s
+    volumes:
+      - pulsardata:/pulsar/data
+      - type: volume
+        source: certs
+        target: /certs/pulsar
+        read_only: true
+        volume: { subpath: pulsar }
+    depends_on:
+      certs: { condition: service_completed_successfully }
+
+  db-migrate:
+    environment:
+      DB_URL: jdbc:postgresql://postgres:5432/notification?sslmode=verify-full&sslrootcert=/certs/ca/ca.crt
+    volumes: [*ca-mount]
+    depends_on:
+      certs: { condition: service_completed_successfully }
+
+  client-api: &encrypted-service
+    environment: &encrypted-env
+      DB_URL: jdbc:postgresql://postgres:5432/notification?sslmode=verify-full&sslrootcert=/certs/ca/ca.crt
+      PULSAR_URL: pulsar+ssl://pulsar:6651
+      PULSAR_TLS_TRUST_CERTS_FILE: /certs/ca/ca.crt
+      SPRING_DATA_REDIS_SSL_ENABLED: "true"
+      SPRING_DATA_REDIS_SSL_BUNDLE: redis
+      SPRING_SSL_BUNDLE_PEM_REDIS_TRUSTSTORE_CERTIFICATE: file:/certs/ca/ca.crt
+    volumes: [*ca-mount]
+    depends_on:
+      certs: { condition: service_completed_successfully }
+
+  admin-api:
+    <<: *encrypted-service
+    environment:
+      <<: *encrypted-env
+
+  dispatcher:
+    <<: *encrypted-service
+    environment:
+      <<: *encrypted-env
+
+volumes:
+  certs:

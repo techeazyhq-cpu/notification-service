@@ -49,7 +49,7 @@ class DeadLetterRecorder {
     }
 
     /** @return true when the message was moved to FAILED by this call */
-    boolean record(UUID messageId, String channel) {
+    boolean recordDeadLetter(UUID messageId, String channel) {
         boolean changed = messages.markDeadLettered(messageId, MessageStatus.IN_FLIGHT, REASON, Instant.now()) == 1;
         if (changed) {
             LOG.warn("Message {} on {} was dead-lettered by the broker and is now FAILED", messageId, channel);

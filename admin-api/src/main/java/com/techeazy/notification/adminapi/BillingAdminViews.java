@@ -28,6 +28,7 @@ import com.techeazy.notification.billing.domain.InvoiceLineKind;
 import com.techeazy.notification.billing.domain.InvoiceStatus;
 import com.techeazy.notification.billing.domain.LedgerEntry;
 import com.techeazy.notification.billing.domain.LedgerEntryType;
+import com.techeazy.notification.billing.domain.Money;
 import com.techeazy.notification.billing.domain.Payment;
 import com.techeazy.notification.billing.domain.Plan;
 import com.techeazy.notification.domain.Channel;
@@ -73,7 +74,7 @@ final class BillingAdminViews {
     static AccountView account(BillingAccount account, String clientName, Plan plan) {
         return new AccountView(account.clientId(), clientName, plan.id(), plan.name(), plan.currency(), account.mode(),
                 account.status(), account.isPrepaid() ? account.creditBalance().formatted() : null,
-                account.spendCap().map(cap -> cap.formatted()).orElse(null), account.billingEmail());
+                account.spendCap().map(Money::formatted).orElse(null), account.billingEmail());
     }
 
     static InvoiceView invoice(Invoice invoice, String clientName) {

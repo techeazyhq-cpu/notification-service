@@ -38,11 +38,13 @@ import java.util.UUID;
  */
 record DeadLetterFilter(UUID clientId, Channel channel, FailureKind kind, String errorContains, boolean retryableOnly) {
 
+    private static final String FAILURE_KIND = "failureKind";
+
     Specification<NotificationMessage> viewSpecification() {
         return (root, query, cb) -> {
             List<Predicate> where = base(root, cb);
             if (kind != null) {
-                where.add(cb.equal(root.get("failureKind"), kind));
+                where.add(cb.equal(root.get(FAILURE_KIND), kind));
             }
             return cb.and(where.toArray(new Predicate[0]));
         };
@@ -53,9 +55,9 @@ record DeadLetterFilter(UUID clientId, Channel channel, FailureKind kind, String
             List<Predicate> where = base(root, cb);
             where.add(cb.notEqual(root.get("recipient"), PersonalData.ERASED));
             if (kind != null) {
-                where.add(cb.equal(root.get("failureKind"), kind));
+                where.add(cb.equal(root.get(FAILURE_KIND), kind));
             } else if (retryableOnly) {
-                where.add(cb.or(cb.isNull(root.get("failureKind")), cb.notEqual(root.get("failureKind"), FailureKind.PERMANENT)));
+                where.add(cb.or(cb.isNull(root.get(FAILURE_KIND)), cb.notEqual(root.get(FAILURE_KIND), FailureKind.PERMANENT)));
             }
             return cb.and(where.toArray(new Predicate[0]));
         };

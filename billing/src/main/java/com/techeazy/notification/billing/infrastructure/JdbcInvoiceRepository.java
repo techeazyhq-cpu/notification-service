@@ -49,6 +49,11 @@ import java.util.stream.Collectors;
 
 class JdbcInvoiceRepository implements InvoiceRepository {
 
+    private static final String CLIENT = "client";
+    private static final String STATUS = "status";
+    private static final String AMOUNT = "amount";
+    private static final String INVOICE_ID = "invoice_id";
+
     private static final String HEADER = """
             SELECT id, number, client_id, plan_id, period_start, currency, tax_rate, status, created_at, issued_at,
                    due_at, paid_at, voided_at, void_reason
@@ -97,7 +102,7 @@ class JdbcInvoiceRepository implements InvoiceRepository {
     @Override
     public Optional<Invoice> findCurrent(UUID clientId, BillingPeriod period) {
         return hydrate(jdbc.sql(HEADER + " WHERE client_id = :client AND period_start = :period AND status <> 'VOID'")
-                .param("client", clientId).param("period", java.sql.Date.valueOf(period.firstDay()))
+                .param(CLIENT, clientId).param("period", java.sql.Date.valueOf(period.firstDay()))
                 .query(this::header).list()).stream().findFirst();
     }
 
@@ -105,7 +110,7 @@ class JdbcInvoiceRepository implements InvoiceRepository {
     public List<Invoice> findByClient(UUID clientId, Set<InvoiceStatus> statuses) {
         List<String> names = statuses.stream().map(Enum::name).toList();
         return hydrate(jdbc.sql(HEADER + " WHERE client_id = :client AND status IN (:statuses) ORDER BY period_start DESC, created_at DESC")
-                .param("client", clientId).param("statuses", names).query(this::header).list());
+                .param(CLIENT, clientId).param("statuses", names).query(this::header).list());
     }
 
     @Override
@@ -115,7 +120,7 @@ class JdbcInvoiceRepository implements InvoiceRepository {
                    AND (CAST(:client AS uuid) IS NULL OR client_id = CAST(:client AS uuid))
                  ORDER BY period_start DESC, created_at DESC
                  LIMIT :limit""")
-                .param("status", status == null ? null : status.name()).param("client", clientId).param("limit", limit)
+                .param(STATUS, status == null ? null : status.name()).param(CLIENT, clientId).param("limit", limit)
                 .query(this::header).list());
     }
 
@@ -136,11 +141,11 @@ class JdbcInvoiceRepository implements InvoiceRepository {
                     total = EXCLUDED.total, status = EXCLUDED.status, issued_at = EXCLUDED.issued_at,
                     due_at = EXCLUDED.due_at, paid_at = EXCLUDED.paid_at, voided_at = EXCLUDED.voided_at,
                     void_reason = EXCLUDED.void_reason, updated_at = now()""")
-                .param("id", invoice.id()).param("number", invoice.number()).param("client", invoice.clientId())
+                .param("id", invoice.id()).param("number", invoice.number()).param(CLIENT, invoice.clientId())
                 .param("plan", invoice.planId()).param("period", java.sql.Date.valueOf(invoice.period().firstDay()))
                 .param("currency", invoice.currency()).param("subtotal", invoice.subtotal().amount())
                 .param("taxRate", invoice.taxRate()).param("taxAmount", invoice.taxAmount().amount())
-                .param("total", invoice.total().amount()).param("status", invoice.status().name())
+                .param("total", invoice.total().amount()).param(STATUS, invoice.status().name())
                 .param("issuedAt", timestamp(invoice.issuedAt())).param("dueAt", timestamp(invoice.dueAt()))
                 .param("paidAt", timestamp(invoice.paidAt())).param("voidedAt", timestamp(invoice.voidedAt()))
                 .param("voidReason", invoice.voidReason()).param("createdAt", timestamp(invoice.createdAt()))
@@ -154,7 +159,7 @@ class JdbcInvoiceRepository implements InvoiceRepository {
                 .param("id", UUID.randomUUID()).param("invoice", invoiceId).param("position", position)
                 .param("kind", line.kind().name()).param("channel", line.channel() == null ? null : line.channel().name())
                 .param("description", line.description()).param("quantity", line.quantity())
-                .param("unitPrice", line.unitPrice().amount()).param("amount", line.amount().amount())
+                .param("unitPrice", line.unitPrice().amount()).param(AMOUNT, line.amount().amount())
                 .update();
     }
 
@@ -163,7 +168,7 @@ class JdbcInvoiceRepository implements InvoiceRepository {
                 INSERT INTO invoice_payment (id, invoice_id, amount, method, reference, received_at)
                 VALUES (:id, :invoice, :amount, :method, :reference, :receivedAt)
                 ON CONFLICT (id) DO NOTHING""")
-                .param("id", payment.id()).param("invoice", invoiceId).param("amount", payment.amount().amount())
+                .param("id", payment.id()).param("invoice", invoiceId).param(AMOUNT, payment.amount().amount())
                 .param("method", payment.method()).param("reference", payment.reference())
                 .param("receivedAt", timestamp(payment.receivedAt()))
                 .update();
@@ -172,7 +177,7 @@ class JdbcInvoiceRepository implements InvoiceRepository {
     private Header header(ResultSet rs, int row) throws SQLException {
         return new Header(rs.getObject("id", UUID.class), rs.getString("number"), rs.getObject("client_id", UUID.class),
                 rs.getObject("plan_id", UUID.class), rs.getObject("period_start", LocalDate.class), rs.getString("currency"),
-                rs.getBigDecimal("tax_rate"), InvoiceStatus.valueOf(rs.getString("status")),
+                rs.getBigDecimal("tax_rate"), InvoiceStatus.valueOf(rs.getString(STATUS)),
                 JdbcRows.instant(rs, "created_at"), JdbcRows.instant(rs, "issued_at"), JdbcRows.instant(rs, "due_at"),
                 JdbcRows.instant(rs, "paid_at"), JdbcRows.instant(rs, "voided_at"), rs.getString("void_reason"));
     }
@@ -189,13 +194,13 @@ class JdbcInvoiceRepository implements InvoiceRepository {
                 SELECT invoice_id, kind, channel, description, quantity, unit_price, amount
                 FROM invoice_line WHERE invoice_id IN (:ids) ORDER BY invoice_id, position""")
                 .param("ids", ids)
-                .query((rs, n) -> Map.entry(rs.getObject("invoice_id", UUID.class), line(rs, currencies)))
+                .query((rs, n) -> Map.entry(rs.getObject(INVOICE_ID, UUID.class), line(rs, currencies)))
                 .list().forEach(e -> lines.computeIfAbsent(e.getKey(), k -> new ArrayList<>()).add(e.getValue()));
         jdbc.sql("""
                 SELECT id, invoice_id, amount, method, reference, received_at
                 FROM invoice_payment WHERE invoice_id IN (:ids) ORDER BY received_at""")
                 .param("ids", ids)
-                .query((rs, n) -> Map.entry(rs.getObject("invoice_id", UUID.class), payment(rs, currencies)))
+                .query((rs, n) -> Map.entry(rs.getObject(INVOICE_ID, UUID.class), payment(rs, currencies)))
                 .list().forEach(e -> payments.computeIfAbsent(e.getKey(), k -> new ArrayList<>()).add(e.getValue()));
         return headers.stream().map(h -> Invoice.restore(new Invoice.State(h.id(), h.clientId(), h.planId(),
                 BillingPeriod.of(h.periodStart()), h.currency(), h.taxRate(), lines.getOrDefault(h.id(), List.of()),
@@ -204,16 +209,16 @@ class JdbcInvoiceRepository implements InvoiceRepository {
     }
 
     private static InvoiceLine line(ResultSet rs, Map<UUID, String> currencies) throws SQLException {
-        String currency = currencies.get(rs.getObject("invoice_id", UUID.class));
+        String currency = currencies.get(rs.getObject(INVOICE_ID, UUID.class));
         String channel = rs.getString("channel");
         return new InvoiceLine(InvoiceLineKind.valueOf(rs.getString("kind")), channel == null ? null : Channel.valueOf(channel),
                 rs.getString("description"), rs.getLong("quantity"), new Money(rs.getBigDecimal("unit_price"), currency),
-                new Money(rs.getBigDecimal("amount"), currency));
+                new Money(rs.getBigDecimal(AMOUNT), currency));
     }
 
     private static Payment payment(ResultSet rs, Map<UUID, String> currencies) throws SQLException {
-        String currency = currencies.get(rs.getObject("invoice_id", UUID.class));
-        return new Payment(rs.getObject("id", UUID.class), new Money(rs.getBigDecimal("amount"), currency),
+        String currency = currencies.get(rs.getObject(INVOICE_ID, UUID.class));
+        return new Payment(rs.getObject("id", UUID.class), new Money(rs.getBigDecimal(AMOUNT), currency),
                 rs.getString("method"), rs.getString("reference"), JdbcRows.instant(rs, "received_at"));
     }
 

@@ -71,7 +71,9 @@ class InvoiceServiceTest {
 
     @Test
     void aPeriodThatIsNotOverYetCannotBeInvoiced() {
-        assertThatThrownBy(() -> f.invoiceService.generateFor(client, BillingPeriod.parse("2026-09")))
+        BillingPeriod september = BillingPeriod.parse("2026-09");
+
+        assertThatThrownBy(() -> f.invoiceService.generateFor(client, september))
                 .isInstanceOf(InvalidBillingStateException.class);
     }
 
@@ -81,7 +83,8 @@ class InvoiceServiceTest {
         f.account(prepaid, f.smsPlan("1", 0), BillingMode.PREPAID, null);
 
         assertThatThrownBy(() -> f.invoiceService.generateFor(prepaid, AUGUST)).isInstanceOf(InvalidBillingStateException.class);
-        assertThatThrownBy(() -> f.invoiceService.generateFor(UUID.randomUUID(), AUGUST)).isInstanceOf(BillingNotFoundException.class);
+        UUID unknown = UUID.randomUUID();
+        assertThatThrownBy(() -> f.invoiceService.generateFor(unknown, AUGUST)).isInstanceOf(BillingNotFoundException.class);
     }
 
     @Test
@@ -204,7 +207,8 @@ class InvoiceServiceTest {
         assertThat(f.invoiceService.get(draft.id()).id()).isEqualTo(draft.id());
         assertThat(f.invoiceService.search(InvoiceStatus.DRAFT, client)).hasSize(1);
         assertThat(f.invoiceService.search(InvoiceStatus.PAID, null)).isEmpty();
-        assertThatThrownBy(() -> f.invoiceService.get(UUID.randomUUID())).isInstanceOf(BillingNotFoundException.class);
+        UUID unknown = UUID.randomUUID();
+        assertThatThrownBy(() -> f.invoiceService.get(unknown)).isInstanceOf(BillingNotFoundException.class);
         assertThat(List.of(draft.status())).containsExactly(InvoiceStatus.DRAFT);
     }
 }

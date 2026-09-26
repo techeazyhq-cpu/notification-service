@@ -46,6 +46,7 @@ import java.util.Optional;
 public class ClientAuthFilter extends OncePerRequestFilter {
 
     public static final String CLIENT_ATTRIBUTE = "notification.client";
+    @SuppressWarnings("java:S1075")
     static final String SENDER_VERIFY_PATH = "/v1/senders/verify";
 
     private final ClientRepository clients;

@@ -18,6 +18,7 @@
 
 package com.techeazy.notification.adminapi.auth;
 
+import java.util.Arrays;
 import java.util.List;
 
 /**
@@ -30,10 +31,6 @@ public enum AdminRole {
 
     /** Spring Security role names (without the {@code ROLE_} prefix) this role should be granted, including implied ones. */
     List<String> impliedRoleNames() {
-        return switch (this) {
-            case VIEWER -> List.of("VIEWER");
-            case OPERATOR -> List.of("VIEWER", "OPERATOR");
-            case ADMIN -> List.of("VIEWER", "OPERATOR", "ADMIN");
-        };
+        return Arrays.stream(values()).filter(role -> role.ordinal() <= ordinal()).map(Enum::name).toList();
     }
 }

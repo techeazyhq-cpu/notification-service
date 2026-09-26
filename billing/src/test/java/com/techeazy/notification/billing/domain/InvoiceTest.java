@@ -83,7 +83,8 @@ class InvoiceTest {
         invoice.issue("INV-2026-000003", NOW, 30);
 
         assertThat(invoice.subtotal()).isEqualTo(Money.of("20.00", "USD"));
-        assertThatThrownBy(() -> invoice.regenerate(UUID.randomUUID(), BigDecimal.ZERO, List.of()))
+        UUID plan = UUID.randomUUID();
+        assertThatThrownBy(() -> invoice.regenerate(plan, BigDecimal.ZERO, List.of()))
                 .isInstanceOf(InvalidBillingStateException.class);
         assertThatThrownBy(() -> invoice.issue("INV-2026-000004", NOW, 30)).isInstanceOf(InvalidBillingStateException.class);
     }
@@ -106,11 +107,13 @@ class InvoiceTest {
     @Test
     void refusesOverpaymentPaymentOnADraftAndWrongCurrency() {
         Invoice draft = draftOf("100.00");
-        assertThatThrownBy(() -> draft.recordPayment(payment("1.00", "x"), NOW)).isInstanceOf(InvalidBillingStateException.class);
+        Payment small = payment("1.00", "x");
+        assertThatThrownBy(() -> draft.recordPayment(small, NOW)).isInstanceOf(InvalidBillingStateException.class);
 
         Invoice issued = draftOf("100.00");
         issued.issue("INV-2026-000006", NOW, 30);
-        assertThatThrownBy(() -> issued.recordPayment(payment("500.00", "big"), NOW)).isInstanceOf(InvalidBillingStateException.class);
+        Payment big = payment("500.00", "big");
+        assertThatThrownBy(() -> issued.recordPayment(big, NOW)).isInstanceOf(InvalidBillingStateException.class);
         Payment euros = new Payment(UUID.randomUUID(), Money.of("1", "EUR"), "card", "eur", NOW);
         assertThatThrownBy(() -> issued.recordPayment(euros, NOW)).isInstanceOf(InvalidBillingDataException.class);
     }

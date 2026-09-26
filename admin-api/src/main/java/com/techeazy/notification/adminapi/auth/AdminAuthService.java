@@ -72,6 +72,7 @@ public class AdminAuthService {
     private final SecureRandom random;
     private final String decoyHash;
 
+    @SuppressWarnings("java:S107")
     AdminAuthService(AdminUserStore users, SessionStore sessions, PasswordEncoder encoder, SecretCipher cipher, Totp totp,
                      Clock clock, AuthSettings settings, SecureRandom random) {
         this.users = users;

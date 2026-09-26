@@ -47,6 +47,42 @@ public class RetentionService {
 
     private static final Logger LOG = LoggerFactory.getLogger(RetentionService.class);
     private static final String FINISHED = "('SENT','FAILED')";
+    private static final String ERASED = "erased";
+    private static final String CUTOFF = "cutoff";
+    private static final String BATCH = "batch";
+
+    private static final String ERASE_FINISHED_MESSAGES = """
+            UPDATE notification_message
+            SET recipient = :erased, variables = '{}'::jsonb, last_error = NULL, erased_at = :now
+            WHERE id IN (SELECT id FROM notification_message
+                         WHERE erased_at IS NULL AND status IN %s AND updated_at < :cutoff
+                         ORDER BY updated_at LIMIT :batch)
+            """.formatted(FINISHED);
+
+    private static final String ERASE_FINISHED_REQUESTS = """
+            UPDATE notification_request SET subject = NULL, body = :erased, erased_at = :now
+            WHERE id IN (SELECT r.id FROM notification_request r
+                         WHERE r.erased_at IS NULL AND r.created_at < :cutoff
+                           AND NOT EXISTS (SELECT 1 FROM notification_message m WHERE m.request_id = r.id AND m.status NOT IN %s)
+                         ORDER BY r.created_at LIMIT :batch)
+            """.formatted(FINISHED);
+
+    private static final String DELETE_FINISHED_MESSAGES = """
+            DELETE FROM notification_message
+            WHERE id IN (SELECT id FROM notification_message WHERE status IN %s AND updated_at < :cutoff LIMIT :batch)
+            """.formatted(FINISHED);
+
+    private static final String DELETE_EMPTY_REQUESTS = """
+            DELETE FROM notification_request
+            WHERE id IN (SELECT r.id FROM notification_request r
+                         WHERE r.created_at < :cutoff AND NOT EXISTS (SELECT 1 FROM notification_message m WHERE m.request_id = r.id)
+                         LIMIT :batch)
+            """;
+
+    private static final String CLEAR_IDEMPOTENCY_KEYS = """
+            UPDATE notification_request SET idempotency_key = NULL
+            WHERE id IN (SELECT id FROM notification_request WHERE idempotency_key IS NOT NULL AND created_at < :cutoff LIMIT :batch)
+            """;
 
     /** How many rows each step changed in one run. */
     public record Report(long messagesErased, long requestsErased, long messagesDeleted, long requestsDeleted, long idempotencyKeysCleared) {}
@@ -100,7 +136,7 @@ public class RetentionService {
                 SET recipient = :erased, variables = '{}'::jsonb, last_error = NULL, erased_at = :now
                 WHERE lower(recipient) = lower(:recipient) AND (CAST(:client AS uuid) IS NULL OR client_id = :client)
                   AND status IN %s AND erased_at IS NULL
-                """.formatted(FINISHED)).param("erased", PersonalData.ERASED).param("now", at)
+                """.formatted(FINISHED)).param(ERASED, PersonalData.ERASED).param("now", at)
                 .param("recipient", recipient).param("client", clientId).update();
         long inFlight = jdbc.sql("""
                 SELECT count(*) FROM notification_message
@@ -112,54 +148,31 @@ public class RetentionService {
                 WHERE r.erased_at IS NULL AND r.total = 1
                   AND EXISTS (SELECT 1 FROM notification_message m WHERE m.request_id = r.id AND m.recipient = :erased)
                   AND NOT EXISTS (SELECT 1 FROM notification_message m WHERE m.request_id = r.id AND m.status NOT IN %s)
-                """.formatted(FINISHED)).param("erased", PersonalData.ERASED).param("now", at).update();
+                """.formatted(FINISHED)).param(ERASED, PersonalData.ERASED).param("now", at).update();
         LOG.info("Erasure request for client {}: {} message(s) erased, {} still in flight", clientId, erased, inFlight);
         return new Erasure(erased, inFlight);
     }
 
     private long eraseFinishedMessages(Instant cutoff, Instant now) {
-        return batches(() -> jdbc.sql("""
-                UPDATE notification_message
-                SET recipient = :erased, variables = '{}'::jsonb, last_error = NULL, erased_at = :now
-                WHERE id IN (SELECT id FROM notification_message
-                             WHERE erased_at IS NULL AND status IN %s AND updated_at < :cutoff
-                             ORDER BY updated_at LIMIT :batch)
-                """.formatted(FINISHED)).param("erased", PersonalData.ERASED).param("now", Timestamp.from(now))
-                .param("cutoff", Timestamp.from(cutoff)).param("batch", properties.getBatchSize()).update());
+        return batches(() -> jdbc.sql(ERASE_FINISHED_MESSAGES).param(ERASED, PersonalData.ERASED).param("now", Timestamp.from(now))
+                .param(CUTOFF, Timestamp.from(cutoff)).param(BATCH, properties.getBatchSize()).update());
     }
 
     private long eraseFinishedRequests(Instant cutoff, Instant now) {
-        return batches(() -> jdbc.sql("""
-                UPDATE notification_request SET subject = NULL, body = :erased, erased_at = :now
-                WHERE id IN (SELECT r.id FROM notification_request r
-                             WHERE r.erased_at IS NULL AND r.created_at < :cutoff
-                               AND NOT EXISTS (SELECT 1 FROM notification_message m WHERE m.request_id = r.id AND m.status NOT IN %s)
-                             ORDER BY r.created_at LIMIT :batch)
-                """.formatted(FINISHED)).param("erased", PersonalData.ERASED).param("now", Timestamp.from(now))
-                .param("cutoff", Timestamp.from(cutoff)).param("batch", properties.getBatchSize()).update());
+        return batches(() -> jdbc.sql(ERASE_FINISHED_REQUESTS).param(ERASED, PersonalData.ERASED).param("now", Timestamp.from(now))
+                .param(CUTOFF, Timestamp.from(cutoff)).param(BATCH, properties.getBatchSize()).update());
     }
 
     private long deleteFinishedMessages(Instant cutoff) {
-        return batches(() -> jdbc.sql("""
-                DELETE FROM notification_message
-                WHERE id IN (SELECT id FROM notification_message WHERE status IN %s AND updated_at < :cutoff LIMIT :batch)
-                """.formatted(FINISHED)).param("cutoff", Timestamp.from(cutoff)).param("batch", properties.getBatchSize()).update());
+        return batches(() -> jdbc.sql(DELETE_FINISHED_MESSAGES).param(CUTOFF, Timestamp.from(cutoff)).param(BATCH, properties.getBatchSize()).update());
     }
 
     private long deleteEmptyRequests(Instant cutoff) {
-        return batches(() -> jdbc.sql("""
-                DELETE FROM notification_request
-                WHERE id IN (SELECT r.id FROM notification_request r
-                             WHERE r.created_at < :cutoff AND NOT EXISTS (SELECT 1 FROM notification_message m WHERE m.request_id = r.id)
-                             LIMIT :batch)
-                """).param("cutoff", Timestamp.from(cutoff)).param("batch", properties.getBatchSize()).update());
+        return batches(() -> jdbc.sql(DELETE_EMPTY_REQUESTS).param(CUTOFF, Timestamp.from(cutoff)).param(BATCH, properties.getBatchSize()).update());
     }
 
     private long clearIdempotencyKeys(Instant cutoff) {
-        return batches(() -> jdbc.sql("""
-                UPDATE notification_request SET idempotency_key = NULL
-                WHERE id IN (SELECT id FROM notification_request WHERE idempotency_key IS NOT NULL AND created_at < :cutoff LIMIT :batch)
-                """).param("cutoff", Timestamp.from(cutoff)).param("batch", properties.getBatchSize()).update());
+        return batches(() -> jdbc.sql(CLEAR_IDEMPOTENCY_KEYS).param(CUTOFF, Timestamp.from(cutoff)).param(BATCH, properties.getBatchSize()).update());
     }
 
     private long batches(java.util.function.IntSupplier statement) {

@@ -19,6 +19,7 @@
 package com.techeazy.notification.infra;
 
 import com.techeazy.notification.config.NotificationProperties;
+import org.apache.pulsar.client.api.ClientBuilder;
 import org.apache.pulsar.client.api.PulsarClient;
 import org.apache.pulsar.client.api.PulsarClientException;
 import org.springframework.context.annotation.Bean;
@@ -29,6 +30,11 @@ public class PulsarConfig {
 
     @Bean(destroyMethod = "close")
     public PulsarClient pulsarClient(NotificationProperties props) throws PulsarClientException {
-        return PulsarClient.builder().serviceUrl(props.getPulsar().getServiceUrl()).build();
+        ClientBuilder builder = PulsarClient.builder().serviceUrl(props.getPulsar().getServiceUrl());
+        String trust = props.getPulsar().getTlsTrustCertsFile();
+        if (trust != null && !trust.isBlank()) {
+            builder.tlsTrustCertsFilePath(trust).enableTlsHostnameVerification(true);
+        }
+        return builder.build();
     }
 }

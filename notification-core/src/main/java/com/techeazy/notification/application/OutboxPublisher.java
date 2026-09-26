@@ -18,6 +18,7 @@
 
 package com.techeazy.notification.application;
 
+import com.techeazy.notification.config.NotificationProperties;
 import com.techeazy.notification.domain.NotificationMessage;
 import com.techeazy.notification.persistence.NotificationMessageRepository;
 import com.techeazy.notification.port.MessagePublisher;
@@ -47,11 +48,14 @@ public class OutboxPublisher {
     private final MessagePublisher publisher;
     private final NotificationMessageRepository messages;
     private final QueuedMarker queuedMarker;
+    private final long publishTimeoutSeconds;
 
-    public OutboxPublisher(MessagePublisher publisher, NotificationMessageRepository messages, QueuedMarker queuedMarker) {
+    public OutboxPublisher(MessagePublisher publisher, NotificationMessageRepository messages, QueuedMarker queuedMarker,
+                           NotificationProperties props) {
         this.publisher = publisher;
         this.messages = messages;
         this.queuedMarker = queuedMarker;
+        this.publishTimeoutSeconds = props.getPulsar().getPublishTimeoutSeconds() + 1L;
     }
 
     /** @return ids that were confirmed published */
@@ -93,7 +97,7 @@ public class OutboxPublisher {
         List<UUID> ok = new ArrayList<>(chunk.size());
         for (int i = 0; i < chunk.size(); i++) {
             try {
-                futures.get(i).get(30, TimeUnit.SECONDS);
+                futures.get(i).get(publishTimeoutSeconds, TimeUnit.SECONDS);
                 ok.add(chunk.get(i).getId());
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();

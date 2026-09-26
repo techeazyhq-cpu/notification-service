@@ -99,6 +99,8 @@ services:
       # Encrypts provider secrets (SMTP password, gateway auth header) at rest; must be the same value on every
       # service, since admin-api encrypts with it and client-api/dispatcher decrypt with it. See ADR-013.
       SECRETS_ENCRYPTION_KEY: ${SECRETS_ENCRYPTION_KEY:-development-only-change-me}
+      # Encrypts message template variables (names, one-time codes) at rest; the same value on every service.
+      DATA_ENCRYPTION_KEY: ${DATA_ENCRYPTION_KEY:-development-only-change-me}
       # Without this, a service refuses to start with the default DB_PASSWORD/ADMIN_PASSWORD/keys above
       # (see notification-core's InsecureDefaults and ADR-013).
       SPRING_PROFILES_ACTIVE: local

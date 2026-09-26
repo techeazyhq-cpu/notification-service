@@ -38,11 +38,7 @@ import java.util.concurrent.ConcurrentHashMap;
 public class SmtpProvider implements ChannelProvider {
 
     private static final String HOST = "host";
-    private static final String PORT = "port";
     private static final String FROM = "from";
-    private static final String USERNAME = "username";
-    private static final String PASSWORD = "password";
-    private static final String STARTTLS = "starttls";
     private static final String HTML = "html";
 
     private record Key(java.util.UUID id, java.time.Instant updatedAt) {}

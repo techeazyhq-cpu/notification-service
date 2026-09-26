@@ -64,7 +64,7 @@ export default function Senders() {
         <label><span>Display name (optional)</span><input value={displayName} onChange={(e) => setDisplayName(e.target.value)} maxLength={120} /></label>
         <button type="submit" className="primary" disabled={busy}>Add and send confirmation</button>
       </form>
-      {message && <p className={isError ? 'error' : 'muted'} role="status">{message}</p>}
+      {message && <output className={isError ? 'error status-block' : 'muted status-block'}>{message}</output>}
       {error && <p className="error">{error}</p>}
       <div className="card">
         <table>
