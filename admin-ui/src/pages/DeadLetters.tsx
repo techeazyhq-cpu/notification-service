@@ -141,9 +141,9 @@ export default function DeadLetters() {
         <button type="button" disabled={busy || !list.data?.totalItems}
           onClick={() => reprocess({ ...filters, limit: 200 }, 'Reprocess up to 200 of the messages matching these filters, oldest first? Permanent failures are skipped.')}>Reprocess up to 200 matching</button>
         {result && (
-          <span role="status">
+          <output>
             {result.requeued} re-queued, {result.published} published{result.refusedCount > 0 ? `, ${result.refusedCount} refused` : ''}; {result.remaining} still matching.
-          </span>
+          </output>
         )}
         {error && <span className="error" role="alert">{error}</span>}
       </div>

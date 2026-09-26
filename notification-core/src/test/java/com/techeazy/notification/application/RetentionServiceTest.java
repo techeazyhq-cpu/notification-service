@@ -123,14 +123,12 @@ class RetentionServiceTest {
 
         assertThat(report.messagesErased()).isGreaterThanOrEqualTo(1);
         Map<String, Object> row = row("notification_message", old);
-        assertThat(row.get("recipient")).isEqualTo("[erased]");
-        assertThat(row.get("variables").toString()).isEqualTo("{}");
-        assertThat(row.get("last_error")).isNull();
-        assertThat(row.get("status")).isEqualTo("SENT");
-        assertThat(row.get("sent_at")).isNotNull();
-        assertThat(row.get("erased_at")).isNotNull();
-        assertThat(row("notification_request", request).get("body")).isEqualTo("[erased]");
-        assertThat(row("notification_request", request).get("subject")).isNull();
+        assertThat(row).containsEntry("recipient", "[erased]").containsEntry("last_error", null).containsEntry("status", "SENT")
+                .extractingByKey("variables").hasToString("{}");
+        assertThat(row).extractingByKey("sent_at").isNotNull();
+        assertThat(row).extractingByKey("erased_at").isNotNull();
+        assertThat(row("notification_request", request)).containsEntry("body", "[erased]");
+        assertThat(row("notification_request", request)).containsEntry("subject", null);
     }
 
     @Test
@@ -143,10 +141,10 @@ class RetentionServiceTest {
 
         service(90, 180, 0, 100).run(NOW);
 
-        assertThat(row("notification_message", recent).get("recipient")).isEqualTo("+14155550102");
-        assertThat(row("notification_message", queued).get("recipient")).isEqualTo("+14155550103");
-        assertThat(row("notification_message", retrying).get("recipient")).isEqualTo("+14155550104");
-        assertThat(row("notification_request", request).get("body")).isEqualTo("content");
+        assertThat(row("notification_message", recent)).containsEntry("recipient", "+14155550102");
+        assertThat(row("notification_message", queued)).containsEntry("recipient", "+14155550103");
+        assertThat(row("notification_message", retrying)).containsEntry("recipient", "+14155550104");
+        assertThat(row("notification_request", request)).containsEntry("body", "content");
         assertThat(jdbc.sql("SELECT count(*) FROM notification_message WHERE id IN (:a, :b)").param("a", queued).param("b", retrying).query(Long.class).single()).isEqualTo(2);
     }
 
@@ -175,8 +173,8 @@ class RetentionServiceTest {
         RetentionService.Report report = service(0, 0, 7, 100).run(NOW);
 
         assertThat(report.idempotencyKeysCleared()).isGreaterThanOrEqualTo(1);
-        assertThat(row("notification_request", old).get("idempotency_key")).isNull();
-        assertThat(row("notification_request", fresh).get("idempotency_key")).isEqualTo("order-2");
+        assertThat(row("notification_request", old)).containsEntry("idempotency_key", null);
+        assertThat(row("notification_request", fresh)).containsEntry("idempotency_key", "order-2");
     }
 
     @Test
@@ -188,11 +186,11 @@ class RetentionServiceTest {
 
         RetentionService.Report off = service(0, 0, 0, 2).run(NOW);
         assertThat(off).isEqualTo(new RetentionService.Report(0, 0, 0, 0, 0));
-        assertThat(row("notification_message", ids.get(0)).get("recipient")).isEqualTo("+14155550200");
+        assertThat(row("notification_message", ids.get(0))).containsEntry("recipient", "+14155550200");
 
         RetentionService.Report batched = service(90, 0, 0, 2).run(NOW);
         assertThat(batched.messagesErased()).isGreaterThanOrEqualTo(5);
-        assertThat(ids).allSatisfy(id -> assertThat(row("notification_message", id).get("recipient")).isEqualTo("[erased]"));
+        assertThat(ids).allSatisfy(id -> assertThat(row("notification_message", id)).containsEntry("recipient", "[erased]"));
     }
 
     @Test
@@ -209,11 +207,11 @@ class RetentionServiceTest {
 
         assertThat(result.erasedMessages()).isEqualTo(1);
         assertThat(result.inFlightMessages()).isEqualTo(1);
-        assertThat(row("notification_message", finished).get("recipient")).isEqualTo("[erased]");
-        assertThat(row("notification_message", inFlight).get("recipient")).isEqualTo("ada@example.com");
-        assertThat(row("notification_message", othersMessage).get("recipient")).isEqualTo("ada@example.com");
-        assertThat(row("notification_request", request).get("body")).isEqualTo("[erased]");
-        assertThat(row("notification_request", otherRequest).get("body")).isEqualTo("bulk template {{name}}");
+        assertThat(row("notification_message", finished)).containsEntry("recipient", "[erased]");
+        assertThat(row("notification_message", inFlight)).containsEntry("recipient", "ada@example.com");
+        assertThat(row("notification_message", othersMessage)).containsEntry("recipient", "ada@example.com");
+        assertThat(row("notification_request", request)).containsEntry("body", "[erased]");
+        assertThat(row("notification_request", otherRequest)).containsEntry("body", "bulk template {{name}}");
     }
 
     @Test

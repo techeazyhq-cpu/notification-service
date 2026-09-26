@@ -78,7 +78,7 @@ class QueuedMarkerTest {
     @Test
     void publishAndMarkQueuedLaterMarksOnlyTheMessagesTheBrokerConfirmed() {
         MessagePublisher publisher = mock(MessagePublisher.class);
-        OutboxPublisher outbox = new OutboxPublisher(publisher, messages, marker);
+        OutboxPublisher outbox = new OutboxPublisher(publisher, messages, marker, new com.techeazy.notification.config.NotificationProperties());
         NotificationMessage ok = message();
         NotificationMessage failed = message();
         when(publisher.publish(any(), any(), any())).thenAnswer(invocation -> invocation.getArgument(1).equals(ok.getId())

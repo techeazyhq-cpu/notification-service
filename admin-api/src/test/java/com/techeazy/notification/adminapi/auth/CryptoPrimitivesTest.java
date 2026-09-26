@@ -102,7 +102,8 @@ class CryptoPrimitivesTest {
         assertThat(stored).doesNotContain(RFC_SECRET);
         assertThat(cipher.decrypt(stored)).isEqualTo(RFC_SECRET);
         assertThat(cipher.encrypt(RFC_SECRET)).isNotEqualTo(stored);
-        assertThatThrownBy(() -> new SecretCipher("key-two", new SecureRandom()).decrypt(stored)).isInstanceOf(IllegalStateException.class);
+        SecretCipher otherCipher = new SecretCipher("key-two", new SecureRandom());
+        assertThatThrownBy(() -> otherCipher.decrypt(stored)).isInstanceOf(IllegalStateException.class);
     }
 
     @Test

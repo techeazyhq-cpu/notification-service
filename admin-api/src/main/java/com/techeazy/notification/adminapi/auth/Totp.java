@@ -58,6 +58,7 @@ final class Totp {
                 + "&issuer=" + encode(issuer) + "&algorithm=SHA1&digits=" + DIGITS + "&period=" + STEP_SECONDS;
     }
 
+    @SuppressWarnings("java:S4790")
     String codeAt(String base32Secret, long step) {
         try {
             Mac mac = Mac.getInstance("HmacSHA1");

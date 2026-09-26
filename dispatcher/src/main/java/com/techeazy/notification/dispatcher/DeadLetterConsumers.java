@@ -91,7 +91,7 @@ class DeadLetterConsumers {
             return;
         }
         try {
-            recorder.record(envelope.messageId(), channel.name());
+            recorder.recordDeadLetter(envelope.messageId(), channel.name());
             consumer.acknowledge(message);
         } catch (Exception e) {
             LOG.error("Could not record a dead letter on {}; it will be delivered again shortly", channel, e);

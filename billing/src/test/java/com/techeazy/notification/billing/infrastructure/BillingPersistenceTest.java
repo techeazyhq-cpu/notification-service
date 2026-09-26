@@ -208,8 +208,10 @@ class BillingPersistenceTest {
     void anAccountForAnUnknownClientIsRejected() {
         Plan plan = newPlan("0.05", 0);
 
-        assertThatThrownBy(() -> accounts.save(new BillingAccount(UUID.randomUUID(), plan.id(), BillingMode.POSTPAID, null,
-                Money.zero(USD), AccountStatus.ACTIVE, null))).isInstanceOf(BillingNotFoundException.class);
+        BillingAccount orphan = new BillingAccount(UUID.randomUUID(), plan.id(), BillingMode.POSTPAID, null,
+                Money.zero(USD), AccountStatus.ACTIVE, null);
+
+        assertThatThrownBy(() -> accounts.save(orphan)).isInstanceOf(BillingNotFoundException.class);
     }
 
     @Test

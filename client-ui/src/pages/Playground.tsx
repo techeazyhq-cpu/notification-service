@@ -56,6 +56,11 @@ async function execute(endpoint: PlaygroundEndpoint, url: string, body: string, 
   }
 }
 
+function sendLabel(busy: boolean, live: boolean | undefined): string {
+  if (busy) return 'Sending…';
+  return live ? 'Send (live)' : 'Send';
+}
+
 function statusClass(status: number): string {
   if (status >= 200 && status < 300) return 'SENT';
   if (status >= 400) return 'FAILED';
@@ -77,7 +82,7 @@ export default function Playground() {
 
   function choose(endpoint: PlaygroundEndpoint) {
     setSelected(endpoint);
-    setPathValues({ ...(endpoint.pathParams ?? {}) });
+    setPathValues({ ...endpoint.pathParams });
     setQueryValues(Object.fromEntries((endpoint.query ?? []).map((q) => [q.name, q.example])));
     setBody(endpoint.body === undefined ? '' : pretty(endpoint.body));
     setIdempotencyKey('');
@@ -172,7 +177,7 @@ export default function Playground() {
               </label>
             )}
             <div className="row" style={{ marginTop: 12 }}>
-              <button type="button" className="primary" disabled={busy} onClick={run}>{busy ? 'Sending…' : selected.live ? 'Send (live)' : 'Send'}</button>
+              <button type="button" className="primary" disabled={busy} onClick={run}>{sendLabel(busy, selected.live)}</button>
               <button type="button" onClick={copy}>{copied ? 'Copied' : 'Copy as curl'}</button>
               {error && <span className="error" role="alert">{error}</span>}
             </div>

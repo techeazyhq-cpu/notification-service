@@ -70,9 +70,9 @@ export default function Privacy() {
       </form>
       {message && <p className="error" role="alert">{message}</p>}
       {result && (
-        <p role="status">
+        <output className="status-block">
           Erased {result.erasedMessages} message(s). {result.inFlightMessages > 0 ? `${result.inFlightMessages} still being delivered. ` : ''}{result.note}
-        </p>
+        </output>
       )}
     </>
   );

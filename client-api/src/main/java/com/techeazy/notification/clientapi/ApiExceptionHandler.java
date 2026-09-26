@@ -41,6 +41,8 @@ import java.util.stream.Collectors;
 @RestControllerAdvice
 public class ApiExceptionHandler {
 
+    private static final String INVALID_REQUEST = "INVALID_REQUEST";
+
     private static final Logger log = LoggerFactory.getLogger(ApiExceptionHandler.class);
 
     public record ErrorBody(String code, String message) {}
@@ -77,7 +79,7 @@ public class ApiExceptionHandler {
 
     @ExceptionHandler(InvalidBillingDataException.class)
     ResponseEntity<ErrorBody> billingInvalid(InvalidBillingDataException e) {
-        return billing(HttpStatus.BAD_REQUEST, "INVALID_REQUEST", e);
+        return billing(HttpStatus.BAD_REQUEST, INVALID_REQUEST, e);
     }
 
     private static ResponseEntity<ErrorBody> billing(HttpStatus status, String code, BillingException e) {
@@ -88,12 +90,12 @@ public class ApiExceptionHandler {
     ResponseEntity<ErrorBody> validation(MethodArgumentNotValidException e) {
         String msg = e.getBindingResult().getFieldErrors().stream()
                 .map(f -> f.getField() + " " + f.getDefaultMessage()).collect(Collectors.joining("; "));
-        return ResponseEntity.badRequest().body(new ErrorBody("INVALID_REQUEST", msg));
+        return ResponseEntity.badRequest().body(new ErrorBody(INVALID_REQUEST, msg));
     }
 
     @ExceptionHandler({HttpMessageNotReadableException.class, MethodArgumentTypeMismatchException.class})
     ResponseEntity<ErrorBody> unreadable(Exception e) {
-        return ResponseEntity.badRequest().body(new ErrorBody("INVALID_REQUEST", "Malformed request: " + e.getMessage()));
+        return ResponseEntity.badRequest().body(new ErrorBody(INVALID_REQUEST, "Malformed request: " + e.getMessage()));
     }
 
     @ExceptionHandler(MaxUploadSizeExceededException.class)

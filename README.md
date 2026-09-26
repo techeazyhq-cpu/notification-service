@@ -160,6 +160,20 @@ docker compose -f docker-compose.yml -f docker-compose.tls.yml -f docker-compose
 `dispatcher` isn't fronted: it has no client- or admin-facing HTTP surface, only actuator health for operators. See
 ADR-016.
 
+## Encrypting the datastore connections
+
+`docker compose -f docker-compose.yml -f docker-compose.encrypted.yml --profile app up -d --build` turns on TLS for
+every hop between the services and PostgreSQL, Redis and Pulsar (plaintext connections are refused) using a private CA
+generated on first start; combine it with `docker-compose.tls.yml` to also encrypt the public edge. Message template
+variables are additionally encrypted in the database (`DATA_ENCRYPTION_KEY`). See ADR-017 for what is and is not
+encrypted, including the storage-level encryption the recipient column needs in production.
+
+## Performance and failure drills
+
+`perf/run-benchmark.mjs` (load and bulk) and `perf/chaos-drills.mjs` (kill the dispatcher, the provider, the broker, the
+database while messages are in flight) write to `docs/benchmarks`. Results and analysis:
+[docs/quality-attributes-analysis.md](docs/quality-attributes-analysis.md).
+
 ## Continuous integration
 
 GitHub Actions run on every pull request and on `main` (`.github/workflows`):
@@ -180,8 +194,10 @@ Sonar findings are kept at zero. To reproduce locally with a throwaway SonarQube
 
 ```bash
 docker run -d --name sonarqube-local -p 9001:9000 -e SONAR_SEARCH_JAVAADDITIONALOPTS=-Dnode.store.allow_mmap=false sonarqube:community
-# create a token in the UI (My Account > Security), then:
-mvn package org.sonarsource.scanner.maven:sonar-maven-plugin:sonar -Dsonar.host.url=http://localhost:9001 -Dsonar.token=<token> -Dsonar.projectKey=notification-service
+# create a token in the UI (My Account > Security), then the Java modules:
+mvn verify org.sonarsource.scanner.maven:sonar-maven-plugin:sonar -Dsonar.host.url=http://localhost:9001 -Dsonar.token=<token>   -Dsonar.projectKey=notification-service -Dsonar.coverage.jacoco.xmlReportPaths='**/target/site/jacoco/jacoco.xml'
+# and the front ends, scripts and container files:
+docker run --rm -v "$PWD:/usr/src" -w /usr/src sonarsource/sonar-scanner-cli -Dsonar.host.url=http://host.docker.internal:9001   -Dsonar.token=<token> -Dsonar.projectKey=notification-service-frontend -Dsonar.sources=.   -Dsonar.inclusions='admin-ui/src/**,client-ui/src/**,client-ui/tests/**,scripts/**,perf/**,tools/**,**/Dockerfile,docker-compose*.yml,.github/**,deploy/**'   -Dsonar.exclusions='**/node_modules/**,**/dist/**,**/target/**'
 ```
 
 JaCoCo reports are written to `*/target/site/jacoco/` by `mvn test` and picked up by Sonar.

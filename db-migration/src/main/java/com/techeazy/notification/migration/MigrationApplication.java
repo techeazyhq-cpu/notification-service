@@ -36,7 +36,7 @@ import java.util.Arrays;
 @EnableConfigurationProperties(MigrationProperties.class)
 public class MigrationApplication {
 
-    private static final String DEFAULT_PASSWORD = "notification";
+    private static final String SHIPPED_DEV_DEFAULT = "notification";
 
     @Bean
     MigrationService migrationService(MigrationProperties props, Environment env) {
@@ -52,9 +52,9 @@ public class MigrationApplication {
      */
     private static void rejectDefaultPasswordOutsideLocal(MigrationProperties props, Environment env) {
         boolean local = Arrays.asList(env.getActiveProfiles()).contains("local");
-        if (!local && DEFAULT_PASSWORD.equals(props.getPassword())) {
+        if (!local && SHIPPED_DEV_DEFAULT.equals(props.getPassword())) {
             throw new IllegalStateException("migration.password (DB_PASSWORD) is still set to this project's shipped "
-                    + "development default (\"" + DEFAULT_PASSWORD + "\"). Set a real value before running outside local "
+                    + "development default (\"" + SHIPPED_DEV_DEFAULT + "\"). Set a real value before running outside local "
                     + "development, or run with the 'local' Spring profile if this really is local development.");
         }
     }

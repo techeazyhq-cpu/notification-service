@@ -74,8 +74,13 @@ public class ProviderRegistry {
         this.breakerEnabled = props.getCircuitBreaker().isEnabled();
         this.configs = Caffeine.newBuilder().expireAfterWrite(Duration.ofSeconds(10))
                 .build(channel -> repo.findByChannelAndEnabledTrueOrderByPriorityAsc(channel).stream()
-                        .peek(cfg -> cfg.setSettings(secrets.decryptForUse(cfg.getSettings())))
+                        .map(cfg -> withDecryptedSettings(cfg, secrets))
                         .toList());
+    }
+
+    private static ProviderConfig withDecryptedSettings(ProviderConfig cfg, ProviderSecrets secrets) {
+        cfg.setSettings(secrets.decryptForUse(cfg.getSettings()));
+        return cfg;
     }
 
     /** False only when the channel has providers and all of their circuits are open. */

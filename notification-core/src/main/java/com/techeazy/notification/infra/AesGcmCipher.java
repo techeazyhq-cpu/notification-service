@@ -18,6 +18,8 @@
 
 package com.techeazy.notification.infra;
 
+import com.techeazy.notification.domain.FieldEncryptor;
+
 import javax.crypto.Cipher;
 import javax.crypto.spec.GCMParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
@@ -33,7 +35,7 @@ import java.util.Base64;
  * from different passphrases cannot decrypt each other's output; that is deliberate (see {@code ProviderSecrets}),
  * not a limitation to work around by sharing one key everywhere.
  */
-public final class AesGcmCipher {
+public final class AesGcmCipher implements FieldEncryptor {
 
     private static final int IV_BYTES = 12;
     private static final int TAG_BITS = 128;
@@ -51,6 +53,7 @@ public final class AesGcmCipher {
         this.random = random;
     }
 
+    @Override
     public String encrypt(String plain) {
         try {
             byte[] iv = new byte[IV_BYTES];
@@ -64,6 +67,7 @@ public final class AesGcmCipher {
         }
     }
 
+    @Override
     public String decrypt(String stored) {
         try {
             ByteBuffer buffer = ByteBuffer.wrap(Base64.getDecoder().decode(stored));

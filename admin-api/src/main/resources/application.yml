@@ -37,8 +37,10 @@ spring:
 
 notification:
   secrets-key: ${SECRETS_ENCRYPTION_KEY:development-only-change-me}
+  data-key: ${DATA_ENCRYPTION_KEY:development-only-change-me}
   pulsar:
     service-url: ${PULSAR_URL:pulsar://localhost:6650}
+    tls-trust-certs-file: ${PULSAR_TLS_TRUST_CERTS_FILE:}
 
 retention:
   enabled: false
