@@ -17,7 +17,7 @@
 # Pinned to JDK 21: Lombok silently generates no methods on newer JDKs (JDK 24 confirmed in ADR-011; JDK 26 hit the
 # same failure and reached main anyway, since Dependabot's ignore rule for major versions does not recognize a JDK
 # suffix like "-24"/"-26" as one -- see ADR-011 and ADR-014). Bumping this tag needs a human to verify the build.
-FROM maven:3.9-eclipse-temurin-21 AS build
+FROM maven:3-eclipse-temurin-24 AS build
 ARG MODULE
 WORKDIR /src
 COPY pom.xml .
