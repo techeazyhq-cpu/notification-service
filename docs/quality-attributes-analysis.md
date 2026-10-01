@@ -107,11 +107,10 @@ is single-node.
 
 - **Present:** each message has a persisted status, attempt count, last error and failure kind; a request's status is
   derived from its messages; dead letters are recorded with a reason; Prometheus counters per channel and outcome
-  (`notification.dispatch`, `notification.dead_letter`, ingest stages); billing is a ledger; admin sign-ins are
-  recorded by sessions.
-- **Missing:** no correlation id from the HTTP request through Pulsar to the provider call, no OpenTelemetry traces, no
-  audit log of administrator actions (who changed a provider, rotated a key, reprocessed dead letters), logs are not
-  structured. When a message misbehaves you can read its row, but you cannot follow one request across services.
+  (`notification.dispatch`, `notification.dead_letter`, ingest stages); billing is a ledger; every state-changing
+  admin API call, including refused attempts and sign-ins, is in an append-only audit log (ADR-019).
+- **Missing:** no correlation id from the HTTP request through Pulsar to the provider call, no OpenTelemetry traces, logs
+  are not structured. When a message misbehaves you can read its row, but you cannot follow one request across services.
 
 ## Scalability
 
@@ -125,7 +124,7 @@ is single-node.
 
 ## Enhancements, in priority order
 
-1. **Traceability:** correlation id and OpenTelemetry across client-api → Pulsar → dispatcher; append-only admin audit log.
+1. **Traceability:** correlation id and OpenTelemetry across client-api → Pulsar → dispatcher.
 2. **Resilience:** circuit breaker on the publisher so ingest stays fast during a broker outage; shorter, configurable
    stuck-processing timeout with a heartbeat instead of a fixed 5 minutes; provider idempotency keys.
 3. **Scale:** partitioned topics and per-channel consumer tuning; time-partitioned `notification_message` with retention by

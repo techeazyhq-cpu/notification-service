@@ -226,7 +226,7 @@ PostgreSQL, schema owned by the `db-migration` job (Liquibase changesets in `db-
 
 ## 6. Cross-cutting
 
-**Security.** API key per client (hashed, rotatable, disable takes effect within 30 s); administrators sign in with a password (plus an optional authenticator-app code and one-time recovery codes) and get a short-lived Bearer session token; the password can be changed in the admin UI, accounts and sessions are stored in the database, and repeated failures lock the account (ADR-005; one administrator and no roles yet, so use OIDC and roles before any shared deployment); provider secrets are masked in admin responses. Threats considered (STRIDE-lite): spoofed client (key), tampering with content (only via authenticated API), repudiation (request/message rows are the audit trail), information disclosure (no PII in Pulsar or logs; recipients visible only to the owning client and admins), DoS (per-client API limit, bulk cap of 50k, upload cap of 20 MB), elevation (admin endpoints separated by port/service and role).
+**Security.** API key per client (hashed, rotatable, disable takes effect within 30 s); administrators sign in with a password (plus an optional authenticator-app code and one-time recovery codes) and get a short-lived Bearer session token; the password can be changed in the admin UI, accounts and sessions are stored in the database, and repeated failures lock the account (ADR-005; one administrator and no roles yet, so use OIDC and roles before any shared deployment); provider secrets are masked in admin responses. Threats considered (STRIDE-lite): spoofed client (key), tampering with content (only via authenticated API), repudiation (request/message rows are the audit trail for clients; an append-only audit log records every admin change and refused attempt, ADR-019), information disclosure (no PII in Pulsar or logs; recipients visible only to the owning client and admins), DoS (per-client API limit, bulk cap of 50k, upload cap of 20 MB), elevation (admin endpoints separated by port/service and role).
 
 **Observability.** Actuator health and Prometheus metrics on every service; dispatcher counter `notification.dispatch{channel,outcome}` (`sent`, `retry`, `rate_limited`, `failed_permanent`, `failed_exhausted`). Recommended SLIs: accept success rate and latency; time from `PENDING` to `SENT` (p95); backlog size; FAILED ratio per channel. Add trace-id propagation into the Pulsar envelope next.
 
@@ -258,7 +258,7 @@ PostgreSQL, schema owned by the `db-migration` job (Liquibase changesets in `db-
 1. Testcontainers integration tests (Postgres + Redis + Pulsar) for the send → retry → DLQ → sweeper paths.
 2. Real vendor adapters (SES/Twilio/FCM) behind `ChannelProvider`; provider delivery receipts → `DELIVERED` state.
 3. Retention + partitioning of `notification_message`; erasure API.
-4. OIDC for admin (roles: viewer/operator/admin); audit log of admin changes.
+4. OIDC for admin (roles are in place, ADR-015; the audit log of admin changes is in place, ADR-019).
 5. Trace propagation; SLO dashboards and alerts; load test against the targets in §1.
 6. Async bulk ingestion for files above the synchronous cap.
 7. Read-only credentials for the client tracking UI (portal tokens or OIDC), instead of the sending API key.

@@ -55,6 +55,8 @@ services:
 
   admin-api:
     ports: !override []
+    environment:
+      FORWARD_HEADERS_STRATEGY: native
     labels:
       - traefik.enable=true
       - traefik.http.routers.admin-api.rule=Host(`${ADMIN_API_DOMAIN:-admin-api.localhost}`)

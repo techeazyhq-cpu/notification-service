@@ -31,6 +31,7 @@ import Messages from './pages/Messages';
 import DeadLetters from './pages/DeadLetters';
 import Account from './pages/Account';
 import Privacy from './pages/Privacy';
+import AuditLog from './pages/AuditLog';
 
 function Login({ onDone }: Readonly<{ onDone: () => void }>) {
   const [user, setUser] = useState('admin');
@@ -101,6 +102,7 @@ export default function App() {
         <NavLink to="/billing/accounts">Billing accounts</NavLink>
         <NavLink to="/billing/invoices">Invoices</NavLink>
         <NavLink to="/privacy">Privacy</NavLink>
+        <NavLink to="/audit">Audit log</NavLink>
         <NavLink to="/account">My account</NavLink>
         <button type="button" className="link" onClick={() => { signOut().finally(() => setAuthed(false)); }}>Sign out</button>
       </nav>
@@ -118,6 +120,7 @@ export default function App() {
           <Route path="/billing/accounts" element={<BillingAccounts />} />
           <Route path="/billing/invoices" element={<BillingInvoices />} />
           <Route path="/privacy" element={<Privacy />} />
+          <Route path="/audit" element={<AuditLog />} />
           <Route path="/account" element={<Account />} />
         </Routes>
       </main>
