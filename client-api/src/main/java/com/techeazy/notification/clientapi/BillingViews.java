@@ -29,6 +29,7 @@ import com.techeazy.notification.billing.domain.InvoiceStatus;
 import com.techeazy.notification.billing.domain.Invoice;
 import com.techeazy.notification.billing.domain.LedgerEntry;
 import com.techeazy.notification.billing.domain.LedgerEntryType;
+import com.techeazy.notification.billing.domain.Money;
 import com.techeazy.notification.billing.domain.Payment;
 import com.techeazy.notification.billing.domain.Plan;
 import com.techeazy.notification.domain.Channel;
@@ -74,7 +75,7 @@ final class BillingViews {
                 .map(e -> new RateView(e.getKey(), e.getValue().unitPrice().unitFormatted(), e.getValue().freeAllowance())).toList();
         return new AccountView(plan.name(), plan.currency(), account.mode(), account.status(),
                 account.isPrepaid() ? account.creditBalance().formatted() : null,
-                account.spendCap().map(cap -> cap.formatted()).orElse(null), plan.platformFee().formatted(),
+                account.spendCap().map(Money::formatted).orElse(null), plan.platformFee().formatted(),
                 percent(plan.taxRate()), rates);
     }
 

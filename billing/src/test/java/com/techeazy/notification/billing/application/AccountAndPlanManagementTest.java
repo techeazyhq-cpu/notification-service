@@ -59,7 +59,8 @@ class AccountAndPlanManagementTest {
 
         assertThat(f.planCatalog.get(created.id()).name()).isEqualTo("standard");
         assertThat(f.planCatalog.list()).hasSize(1);
-        assertThatThrownBy(() -> f.planCatalog.get(UUID.randomUUID())).isInstanceOf(BillingNotFoundException.class);
+        UUID unknownPlan = UUID.randomUUID();
+        assertThatThrownBy(() -> f.planCatalog.get(unknownPlan)).isInstanceOf(BillingNotFoundException.class);
     }
 
     @Test
@@ -67,8 +68,10 @@ class AccountAndPlanManagementTest {
         Plan first = f.planCatalog.create(draft("standard", USD, true));
         Plan second = f.planCatalog.create(draft("premium", USD, true));
 
-        assertThatThrownBy(() -> f.planCatalog.create(draft("standard", USD, true))).isInstanceOf(InvalidBillingStateException.class);
-        assertThatThrownBy(() -> f.planCatalog.update(second.id(), draft("standard", USD, true))).isInstanceOf(InvalidBillingStateException.class);
+        PlanDraft duplicate = draft("standard", USD, true);
+        UUID secondId = second.id();
+        assertThatThrownBy(() -> f.planCatalog.create(duplicate)).isInstanceOf(InvalidBillingStateException.class);
+        assertThatThrownBy(() -> f.planCatalog.update(secondId, duplicate)).isInstanceOf(InvalidBillingStateException.class);
         assertThat(f.planCatalog.update(first.id(), draft("standard", USD, false)).active()).isFalse();
     }
 
@@ -77,7 +80,9 @@ class AccountAndPlanManagementTest {
         Plan plan = f.planCatalog.create(draft("standard", USD, true));
         f.accountManagement.assign(assignment(plan, BillingMode.POSTPAID, null));
 
-        assertThatThrownBy(() -> f.planCatalog.update(plan.id(), draft("standard", "EUR", true))).isInstanceOf(InvalidBillingStateException.class);
+        UUID planId = plan.id();
+        PlanDraft euroDraft = draft("standard", "EUR", true);
+        assertThatThrownBy(() -> f.planCatalog.update(planId, euroDraft)).isInstanceOf(InvalidBillingStateException.class);
     }
 
     @Test
@@ -90,16 +95,19 @@ class AccountAndPlanManagementTest {
         assertThat(account.spendCap()).contains(Money.of("500", USD));
         assertThat(f.accountManagement.get(client).billingEmail()).isEqualTo("billing@acme.test");
         assertThat(f.accountManagement.list()).hasSize(1);
-        assertThatThrownBy(() -> f.accountManagement.get(UUID.randomUUID())).isInstanceOf(BillingNotFoundException.class);
+        UUID unknownClient = UUID.randomUUID();
+        assertThatThrownBy(() -> f.accountManagement.get(unknownClient)).isInstanceOf(BillingNotFoundException.class);
     }
 
     @Test
     void anInactiveOrUnknownPlanCannotBeAssigned() {
         Plan inactive = f.planCatalog.create(draft("old", USD, false));
 
-        assertThatThrownBy(() -> f.accountManagement.assign(assignment(inactive, BillingMode.POSTPAID, null))).isInstanceOf(InvalidBillingStateException.class);
+        AccountAssignment inactiveAssignment = assignment(inactive, BillingMode.POSTPAID, null);
+        assertThatThrownBy(() -> f.accountManagement.assign(inactiveAssignment)).isInstanceOf(InvalidBillingStateException.class);
         Plan ghost = new Plan(UUID.randomUUID(), "ghost", USD, Money.zero(USD), BigDecimal.ZERO, Map.of(), true);
-        assertThatThrownBy(() -> f.accountManagement.assign(assignment(ghost, BillingMode.POSTPAID, null))).isInstanceOf(BillingNotFoundException.class);
+        AccountAssignment ghostAssignment = assignment(ghost, BillingMode.POSTPAID, null);
+        assertThatThrownBy(() -> f.accountManagement.assign(ghostAssignment)).isInstanceOf(BillingNotFoundException.class);
     }
 
     @Test
@@ -108,7 +116,8 @@ class AccountAndPlanManagementTest {
         AccountAssignment euroCap = new AccountAssignment(client, plan.id(), BillingMode.POSTPAID, Money.of("5", "EUR"), AccountStatus.ACTIVE, null);
 
         assertThatThrownBy(() -> f.accountManagement.assign(euroCap)).isInstanceOf(InvalidBillingDataException.class);
-        assertThatThrownBy(() -> f.accountManagement.assign(assignment(plan, BillingMode.PREPAID, "10"))).isInstanceOf(InvalidBillingDataException.class);
+        AccountAssignment prepaidCap = assignment(plan, BillingMode.PREPAID, "10");
+        assertThatThrownBy(() -> f.accountManagement.assign(prepaidCap)).isInstanceOf(InvalidBillingDataException.class);
     }
 
     @Test
@@ -130,13 +139,14 @@ class AccountAndPlanManagementTest {
         f.accountManagement.assign(assignment(plan, BillingMode.PREPAID, null));
         f.creditService.topUp(client, Money.of("40", USD), "p1", "payment");
 
-        assertThatThrownBy(() -> f.accountManagement.assign(assignment(plan, BillingMode.POSTPAID, null))).isInstanceOf(InvalidBillingStateException.class);
+        AccountAssignment toPostpaid = assignment(plan, BillingMode.POSTPAID, null);
+        assertThatThrownBy(() -> f.accountManagement.assign(toPostpaid)).isInstanceOf(InvalidBillingStateException.class);
 
         f.accounts.setBalance(client, Money.zero(USD));
         f.admission.admit(new Admission(client, Channel.SMS, 0, HoldScope.REQUEST, UUID.randomUUID()));
         f.credits.saveHold(com.techeazy.notification.billing.domain.CreditHold.place(client, HoldScope.REQUEST, UUID.randomUUID(),
                 Channel.SMS, 1, Money.of("0.05", USD), f.clock.instant()));
-        assertThatThrownBy(() -> f.accountManagement.assign(assignment(plan, BillingMode.POSTPAID, null))).isInstanceOf(InvalidBillingStateException.class);
+        assertThatThrownBy(() -> f.accountManagement.assign(toPostpaid)).isInstanceOf(InvalidBillingStateException.class);
     }
 
     @Test

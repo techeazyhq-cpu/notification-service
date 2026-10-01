@@ -62,7 +62,6 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
-import java.time.Clock;
 import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
@@ -77,6 +76,8 @@ import java.util.stream.Collectors;
 @RestController
 @RequestMapping("/api/admin/billing")
 class BillingAdminController {
+
+    private static final String UNKNOWN_CLIENT = "unknown";
 
     record RateInput(@NotNull Channel channel, @NotNull BigDecimal unitPrice, long freeAllowance) {}
 
@@ -101,16 +102,14 @@ class BillingAdminController {
     private final CreditService credits;
     private final InvoiceService invoices;
     private final ClientRepository clients;
-    private final Clock clock;
 
     BillingAdminController(PlanCatalog plans, AccountManagement accounts, CreditService credits, InvoiceService invoices,
-                           ClientRepository clients, Clock clock) {
+                           ClientRepository clients) {
         this.plans = plans;
         this.accounts = accounts;
         this.credits = credits;
         this.invoices = invoices;
         this.clients = clients;
-        this.clock = clock;
     }
 
     @GetMapping("/plans")
@@ -134,7 +133,7 @@ class BillingAdminController {
         Map<UUID, String> names = clientNames();
         Map<UUID, Plan> planById = plans.list().stream().collect(Collectors.toMap(Plan::id, Function.identity()));
         return accounts.list().stream()
-                .map(a -> BillingAdminViews.account(a, names.getOrDefault(a.clientId(), "unknown"), planById.get(a.planId()))).toList();
+                .map(a -> BillingAdminViews.account(a, names.getOrDefault(a.clientId(), UNKNOWN_CLIENT), planById.get(a.planId()))).toList();
     }
 
     @PutMapping("/accounts/{clientId}")
@@ -165,7 +164,7 @@ class BillingAdminController {
     List<InvoiceView> invoices(@RequestParam(required = false) InvoiceStatus status, @RequestParam(required = false) UUID clientId) {
         Map<UUID, String> names = clientNames();
         return invoices.search(status, clientId).stream()
-                .map(i -> BillingAdminViews.invoice(i, names.getOrDefault(i.clientId(), "unknown"))).toList();
+                .map(i -> BillingAdminViews.invoice(i, names.getOrDefault(i.clientId(), UNKNOWN_CLIENT))).toList();
     }
 
     @GetMapping("/invoices/{id}")
@@ -225,7 +224,7 @@ class BillingAdminController {
     }
 
     private String clientName(UUID clientId) {
-        return clients.findById(clientId).map(Client::getName).orElse("unknown");
+        return clients.findById(clientId).map(Client::getName).orElse(UNKNOWN_CLIENT);
     }
 
     private Map<UUID, String> clientNames() {

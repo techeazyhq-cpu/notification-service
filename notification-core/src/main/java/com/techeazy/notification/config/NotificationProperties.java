@@ -35,6 +35,10 @@ public class NotificationProperties {
         private String serviceUrl = "pulsar://localhost:6650";
         /** Topics are {@code <topicPrefix><channel>}, e.g. persistent://public/default/notification-email. */
         private String topicPrefix = "persistent://public/default/notification-";
+        /** PEM file with the CA that signed the broker certificate; set together with a {@code pulsar+ssl://} service URL. */
+        private String tlsTrustCertsFile = "";
+        /** How long an accept waits for the broker to confirm a publish; on timeout the row stays PENDING and the sweeper publishes it. */
+        private int publishTimeoutSeconds = 5;
     }
 
     @Getter @Setter
@@ -54,6 +58,8 @@ public class NotificationProperties {
         private long pendingAgeSeconds = 30;
         /** PROCESSING rows older than this belong to a crashed worker. */
         private long processingTimeoutSeconds = 300;
+        /** QUEUED rows older than this were lost between the broker and a worker; republishing is safe because workers claim atomically. */
+        private long queuedTimeoutSeconds = 900;
         private int batchSize = 500;
     }
 }

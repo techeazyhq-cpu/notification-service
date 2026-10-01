@@ -46,7 +46,7 @@ class BillingPeriodTest {
 
         assertThat(august.start()).isEqualTo(Instant.parse("2026-08-01T00:00:00Z"));
         assertThat(august.endExclusive()).isEqualTo(Instant.parse("2026-09-01T00:00:00Z"));
-        assertThat(august.firstDay().toString()).isEqualTo("2026-08-01");
+        assertThat(august.firstDay()).hasToString("2026-08-01");
     }
 
     @Test

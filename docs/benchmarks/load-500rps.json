@@ -1,0 +1,45 @@
+{
+  "label": "load-500rps",
+  "date": "2026-09-26T04:37:36.179Z",
+  "environment": {
+    "host": "Vasanth",
+    "cpus": 12,
+    "memGiB": 16,
+    "note": "one instance of each service, single-node Postgres, Redis and Pulsar, all in Docker Desktop on this machine"
+  },
+  "singleSend": {
+    "targetRatePerSecond": 500,
+    "acceptedMessages": 30001,
+    "achievedRatePerSecond": 448.07216385462203,
+    "latencyMs": {
+      "avg": 18.182921685877076,
+      "med": 16.302122,
+      "p(90)": 25.972233,
+      "p(95)": 31.453633,
+      "p(99)": 46.725315,
+      "max": 119.374894,
+      "thresholds": {
+        "p(99)<500": false
+      }
+    },
+    "errorRate": 0
+  },
+  "afterLoadDrain": {
+    "backlogAtStart": 13390,
+    "seconds": 45.88
+  },
+  "statusRead": {
+    "latencyMs": {
+      "avg": 8.102190501166623,
+      "med": 7.096245,
+      "p(90)": 10.54481,
+      "p(95)": 13.274852,
+      "p(99)": 25.402084,
+      "max": 98.335062,
+      "thresholds": {
+        "p(99)<500": false
+      }
+    }
+  },
+  "bulk": null
+}

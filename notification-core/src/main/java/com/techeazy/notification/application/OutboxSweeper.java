@@ -38,7 +38,8 @@ import java.util.UUID;
 
 /**
  * Recovers messages that fell between database commit and broker publish (PENDING), and messages
- * whose worker died mid-send (PROCESSING). Delivery is therefore at-least-once; workers make
+ * whose worker died mid-send (PROCESSING), and messages the broker acknowledged or lost without a worker ever
+ * claiming them (QUEUED for longer than any healthy backlog). Delivery is therefore at-least-once; workers make
  * redelivery safe by atomically claiming a message before sending.
  */
 @Component
@@ -66,6 +67,8 @@ public class OutboxSweeper {
                 cfg.getBatchSize()), "pending");
         republish(messages.lockStale(MessageStatus.PROCESSING.name(), now.minus(Duration.ofSeconds(cfg.getProcessingTimeoutSeconds())),
                 cfg.getBatchSize()), "stuck processing");
+        republish(messages.lockStale(MessageStatus.QUEUED.name(), now.minus(Duration.ofSeconds(cfg.getQueuedTimeoutSeconds())),
+                cfg.getBatchSize()), "queued but never delivered");
     }
 
     private void republish(List<NotificationMessage> stale, String what) {

@@ -136,7 +136,7 @@ export default function BillingAccounts() {
     <>
       <h1>Billing accounts</h1>
       <p className="muted">
-        A client without an account is not billed. <b>Postpaid</b> clients are invoiced monthly for messages that were sent, with an optional soft monthly spend cap.
+        A client without an account is not billed. <b>Postpaid</b> clients are invoiced monthly for messages that were sent, with an optional soft monthly spend cap.{' '}
         <b> Prepaid</b> clients hold credit: the cost of a request is reserved when it is accepted and whatever is not sent is returned. Mode and currency cannot change while an account holds credit.
       </p>
       <form className="card row" onSubmit={save}>

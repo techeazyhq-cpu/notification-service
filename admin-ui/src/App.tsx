@@ -64,7 +64,7 @@ function Login({ onDone }: Readonly<{ onDone: () => void }>) {
       <label>Username<input value={user} onChange={(e) => setUser(e.target.value)} autoComplete="username" disabled={needCode} /></label>
       <label>Password<input type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="current-password" disabled={needCode} /></label>
       {needCode && (
-        <label>Verification code
+        <label>Verification code{' '}
           <input value={code} onChange={(e) => setCode(e.target.value)} inputMode="numeric" autoComplete="one-time-code" placeholder="6-digit code or a recovery code" required />
         </label>
       )}

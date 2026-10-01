@@ -66,6 +66,7 @@ public class InvoiceService {
     private final Clock clock;
     private final int paymentTermsDays;
 
+    @SuppressWarnings("java:S107")
     public InvoiceService(InvoiceRepository invoices, AccountRepository accounts, PlanRepository plans,
                           UsageReader usage, InvoiceCalculator calculator, Transactions transactions, Clock clock,
                           int paymentTermsDays) {

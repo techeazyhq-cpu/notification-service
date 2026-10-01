@@ -69,10 +69,14 @@ class PrepaidLifecycleTest {
         UUID postpaidClient = UUID.randomUUID();
         f.account(postpaidClient, f.smsPlan("0.1", 0), BillingMode.POSTPAID, null);
 
-        assertThatThrownBy(() -> f.creditService.topUp(client, usd("0"), "r", "d")).isInstanceOf(InvalidBillingDataException.class);
-        assertThatThrownBy(() -> f.creditService.topUp(client, Money.of("5", "EUR"), "r", "d")).isInstanceOf(InvalidBillingDataException.class);
-        assertThatThrownBy(() -> f.creditService.topUp(client, usd("5"), " ", "d")).isInstanceOf(InvalidBillingDataException.class);
-        assertThatThrownBy(() -> f.creditService.topUp(postpaidClient, usd("5"), "r", "d")).isInstanceOf(InvalidBillingStateException.class);
+        Money zero = usd("0");
+        Money euros = Money.of("5", "EUR");
+        Money five = usd("5");
+
+        assertThatThrownBy(() -> f.creditService.topUp(client, zero, "r", "d")).isInstanceOf(InvalidBillingDataException.class);
+        assertThatThrownBy(() -> f.creditService.topUp(client, euros, "r", "d")).isInstanceOf(InvalidBillingDataException.class);
+        assertThatThrownBy(() -> f.creditService.topUp(client, five, " ", "d")).isInstanceOf(InvalidBillingDataException.class);
+        assertThatThrownBy(() -> f.creditService.topUp(postpaidClient, five, "r", "d")).isInstanceOf(InvalidBillingStateException.class);
     }
 
     @Test
@@ -80,7 +84,8 @@ class PrepaidLifecycleTest {
         f.creditService.topUp(client, usd("10"), "p1", "payment");
 
         assertThat(f.creditService.adjust(client, usd("-4"), "fix-1", "correction")).isEqualTo(usd("6"));
-        assertThatThrownBy(() -> f.creditService.adjust(client, usd("-7"), "fix-2", "correction"))
+        Money overdraw = usd("-7");
+        assertThatThrownBy(() -> f.creditService.adjust(client, overdraw, "fix-2", "correction"))
                 .isInstanceOf(InsufficientCreditException.class);
         assertThat(f.credits.balance(client)).isEqualTo(usd("6"));
     }

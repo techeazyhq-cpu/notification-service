@@ -39,6 +39,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -121,7 +122,7 @@ class DeadLetterReprocessorTest {
         reprocessor.reprocess(null, everything, 0);
 
         ArgumentCaptor<Pageable> page = ArgumentCaptor.forClass(Pageable.class);
-        verify(messages, org.mockito.Mockito.times(3)).findAll(any(Specification.class), page.capture());
+        verify(messages, times(3)).findAll(any(Specification.class), page.capture());
         assertThat(page.getAllValues()).extracting(Pageable::getPageSize).containsExactly(1000, 200, 1);
     }
 

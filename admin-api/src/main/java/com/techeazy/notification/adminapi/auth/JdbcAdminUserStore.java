@@ -33,6 +33,9 @@ class JdbcAdminUserStore implements AdminUserStore {
 
     private static final String COLUMNS = "id, username, password_hash, password_changed_at, totp_secret, totp_enabled, totp_last_step, locked_until, role";
 
+    private static final String USERNAME = "username";
+    private static final String SELECT_USER = "SELECT " + COLUMNS + " FROM admin_user";
+
     private final JdbcClient jdbc;
 
     JdbcAdminUserStore(JdbcClient jdbc) {
@@ -46,25 +49,25 @@ class JdbcAdminUserStore implements AdminUserStore {
 
     @Override
     public Optional<AdminUser> findByUsername(String username) {
-        return jdbc.sql("SELECT " + COLUMNS + " FROM admin_user WHERE username = :username")
-                .param("username", username).query(JdbcAdminUserStore::map).optional();
+        return jdbc.sql(SELECT_USER + " WHERE username = :username")
+                .param(USERNAME, username).query(JdbcAdminUserStore::map).optional();
     }
 
     @Override
     public Optional<AdminUser> findById(UUID id) {
-        return jdbc.sql("SELECT " + COLUMNS + " FROM admin_user WHERE id = :id")
+        return jdbc.sql(SELECT_USER + " WHERE id = :id")
                 .param("id", id).query(JdbcAdminUserStore::map).optional();
     }
 
     @Override
     public List<AdminUser> findAll() {
-        return jdbc.sql("SELECT " + COLUMNS + " FROM admin_user ORDER BY username").query(JdbcAdminUserStore::map).list();
+        return jdbc.sql(SELECT_USER + " ORDER BY username").query(JdbcAdminUserStore::map).list();
     }
 
     @Override
     public void insert(AdminUser user, Instant now) {
         jdbc.sql("INSERT INTO admin_user (id, username, password_hash, created_at, role) VALUES (:id, :username, :hash, :now, :role)")
-                .param("id", user.id()).param("username", user.username()).param("hash", user.passwordHash())
+                .param("id", user.id()).param(USERNAME, user.username()).param("hash", user.passwordHash())
                 .param("now", Timestamp.from(now)).param("role", user.role().name()).update();
     }
 
@@ -134,7 +137,7 @@ class JdbcAdminUserStore implements AdminUserStore {
     private static AdminUser map(ResultSet rs, int row) throws SQLException {
         Timestamp changed = rs.getTimestamp("password_changed_at");
         Timestamp locked = rs.getTimestamp("locked_until");
-        return new AdminUser(rs.getObject("id", UUID.class), rs.getString("username"), rs.getString("password_hash"),
+        return new AdminUser(rs.getObject("id", UUID.class), rs.getString(USERNAME), rs.getString("password_hash"),
                 changed == null ? null : changed.toInstant(), rs.getString("totp_secret"), rs.getBoolean("totp_enabled"),
                 rs.getLong("totp_last_step"), locked == null ? null : locked.toInstant(), AdminRole.valueOf(rs.getString("role")));
     }

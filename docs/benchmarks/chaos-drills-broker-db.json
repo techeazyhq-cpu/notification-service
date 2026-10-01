@@ -1,0 +1,24 @@
+{
+  "label": "chaos-drills-broker-db",
+  "date": "2026-09-26T06:41:14.956Z",
+  "drills": {
+    "broker-down-during-ingest": {
+      "requests": 100,
+      "acceptedWhileBrokerDown": 100,
+      "drained": true,
+      "seconds": 48.401,
+      "secondsFromBrokerStartToAllDelivered": 49.868,
+      "deliveredAfterRecovery": 100
+    },
+    "database-restart-during-ingest": {
+      "attempts": 659,
+      "accepted": 659,
+      "rejected": 0,
+      "secondsOfRejections": 0,
+      "drained": true,
+      "seconds": 0.024,
+      "acceptedAndDelivered": 659,
+      "acceptedButLost": 0
+    }
+  }
+}

@@ -43,6 +43,7 @@ public class AuthConfiguration {
     private static final Logger LOG = LoggerFactory.getLogger(AuthConfiguration.class);
     private static final String DEFAULT_TWO_FACTOR_KEY = "development-only-change-me";
     private static final String DEFAULT_ADMIN_PASSWORD = "admin";
+    private static final SecureRandom RANDOM = new SecureRandom();
 
     @Bean
     AdminAuthService adminAuthService(Environment env, JdbcClient jdbc, PasswordEncoder encoder,
@@ -53,11 +54,10 @@ public class AuthConfiguration {
                                       @Value("${admin.max-failed-attempts:5}") int maxFailedAttempts,
                                       @Value("${admin.lockout-minutes:15}") long lockoutMinutes) {
         InsecureDefaults.reject(env, "admin.two-factor-key", twoFactorKey, DEFAULT_TWO_FACTOR_KEY);
-        SecureRandom random = new SecureRandom();
         AuthSettings settings = new AuthSettings(issuer, Duration.ofMinutes(idleMinutes), Duration.ofHours(maxHours),
                 maxFailedAttempts, Duration.ofMinutes(lockoutMinutes));
         return new AdminAuthService(new JdbcAdminUserStore(jdbc), new JdbcSessionStore(jdbc), encoder,
-                new SecretCipher(twoFactorKey, random), new Totp(random), Clock.systemUTC(), settings, random);
+                new SecretCipher(twoFactorKey, RANDOM), new Totp(RANDOM), Clock.systemUTC(), settings, RANDOM);
     }
 
     @Bean

@@ -45,29 +45,43 @@ class PlanTest {
 
     @Test
     void rejectsTaxOutsideZeroToOne() {
-        assertThatThrownBy(() -> plan(new BigDecimal("1.5"), Money.zero("USD"), Map.of())).isInstanceOf(InvalidBillingDataException.class);
-        assertThatThrownBy(() -> plan(new BigDecimal("-0.1"), Money.zero("USD"), Map.of())).isInstanceOf(InvalidBillingDataException.class);
+        Money noFee = Money.zero("USD");
+        BigDecimal above = new BigDecimal("1.5");
+        BigDecimal below = new BigDecimal("-0.1");
+
+        assertThatThrownBy(() -> plan(above, noFee, Map.of())).isInstanceOf(InvalidBillingDataException.class);
+        assertThatThrownBy(() -> plan(below, noFee, Map.of())).isInstanceOf(InvalidBillingDataException.class);
     }
 
     @Test
     void rejectsRatesAndFeesInAnotherCurrency() {
         Map<Channel, ChannelRate> euroRates = Map.of(Channel.SMS, new ChannelRate(Money.of("0.05", "EUR"), 0));
 
-        assertThatThrownBy(() -> plan(BigDecimal.ZERO, Money.zero("USD"), euroRates)).isInstanceOf(InvalidBillingDataException.class);
-        assertThatThrownBy(() -> plan(BigDecimal.ZERO, Money.of("5", "EUR"), Map.of())).isInstanceOf(InvalidBillingDataException.class);
+        Money noFee = Money.zero("USD");
+        Money euroFee = Money.of("5", "EUR");
+
+        assertThatThrownBy(() -> plan(BigDecimal.ZERO, noFee, euroRates)).isInstanceOf(InvalidBillingDataException.class);
+        assertThatThrownBy(() -> plan(BigDecimal.ZERO, euroFee, Map.of())).isInstanceOf(InvalidBillingDataException.class);
     }
 
     @Test
     void rejectsNegativePricesAndAllowances() {
-        assertThatThrownBy(() -> new ChannelRate(Money.of("-1", "USD"), 0)).isInstanceOf(InvalidBillingDataException.class);
-        assertThatThrownBy(() -> new ChannelRate(Money.of("1", "USD"), -1)).isInstanceOf(InvalidBillingDataException.class);
-        assertThatThrownBy(() -> plan(BigDecimal.ZERO, Money.of("-5", "USD"), Map.of())).isInstanceOf(InvalidBillingDataException.class);
+        Money negativePrice = Money.of("-1", "USD");
+        Money price = Money.of("1", "USD");
+        Money negativeFee = Money.of("-5", "USD");
+
+        assertThatThrownBy(() -> new ChannelRate(negativePrice, 0)).isInstanceOf(InvalidBillingDataException.class);
+        assertThatThrownBy(() -> new ChannelRate(price, -1)).isInstanceOf(InvalidBillingDataException.class);
+        assertThatThrownBy(() -> plan(BigDecimal.ZERO, negativeFee, Map.of())).isInstanceOf(InvalidBillingDataException.class);
     }
 
     @Test
     void ratesCannotBeChangedAfterConstruction() {
         Plan plan = plan(BigDecimal.ZERO, Money.zero("USD"), Map.of(Channel.SMS, ChannelRate.free("USD")));
 
-        assertThatThrownBy(() -> plan.rates().put(Channel.PUSH, ChannelRate.free("USD"))).isInstanceOf(UnsupportedOperationException.class);
+        Map<Channel, ChannelRate> rates = plan.rates();
+        ChannelRate free = ChannelRate.free("USD");
+
+        assertThatThrownBy(() -> rates.put(Channel.PUSH, free)).isInstanceOf(UnsupportedOperationException.class);
     }
 }

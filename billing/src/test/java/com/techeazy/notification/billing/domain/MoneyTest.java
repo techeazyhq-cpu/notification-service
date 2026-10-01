@@ -56,7 +56,7 @@ class MoneyTest {
     @Test
     void appliesPercentagesAndComparesAmounts() {
         assertThat(Money.of("200", "EUR").percent(new BigDecimal("0.18"))).isEqualTo(Money.of("36", "EUR"));
-        assertThat(Money.of("1", "EUR").compareTo(Money.of("2", "EUR"))).isNegative();
+        assertThat(Money.of("1", "EUR")).isLessThan(Money.of("2", "EUR"));
         assertThat(Money.of("5", "EUR").min(Money.of("3", "EUR"))).isEqualTo(Money.of("3", "EUR"));
         assertThat(Money.zero("EUR").isZero()).isTrue();
         assertThat(Money.of("0.000001", "EUR").isPositive()).isTrue();

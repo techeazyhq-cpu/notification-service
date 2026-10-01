@@ -36,6 +36,7 @@ import java.util.UUID;
 
 import static com.techeazy.notification.billing.application.BillingFixture.USD;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class AdmissionControlTest {
@@ -65,7 +66,9 @@ class AdmissionControlTest {
         Plan plan = f.smsPlan("0.05", 0);
         f.accounts.save(new BillingAccount(client, plan.id(), BillingMode.POSTPAID, null, Money.zero(USD), AccountStatus.SUSPENDED, null));
 
-        assertThatThrownBy(() -> f.admission.admit(sms(1))).isInstanceOf(AccountSuspendedException.class);
+        Admission request = sms(1);
+
+        assertThatThrownBy(() -> f.admission.admit(request)).isInstanceOf(AccountSuspendedException.class);
     }
 
     @Test
@@ -89,7 +92,9 @@ class AdmissionControlTest {
     void prepaidIsRefusedWithoutChangingAnythingWhenTheBalanceIsTooLow() {
         prepaidWithBalance("0.05", "5");
 
-        assertThatThrownBy(() -> f.admission.admit(sms(200)))
+        Admission request = sms(200);
+
+        assertThatThrownBy(() -> f.admission.admit(request))
                 .isInstanceOfSatisfying(InsufficientCreditException.class, e -> {
                     assertThat(e.balance()).isEqualTo(Money.of("5", USD));
                     assertThat(e.required()).isEqualTo(Money.of("10", USD));
@@ -123,8 +128,10 @@ class AdmissionControlTest {
     @Test
     void postpaidWithoutACapIsNeverBlocked() {
         f.account(client, f.smsPlan("1", 0), BillingMode.POSTPAID, null);
+        Admission hugeRequest = sms(5_000_000);
 
-        f.admission.admit(sms(5_000_000));
+        assertThatCode(() -> f.admission.admit(hugeRequest)).doesNotThrowAnyException();
+        assertThat(f.credits.holds).isEmpty();
     }
 
     @Test
@@ -132,7 +139,9 @@ class AdmissionControlTest {
         f.account(client, f.smsPlan("1", 0), BillingMode.POSTPAID, "100");
         f.usage.sent(client, Channel.SMS, "2026-09-03T10:00:00Z", 60);
 
-        assertThatThrownBy(() -> f.admission.admit(sms(41)))
+        Admission overCap = sms(41);
+
+        assertThatThrownBy(() -> f.admission.admit(overCap))
                 .isInstanceOfSatisfying(SpendCapExceededException.class, e -> assertThat(e.getMessage()).contains("100.00 USD", "101.00 USD"));
         f.admission.admit(sms(40));
     }
@@ -145,6 +154,7 @@ class AdmissionControlTest {
 
         f.admission.admit(sms(30));
 
-        assertThatThrownBy(() -> f.admission.admit(sms(31))).isInstanceOf(SpendCapExceededException.class);
+        Admission overCap = sms(31);
+        assertThatThrownBy(() -> f.admission.admit(overCap)).isInstanceOf(SpendCapExceededException.class);
     }
 }

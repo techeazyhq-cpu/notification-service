@@ -30,8 +30,11 @@ export function safeParse(text: string): unknown {
   }
 }
 
+const LINE_CONTINUATION = ` ${String.fromCodePoint(92)}\n`;
+
 export function shellQuote(text: string): string {
-  return `'${text.replaceAll("'", `'\''`)}'`;
+  const escaped = text.replaceAll("'", String.raw`'\''`);
+  return `'${escaped}'`;
 }
 
 export function buildUrl(endpoint: PlaygroundEndpoint, pathValues: Record<string, string>, queryValues: Record<string, string>): string {
@@ -58,11 +61,15 @@ export function buildCurl(endpoint: PlaygroundEndpoint, origin: string, url: str
   if (endpoint.upload) {
     const fields = (safeParse(body) ?? {}) as Record<string, string>;
     for (const [name, value] of Object.entries(fields)) {
-      if (name !== 'csv' && value) lines.push(`  -F ${shellQuote(`${name}=${value}`)}`);
+      if (name !== 'csv' && value) {
+        const field = shellQuote(`${name}=${value}`);
+        lines.push(`  -F ${field}`);
+      }
     }
     lines.push('  -F "file=@recipients.csv"');
   } else if (endpoint.body !== undefined) {
-    lines.push('  -H "Content-Type: application/json"', `  -d ${shellQuote(body)}`);
+    const data = shellQuote(body);
+    lines.push('  -H "Content-Type: application/json"', `  -d ${data}`);
   }
-  return lines.join(' \\n');
+  return lines.join(LINE_CONTINUATION);
 }

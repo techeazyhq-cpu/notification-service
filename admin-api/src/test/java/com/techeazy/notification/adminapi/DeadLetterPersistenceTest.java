@@ -63,9 +63,18 @@ import static org.assertj.core.api.Assertions.assertThat;
 @Testcontainers(disabledWithoutDocker = true)
 @DataJpaTest(properties = {"spring.jpa.hibernate.ddl-auto=validate", "spring.liquibase.enabled=false"})
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
-@Import(CoreConfig.class)
+@Import({CoreConfig.class, DeadLetterPersistenceTest.EncryptionForTest.class})
 @EnableAutoConfiguration
 class DeadLetterPersistenceTest {
+
+    @org.springframework.boot.test.context.TestConfiguration
+    static class EncryptionForTest {
+        @org.springframework.context.annotation.Bean
+        com.techeazy.notification.domain.FieldEncryptor fieldEncryptor() {
+            return new com.techeazy.notification.infra.AesGcmCipher("test-data-key");
+        }
+    }
+
 
     private static final Instant NOW = Instant.parse("2026-09-20T10:00:00Z");
 
@@ -73,7 +82,7 @@ class DeadLetterPersistenceTest {
     static final PostgreSQLContainer<?> PG = new PostgreSQLContainer<>("postgres:16-alpine");
 
     @DynamicPropertySource
-    static void database(DynamicPropertyRegistry registry) throws Exception {
+    static void database(DynamicPropertyRegistry registry) {
         registry.add("spring.datasource.url", PG::getJdbcUrl);
         registry.add("spring.datasource.username", PG::getUsername);
         registry.add("spring.datasource.password", PG::getPassword);

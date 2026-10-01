@@ -73,10 +73,10 @@ export default function Privacy() {
       </form>
       {error && <p className="error" role="alert">{error}</p>}
       {result && (
-        <p role="status">
+        <output className="status-block">
           Erased {result.erasedMessages} message(s).
           {result.inFlightMessages > 0 ? ` ${result.inFlightMessages} are still being delivered: repeat once they finish.` : ' Nothing left in flight.'}
-        </p>
+        </output>
       )}
     </>
   );

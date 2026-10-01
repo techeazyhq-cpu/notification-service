@@ -105,7 +105,9 @@ class SenderRepositoryTest {
         repository.insert(pending(first, "Same@acme.com"), "h1", NOW.plusSeconds(60));
 
         assertThat(repository.emailExists(first, "same@ACME.com")).isTrue();
-        assertThatThrownBy(() -> repository.insert(pending(first, "same@acme.com"), "h2", NOW.plusSeconds(60))).isInstanceOf(DuplicateKeyException.class);
+        SenderAddress duplicate = pending(first, "same@acme.com");
+        Instant expiry = NOW.plusSeconds(60);
+        assertThatThrownBy(() -> repository.insert(duplicate, "h2", expiry)).isInstanceOf(DuplicateKeyException.class);
         repository.insert(pending(second, "same@acme.com"), "h3", NOW.plusSeconds(60));
         assertThat(repository.findByClient(second)).hasSize(1);
     }
@@ -127,7 +129,8 @@ class SenderRepositoryTest {
 
         repository.markDefault(client, a.id());
         assertThat(repository.findVerifiedDefault(client)).get().extracting(SenderAddress::email).isEqualTo("a@acme.com");
-        assertThatThrownBy(() -> repository.markDefault(client, b.id())).isInstanceOf(DuplicateKeyException.class);
+        UUID bId = b.id();
+        assertThatThrownBy(() -> repository.markDefault(client, bId)).isInstanceOf(DuplicateKeyException.class);
 
         repository.clearDefault(client);
         repository.markDefault(client, b.id());

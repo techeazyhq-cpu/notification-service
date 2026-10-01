@@ -18,11 +18,13 @@
 
 package com.techeazy.notification.config;
 
+import com.techeazy.notification.domain.FieldEncryptor;
 import com.techeazy.notification.infra.AesGcmCipher;
 import com.techeazy.notification.infra.ProviderSecrets;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Primary;
 import org.springframework.core.env.Environment;
 
 /** Provider-secret encryption, and the startup checks that refuse known development defaults outside {@code local}. */
@@ -38,17 +40,25 @@ public class SecretsConfig {
     }
 
     @Bean
+    @Primary
+    FieldEncryptor personalDataEncryptor(Environment env, @Value("${notification.data-key:" + DEFAULT_SECRETS_KEY + "}") String dataKey) {
+        InsecureDefaults.reject(env, "notification.data-key", dataKey, DEFAULT_SECRETS_KEY);
+        return new AesGcmCipher(dataKey);
+    }
+
+    @Bean
     ProviderSecrets providerSecrets(AesGcmCipher providerSecretsCipher) {
         return new ProviderSecrets(providerSecretsCipher);
     }
 
     /** Exists only so its factory method below runs during startup; nothing depends on the instance itself. */
-    static final class DatabaseCredentialsChecked {
+    record DatabaseCredentialsChecked(String property) {
     }
 
     @Bean
     DatabaseCredentialsChecked databaseCredentialsChecked(Environment env, @Value("${spring.datasource.password:}") String dbPassword) {
-        InsecureDefaults.reject(env, "spring.datasource.password", dbPassword, "notification", "notification_app");
-        return new DatabaseCredentialsChecked();
+        String property = "spring.datasource.password";
+        InsecureDefaults.reject(env, property, dbPassword, "notification", "notification_app");
+        return new DatabaseCredentialsChecked(property);
     }
 }

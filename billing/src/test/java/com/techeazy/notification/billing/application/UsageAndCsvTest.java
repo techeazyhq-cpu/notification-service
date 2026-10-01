@@ -70,7 +70,10 @@ class UsageAndCsvTest {
 
     @Test
     void aClientWithoutAnAccountHasNoStatement() {
-        assertThatThrownBy(() -> f.usageService.statement(UUID.randomUUID(), BillingPeriod.parse("2026-08")))
+        UUID unknown = UUID.randomUUID();
+        BillingPeriod august = BillingPeriod.parse("2026-08");
+
+        assertThatThrownBy(() -> f.usageService.statement(unknown, august))
                 .isInstanceOf(BillingNotFoundException.class);
     }
 
@@ -81,11 +84,12 @@ class UsageAndCsvTest {
 
         String csv = InvoiceCsv.render(invoice);
 
-        assertThat(csv).contains("Invoice,INV-2026-000001", "Period,2026-08", "Status,ISSUED", "Currency,USD");
-        assertThat(csv).contains("Description,Channel,Quantity,Unit price,Amount");
-        assertThat(csv).contains("\"SMS messages: 1500 sent, 1000 included free\",SMS,500,0.05,25.00");
-        assertThat(csv).contains("Subtotal,,,,25.00", "Tax 10%,,,,2.50", "Total,,,,27.50", "Paid,,,,0.00", "Outstanding,,,,27.50");
-        assertThat(csv).endsWith("\r\n");
+        assertThat(csv)
+                .contains("Invoice,INV-2026-000001", "Period,2026-08", "Status,ISSUED", "Currency,USD")
+                .contains("Description,Channel,Quantity,Unit price,Amount")
+                .contains("\"SMS messages: 1500 sent, 1000 included free\",SMS,500,0.05,25.00")
+                .contains("Subtotal,,,,25.00", "Tax 10%,,,,2.50", "Total,,,,27.50", "Paid,,,,0.00", "Outstanding,,,,27.50")
+                .endsWith("\r\n");
     }
 
     @Test

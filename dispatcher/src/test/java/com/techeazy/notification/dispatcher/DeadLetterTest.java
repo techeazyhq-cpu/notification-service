@@ -61,7 +61,7 @@ class DeadLetterTest {
     void aMessageStillInFlightBecomesAFailedDeadLetterAndIsCounted() {
         when(messages.markDeadLettered(eq(id), eq(MessageStatus.IN_FLIGHT), eq(DeadLetterRecorder.REASON), any())).thenReturn(1);
 
-        assertThat(recorder.record(id, "SMS")).isTrue();
+        assertThat(recorder.recordDeadLetter(id, "SMS")).isTrue();
 
         assertThat(meters.get("notification.dead_letter").tag("channel", "SMS").counter().count()).isEqualTo(1.0);
     }
@@ -70,7 +70,7 @@ class DeadLetterTest {
     void aMessageThatAlreadyFinishedIsLeftAlone() {
         when(messages.markDeadLettered(eq(id), any(), anyString(), any())).thenReturn(0);
 
-        assertThat(recorder.record(id, "SMS")).isFalse();
+        assertThat(recorder.recordDeadLetter(id, "SMS")).isFalse();
 
         assertThat(meters.find("notification.dead_letter").counter()).isNull();
     }

@@ -1,0 +1,60 @@
+{
+  "label": "encrypted-transport-200rps",
+  "date": "2026-09-26T07:03:21.830Z",
+  "environment": {
+    "host": "Vasanth",
+    "cpus": 12,
+    "memGiB": 16,
+    "note": "one instance of each service, single-node Postgres, Redis and Pulsar, all in Docker Desktop on this machine"
+  },
+  "singleSend": {
+    "targetRatePerSecond": 200,
+    "acceptedMessages": 12001,
+    "achievedRatePerSecond": 175.38782897440825,
+    "latencyMs": {
+      "med": 13.06653,
+      "p(90)": 19.755692,
+      "p(95)": 25.366256,
+      "p(99)": 49.194169,
+      "max": 137.726454,
+      "avg": 14.716542860428282,
+      "thresholds": {
+        "p(99)<500": false
+      }
+    },
+    "errorRate": 0
+  },
+  "afterLoadDrain": {
+    "backlogAtStart": 0,
+    "seconds": 0.053
+  },
+  "statusRead": {
+    "latencyMs": {
+      "avg": 4.169314607732051,
+      "med": 3.881029,
+      "p(90)": 4.915003,
+      "p(95)": 5.404973,
+      "p(99)": 9.04575,
+      "max": 70.003577,
+      "thresholds": {
+        "p(99)<500": false
+      }
+    }
+  },
+  "bulk": {
+    "recipients": 10000,
+    "acceptSeconds": 1.111,
+    "acceptRecipientsPerSecond": 9001,
+    "drainSeconds": 27.887,
+    "deliveredPerSecond": 359,
+    "finalStatus": "PARTIALLY_FAILED",
+    "counts": {
+      "pending": 0,
+      "queued": 0,
+      "processing": 0,
+      "retrying": 0,
+      "sent": 9999,
+      "failed": 1
+    }
+  }
+}

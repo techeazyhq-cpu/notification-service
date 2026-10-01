@@ -33,7 +33,11 @@ import java.util.UUID;
 @Repository
 public class SenderRepository {
 
+    private static final String CLIENT = "client";
+    private static final String EMAIL = "email";
+
     private static final String COLUMNS = "id, client_id, email, display_name, status, is_default, created_at, verified_at, verification_sent_at";
+    private static final String SELECT_SENDER = "SELECT " + COLUMNS + " FROM client_sender";
 
     private final JdbcClient jdbc;
 
@@ -46,38 +50,38 @@ public class SenderRepository {
                 INSERT INTO client_sender (id, client_id, email, display_name, status, is_default, token_hash, token_expires_at,
                                            verification_sent_at, created_at)
                 VALUES (:id, :client, :email, :name, 'PENDING', FALSE, :hash, :expires, :now, :now)
-                """).param("id", sender.id()).param("client", sender.clientId()).param("email", sender.email())
+                """).param("id", sender.id()).param(CLIENT, sender.clientId()).param(EMAIL, sender.email())
                 .param("name", sender.displayName()).param("hash", tokenHash).param("expires", Timestamp.from(tokenExpiresAt))
                 .param("now", Timestamp.from(sender.createdAt())).update();
     }
 
     public List<SenderAddress> findByClient(UUID clientId) {
-        return jdbc.sql("SELECT " + COLUMNS + " FROM client_sender WHERE client_id = :client ORDER BY created_at")
-                .param("client", clientId).query(SenderRepository::map).list();
+        return jdbc.sql(SELECT_SENDER + " WHERE client_id = :client ORDER BY created_at")
+                .param(CLIENT, clientId).query(SenderRepository::map).list();
     }
 
     public Optional<SenderAddress> find(UUID clientId, UUID id) {
-        return jdbc.sql("SELECT " + COLUMNS + " FROM client_sender WHERE client_id = :client AND id = :id")
-                .param("client", clientId).param("id", id).query(SenderRepository::map).optional();
+        return jdbc.sql(SELECT_SENDER + " WHERE client_id = :client AND id = :id")
+                .param(CLIENT, clientId).param("id", id).query(SenderRepository::map).optional();
     }
 
     public Optional<SenderAddress> findVerifiedByEmail(UUID clientId, String email) {
-        return jdbc.sql("SELECT " + COLUMNS + " FROM client_sender WHERE client_id = :client AND lower(email) = lower(:email) AND status = 'VERIFIED'")
-                .param("client", clientId).param("email", email).query(SenderRepository::map).optional();
+        return jdbc.sql(SELECT_SENDER + " WHERE client_id = :client AND lower(email) = lower(:email) AND status = 'VERIFIED'")
+                .param(CLIENT, clientId).param(EMAIL, email).query(SenderRepository::map).optional();
     }
 
     public Optional<SenderAddress> findVerifiedDefault(UUID clientId) {
-        return jdbc.sql("SELECT " + COLUMNS + " FROM client_sender WHERE client_id = :client AND is_default AND status = 'VERIFIED'")
-                .param("client", clientId).query(SenderRepository::map).optional();
+        return jdbc.sql(SELECT_SENDER + " WHERE client_id = :client AND is_default AND status = 'VERIFIED'")
+                .param(CLIENT, clientId).query(SenderRepository::map).optional();
     }
 
     public int countByClient(UUID clientId) {
-        return jdbc.sql("SELECT count(*) FROM client_sender WHERE client_id = :client").param("client", clientId).query(Integer.class).single();
+        return jdbc.sql("SELECT count(*) FROM client_sender WHERE client_id = :client").param(CLIENT, clientId).query(Integer.class).single();
     }
 
     public boolean emailExists(UUID clientId, String email) {
         return jdbc.sql("SELECT count(*) FROM client_sender WHERE client_id = :client AND lower(email) = lower(:email)")
-                .param("client", clientId).param("email", email).query(Integer.class).single() > 0;
+                .param(CLIENT, clientId).param(EMAIL, email).query(Integer.class).single() > 0;
     }
 
     public void replaceToken(UUID id, String tokenHash, Instant expiresAt, Instant sentAt) {
@@ -95,22 +99,22 @@ public class SenderRepository {
     }
 
     public void clearDefault(UUID clientId) {
-        jdbc.sql("UPDATE client_sender SET is_default = FALSE WHERE client_id = :client AND is_default").param("client", clientId).update();
+        jdbc.sql("UPDATE client_sender SET is_default = FALSE WHERE client_id = :client AND is_default").param(CLIENT, clientId).update();
     }
 
     public boolean markDefault(UUID clientId, UUID id) {
         return jdbc.sql("UPDATE client_sender SET is_default = TRUE WHERE client_id = :client AND id = :id AND status = 'VERIFIED'")
-                .param("client", clientId).param("id", id).update() == 1;
+                .param(CLIENT, clientId).param("id", id).update() == 1;
     }
 
     public boolean delete(UUID clientId, UUID id) {
-        return jdbc.sql("DELETE FROM client_sender WHERE client_id = :client AND id = :id").param("client", clientId).param("id", id).update() == 1;
+        return jdbc.sql("DELETE FROM client_sender WHERE client_id = :client AND id = :id").param(CLIENT, clientId).param("id", id).update() == 1;
     }
 
     private static SenderAddress map(ResultSet rs, int row) throws SQLException {
         Timestamp verified = rs.getTimestamp("verified_at");
         Timestamp sent = rs.getTimestamp("verification_sent_at");
-        return new SenderAddress(rs.getObject("id", UUID.class), rs.getObject("client_id", UUID.class), rs.getString("email"),
+        return new SenderAddress(rs.getObject("id", UUID.class), rs.getObject("client_id", UUID.class), rs.getString(EMAIL),
                 rs.getString("display_name"), SenderAddress.Status.valueOf(rs.getString("status")), rs.getBoolean("is_default"),
                 rs.getTimestamp("created_at").toInstant(), verified == null ? null : verified.toInstant(), sent == null ? null : sent.toInstant());
     }

@@ -33,7 +33,7 @@ class ProviderSecretsTest {
         Map<String, String> stored = secrets.encryptForStorage(Map.of(
                 "host", "smtp.example.com", "password", "hunter2", "authHeader", "Bearer abc"));
 
-        assertThat(stored.get("host")).isEqualTo("smtp.example.com");
+        assertThat(stored).containsEntry("host", "smtp.example.com");
         assertThat(stored.get("password")).startsWith("enc:").isNotEqualTo("enc:hunter2");
         assertThat(stored.get("authHeader")).startsWith("enc:");
     }
@@ -43,14 +43,14 @@ class ProviderSecretsTest {
         Map<String, String> stored = secrets.encryptForStorage(Map.of("password", "hunter2"));
         Map<String, String> used = secrets.decryptForUse(stored);
 
-        assertThat(used.get("password")).isEqualTo("hunter2");
+        assertThat(used).containsEntry("password", "hunter2");
     }
 
     @Test
     void leavesLegacyPlaintextUntouchedOnDecrypt() {
         Map<String, String> legacy = Map.of("password", "still-plaintext-from-before-this-change");
 
-        assertThat(secrets.decryptForUse(legacy).get("password")).isEqualTo("still-plaintext-from-before-this-change");
+        assertThat(secrets.decryptForUse(legacy)).containsEntry("password", "still-plaintext-from-before-this-change");
     }
 
     @Test
@@ -58,7 +58,7 @@ class ProviderSecretsTest {
         Map<String, String> stored = secrets.encryptForStorage(Map.of("password", "hunter2"));
         Map<String, String> storedAgain = secrets.encryptForStorage(stored);
 
-        assertThat(storedAgain.get("password")).isEqualTo(stored.get("password"));
+        assertThat(storedAgain).containsEntry("password", stored.get("password"));
     }
 
     @Test

@@ -21,6 +21,9 @@ import { test } from 'node:test';
 import { CATALOG } from '../src/playgroundCatalog.ts';
 import { buildCurl, buildUrl, formatBody, safeParse, shellQuote } from '../src/playgroundLogic.ts';
 
+const byText = (a, b) => a.localeCompare(b);
+const CONTINUATION = ` ${String.fromCodePoint(92)}\n`;
+
 const endpoint = (id) => CATALOG.find((e) => e.id === id);
 
 test('every endpoint is unique and its sample body is valid JSON', () => {
@@ -33,13 +36,13 @@ test('every endpoint is unique and its sample body is valid JSON', () => {
 
 test('every path placeholder has an input and every input a placeholder', () => {
   for (const e of CATALOG) {
-    const placeholders = [...e.path.matchAll(/\{(\w+)\}/g)].map((m) => m[1]).sort();
-    assert.deepEqual(Object.keys(e.pathParams ?? {}).sort(), placeholders, e.id);
+    const placeholders = [...e.path.matchAll(/\{(\w+)\}/g)].map((m) => m[1]).sort(byText);
+    assert.deepEqual(Object.keys(e.pathParams ?? {}).sort(byText), placeholders, e.id);
   }
 });
 
 test('sending endpoints are flagged live and read-only ones are not', () => {
-  assert.deepEqual(CATALOG.filter((e) => e.live).map((e) => e.id).sort(), ['bulk', 'send', 'upload']);
+  assert.deepEqual(CATALOG.filter((e) => e.live).map((e) => e.id).sort(byText), ['bulk', 'send', 'upload']);
   assert.ok(CATALOG.filter((e) => e.method === 'GET').every((e) => !e.live));
 });
 
@@ -50,7 +53,7 @@ test('buildUrl fills and encodes path values and keeps only filled query values'
 });
 
 test('shellQuote survives single quotes', () => {
-  assert.equal(shellQuote("it's"), "'it'\''s'");
+  assert.equal(shellQuote("it's"), String.raw`'it'\''s'`);
 });
 
 test('curl for a JSON call uses the key placeholder, the body and the idempotency key', () => {
@@ -61,18 +64,18 @@ test('curl for a JSON call uses the key placeholder, the body and the idempotenc
   assert.match(curl, /-H "X-API-Key: \$API_KEY"/);
   assert.match(curl, /-H 'Idempotency-Key: key-1'/);
   assert.match(curl, /-H "Content-Type: application\/json"/);
-  assert.ok(curl.includes("it'\''s"));
+  assert.ok(curl.includes(String.raw`it'\''s`));
 });
 
 test('curl for a GET has no body and no content type', () => {
   const curl = buildCurl(endpoint('me'), 'http://localhost:5174', '/v1/me', '', '');
 
-  assert.equal(curl, 'curl -X GET \'http://localhost:5174/v1/me\' \\n  -H "X-API-Key: $API_KEY"');
+  assert.equal(curl, ["curl -X GET 'http://localhost:5174/v1/me'", '  -H "X-API-Key: $API_KEY"'].join(CONTINUATION));
 });
 
 test('curl for the CSV upload becomes form fields with the file left to the caller', () => {
   const body = JSON.stringify({ channel: 'SMS', body: 'Hi {{name}}', csv: 'recipient\n+1' });
-  const curl = buildCurl(endpoint('upload'), 'http://x', '/v1/notifications/bulk/upload', body, '');
+  const curl = buildCurl(endpoint('upload'), 'https://x', '/v1/notifications/bulk/upload', body, '');
 
   assert.match(curl, /-F 'channel=SMS'/);
   assert.match(curl, /-F 'body=Hi \{\{name\}\}'/);

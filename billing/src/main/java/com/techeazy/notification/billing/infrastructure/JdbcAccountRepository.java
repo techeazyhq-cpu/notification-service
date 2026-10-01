@@ -23,6 +23,7 @@ import com.techeazy.notification.billing.domain.AccountStatus;
 import com.techeazy.notification.billing.domain.BillingAccount;
 import com.techeazy.notification.billing.domain.BillingMode;
 import com.techeazy.notification.billing.domain.BillingNotFoundException;
+import com.techeazy.notification.billing.domain.Money;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.simple.JdbcClient;
 
@@ -56,7 +57,7 @@ class JdbcAccountRepository implements AccountRepository {
                         monthly_spend_cap = EXCLUDED.monthly_spend_cap, status = EXCLUDED.status,
                         billing_email = EXCLUDED.billing_email, updated_at = now()""")
                     .param("client", account.clientId()).param("plan", account.planId()).param("mode", account.mode().name())
-                    .param("cap", account.spendCap().map(cap -> cap.amount()).orElse(null))
+                    .param("cap", account.spendCap().map(Money::amount).orElse(null))
                     .param("balance", account.creditBalance().amount()).param("status", account.status().name())
                     .param("email", account.billingEmail())
                     .update();

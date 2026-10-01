@@ -26,13 +26,13 @@ import jakarta.annotation.PreDestroy;
 import org.apache.pulsar.client.api.CompressionType;
 import org.apache.pulsar.client.api.Producer;
 import org.apache.pulsar.client.api.PulsarClient;
-import org.apache.pulsar.client.api.PulsarClientException;
 import org.springframework.stereotype.Component;
 
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.TimeUnit;
 
 /** One producer per channel topic. Payload is a small versioned JSON envelope holding only the message id. */
 @Component
@@ -45,7 +45,7 @@ public class PulsarMessagePublisher implements MessagePublisher {
     private final PulsarClient client;
     private final NotificationProperties props;
     private final ObjectMapper mapper;
-    private final Map<Channel, Producer<byte[]>> producers = new ConcurrentHashMap<>();
+    private final Map<Channel, CompletableFuture<Producer<byte[]>>> producers = new ConcurrentHashMap<>();
 
     public PulsarMessagePublisher(PulsarClient client, NotificationProperties props, ObjectMapper mapper) {
         this.client = client;
@@ -61,33 +61,39 @@ public class PulsarMessagePublisher implements MessagePublisher {
     public CompletableFuture<Void> publish(Channel channel, UUID messageId, UUID clientId) {
         try {
             byte[] payload = mapper.writeValueAsBytes(new Envelope(Envelope.CURRENT_VERSION, messageId, channel));
-            return producers.computeIfAbsent(channel, this::createProducer)
-                    .newMessage()
-                    .key(clientId.toString())
-                    .value(payload)
-                    .sendAsync()
-                    .thenAccept(id -> { /* only completion matters; the broker message id is not needed */ });
+            return producerFor(channel)
+                    .thenCompose(producer -> producer.newMessage().key(clientId.toString()).value(payload).sendAsync())
+                    .<Void>thenApply(id -> null)
+                    .orTimeout(props.getPulsar().getPublishTimeoutSeconds(), TimeUnit.SECONDS);
         } catch (Exception e) {
             return CompletableFuture.failedFuture(e);
         }
     }
 
-    private Producer<byte[]> createProducer(Channel channel) {
-        try {
-            return client.newProducer()
-                    .topic(topicFor(props, channel))
-                    .producerName("notification-producer-" + channel.topicSuffix() + "-" + UUID.randomUUID())
-                    .compressionType(CompressionType.LZ4)
-                    .enableBatching(true)
-                    .blockIfQueueFull(true)
-                    .create();
-        } catch (PulsarClientException e) {
-            throw new IllegalStateException("Cannot create Pulsar producer for " + channel, e);
-        }
+    /** Creates a channel's producer without blocking; a failed creation is forgotten so the next publish tries again. */
+    private CompletableFuture<Producer<byte[]>> producerFor(Channel channel) {
+        CompletableFuture<Producer<byte[]>> future = producers.computeIfAbsent(channel, this::createProducer);
+        future.whenComplete((producer, error) -> {
+            if (error != null) {
+                producers.remove(channel, future);
+            }
+        });
+        return future;
+    }
+
+    private CompletableFuture<Producer<byte[]>> createProducer(Channel channel) {
+        return client.newProducer()
+                .topic(topicFor(props, channel))
+                .producerName("notification-producer-" + channel.topicSuffix() + "-" + UUID.randomUUID())
+                .compressionType(CompressionType.LZ4)
+                .enableBatching(true)
+                .blockIfQueueFull(true)
+                .sendTimeout(props.getPulsar().getPublishTimeoutSeconds(), TimeUnit.SECONDS)
+                .createAsync();
     }
 
     @PreDestroy
     void close() {
-        producers.values().forEach(Producer::closeAsync);
+        producers.values().forEach(future -> future.thenAccept(Producer::closeAsync));
     }
 }

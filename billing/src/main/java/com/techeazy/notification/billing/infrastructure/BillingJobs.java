@@ -80,10 +80,12 @@ public class BillingJobs {
         void run() {
             BillingPeriod period = BillingPeriod.previous(clock);
             GenerationReport report = invoices.generateForAll(period);
-            log.info("Invoices for {}: {} created, {} existing, {} failed", period.label(), report.created(),
-                    report.existing(), report.failures().size());
+            String label = period.label();
+            int failed = report.failures().size();
+            log.info("Invoices for {}: {} created, {} existing, {} failed", label, report.created(), report.existing(), failed);
             if (properties.getInvoicing().isAutoIssue()) {
-                log.info("Issued {} invoice(s) for {}", invoices.issueDrafts(period), period.label());
+                int issued = invoices.issueDrafts(period);
+                log.info("Issued {} invoice(s) for {}", issued, label);
             }
         }
     }

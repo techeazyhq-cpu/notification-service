@@ -28,6 +28,7 @@ import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.awaitility.Awaitility.await;
 
 class CachedLookupsTest {
 
@@ -63,7 +64,7 @@ class CachedLookupsTest {
     }
 
     @Test
-    void entriesExpireSoAChangeIsSeenAfterTheLifetime() throws InterruptedException {
+    void entriesExpireSoAChangeIsSeenAfterTheLifetime() {
         AtomicInteger loads = new AtomicInteger();
         AccountLookup cached = CachedLookups.accounts(id -> {
             loads.incrementAndGet();
@@ -72,9 +73,11 @@ class CachedLookupsTest {
         UUID client = UUID.randomUUID();
         cached.findByClientId(client);
 
-        Thread.sleep(120);
-        cached.findByClientId(client);
+        await().atMost(Duration.ofSeconds(5)).until(() -> {
+            cached.findByClientId(client);
+            return loads.get() >= 2;
+        });
 
-        assertThat(loads).hasValue(2);
+        assertThat(loads).hasValueGreaterThanOrEqualTo(2);
     }
 }

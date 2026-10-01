@@ -34,7 +34,9 @@ class MigrationApplicationTest {
         MigrationProperties props = new MigrationProperties();
         props.setPassword("notification");
 
-        assertThatThrownBy(() -> app.migrationService(props, new MockEnvironment()))
+        MockEnvironment environment = new MockEnvironment();
+
+        assertThatThrownBy(() -> app.migrationService(props, environment))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("migration.password");
     }

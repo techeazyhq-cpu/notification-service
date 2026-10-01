@@ -27,7 +27,6 @@ import com.techeazy.notification.clientapi.Dtos.SubmitResponse;
 import com.techeazy.notification.clientapi.IngestPersister.Recipient;
 import com.techeazy.notification.domain.*;
 import com.techeazy.notification.persistence.NotificationRequestRepository;
-import com.techeazy.notification.persistence.TemplateRepository;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
 import org.springframework.beans.factory.annotation.Value;
