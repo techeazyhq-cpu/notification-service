@@ -25,6 +25,7 @@ jobs:
           severity: HIGH,CRITICAL
           ignore-unfixed: true
           exit-code: "1"
+          trivyignores: .trivyignore
 
   codeql:
     name: CodeQL (${{ matrix.language }})
