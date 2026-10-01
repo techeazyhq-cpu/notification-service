@@ -18,6 +18,7 @@
 
 package com.techeazy.notification.adminapi;
 
+import io.micrometer.core.instrument.MeterRegistry;
 import jakarta.servlet.DispatcherType;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpMethod;
@@ -28,6 +29,8 @@ import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
+import com.techeazy.notification.adminapi.audit.AuditLog;
+import com.techeazy.notification.adminapi.audit.AuditTrailFilter;
 import com.techeazy.notification.adminapi.auth.AdminAuthService;
 import com.techeazy.notification.adminapi.auth.BearerTokenFilter;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
@@ -42,6 +45,7 @@ import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
+import java.time.Clock;
 import java.util.List;
 
 /**
@@ -77,7 +81,8 @@ class SecurityConfig {
      */
     @Bean
     @SuppressWarnings("java:S4502") // reviewed: stateless header-authenticated API, see Javadoc
-    SecurityFilterChain chain(HttpSecurity http, AdminAuthService auth) throws Exception {
+    SecurityFilterChain chain(HttpSecurity http, AdminAuthService auth, AuditLog auditLog, MeterRegistry meters)
+            throws Exception {
         http.csrf(AbstractHttpConfigurer::disable)
                 .cors(Customizer.withDefaults())
                 .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
@@ -91,6 +96,7 @@ class SecurityConfig {
                         .requestMatchers("/api/admin/auth/**").hasRole(VIEWER)
                         // Managing other administrators is always an ADMIN action, GET included.
                         .requestMatchers("/api/admin/administrators/**").hasRole(ADMIN)
+                        .requestMatchers("/api/admin/audit-events/**").hasRole(ADMIN)
                         // Day-to-day operational recovery actions: OPERATOR, not full ADMIN (see ADR-015).
                         .requestMatchers(HttpMethod.POST, "/api/admin/dead-letters/reprocess").hasRole(OPERATOR)
                         .requestMatchers(HttpMethod.POST, "/api/admin/messages/*/retry").hasRole(OPERATOR)
@@ -102,6 +108,7 @@ class SecurityConfig {
                         .requestMatchers(API).hasRole(ADMIN)
                         .anyRequest().denyAll())
                 .addFilterBefore(new BearerTokenFilter(auth), UsernamePasswordAuthenticationFilter.class)
+                .addFilterAfter(new AuditTrailFilter(auditLog, Clock.systemUTC(), meters), BearerTokenFilter.class)
                 .exceptionHandling(e -> e.authenticationEntryPoint(new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED)));
         return http.build();
     }

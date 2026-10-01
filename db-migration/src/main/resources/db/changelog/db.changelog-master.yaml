@@ -34,3 +34,5 @@ databaseChangeLog:
       file: db/changelog/changes/008-dead-letters.sql
   - include:
       file: db/changelog/changes/009-admin-roles.sql
+  - include:
+      file: db/changelog/changes/010-admin-audit-log.sql

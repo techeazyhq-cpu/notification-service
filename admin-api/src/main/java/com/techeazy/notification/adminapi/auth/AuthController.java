@@ -18,6 +18,8 @@
 
 package com.techeazy.notification.adminapi.auth;
 
+import com.techeazy.notification.adminapi.audit.AuditTrailFilter;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.constraints.NotBlank;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -57,7 +59,8 @@ class AuthController {
     }
 
     @PostMapping("/login")
-    LoginResponse login(@RequestBody @jakarta.validation.Valid LoginRequest request) {
+    LoginResponse login(@RequestBody @jakarta.validation.Valid LoginRequest request, HttpServletRequest httpRequest) {
+        httpRequest.setAttribute(AuditTrailFilter.CLAIMED_ACTOR_ATTRIBUTE, request.username());
         AdminAuthService.Login login = auth.login(request.username(), request.password(), request.verificationCode());
         return new LoginResponse(login.token(), login.expiresAt(), login.twoFactorEnabled(), login.initialPassword(), login.role());
     }

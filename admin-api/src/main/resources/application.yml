@@ -15,6 +15,7 @@
 # @author Vasantha Kumar <vasantha.kumar@hotmail.com>
 server:
   port: ${SERVER_PORT:8081}
+  forward-headers-strategy: ${FORWARD_HEADERS_STRATEGY:none}
 
 spring:
   application:

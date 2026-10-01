@@ -94,6 +94,15 @@ export interface Point { bucket: string; channel: string; status: string; count:
 export interface MessageRow { id: string; requestId: string; clientId: string; clientName: string; channel: string; recipient: string; status: string; attempts: number; lastError?: string; providerMessageId?: string; createdAt: string; sentAt?: string }
 export interface MessagePage { items: MessageRow[]; page: number; size: number; totalItems: number }
 
+export const AUDIT_OUTCOMES = ['SUCCEEDED', 'REJECTED', 'DENIED', 'FAILED'] as const;
+export type AuditOutcome = (typeof AUDIT_OUTCOMES)[number];
+export interface AuditEvent {
+  id: string; occurredAt: string; actor: string | null; actorRole: string | null; httpMethod: string;
+  route: string | null; path: string; statusCode: number; outcome: AuditOutcome;
+  sourceAddress: string | null; userAgent: string | null;
+}
+export interface AuditPage { items: AuditEvent[]; page: number; size: number; totalItems: number }
+
 export async function download(path: string, filename: string): Promise<void> {
   const res = await fetch('/api/admin' + path, { headers: { Authorization: auth.get() ?? '' } });
   if (!res.ok) throw new ApiError(res.status, `HTTP ${res.status}`);

@@ -18,8 +18,13 @@
 
 package com.techeazy.notification.adminapi;
 
+import com.techeazy.notification.adminapi.audit.AuditEvent;
+import com.techeazy.notification.adminapi.audit.AuditOutcome;
+import com.techeazy.notification.adminapi.audit.RecordingAuditLog;
 import com.techeazy.notification.adminapi.auth.AdminAuthService;
 import com.techeazy.notification.adminapi.auth.AdminRole;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import jakarta.servlet.Filter;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -59,17 +64,30 @@ class SecurityRulesTest {
         AdminAuthService adminAuthService() {
             return mock(AdminAuthService.class);
         }
+
+        @Bean
+        RecordingAuditLog auditLog() {
+            return new RecordingAuditLog();
+        }
+
+        @Bean
+        MeterRegistry meterRegistry() {
+            return new SimpleMeterRegistry();
+        }
     }
 
     @Autowired
     private WebApplicationContext context;
     @Autowired
     private AdminAuthService auth;
+    @Autowired
+    private RecordingAuditLog auditLog;
 
     private MockMvc mvc;
 
     @BeforeEach
     void setUp() {
+        auditLog.clear();
         mvc = MockMvcBuilders.webAppContextSetup(context).addFilters(context.getBean("springSecurityFilterChain", Filter.class)).build();
         for (AdminRole role : AdminRole.values()) {
             when(auth.authenticate(role.name())).thenReturn(Optional.of(new AdminAuthService.AuthenticatedSession("user", "hash", role)));
@@ -116,6 +134,51 @@ class SecurityRulesTest {
         assertThat(status(AdminRole.ADMIN, HttpMethod.POST, "/api/admin/clients")).isEqualTo(404);
         assertThat(status(AdminRole.ADMIN, HttpMethod.DELETE, "/api/admin/providers/1")).isEqualTo(404);
         assertThat(status(AdminRole.ADMIN, HttpMethod.GET, "/api/admin/administrators")).isEqualTo(404);
+    }
+
+    @Test
+    void onlyAnAdminMayReadTheAuditLog() throws Exception {
+        assertThat(status(AdminRole.VIEWER, HttpMethod.GET, "/api/admin/audit-events")).isEqualTo(403);
+        assertThat(status(AdminRole.OPERATOR, HttpMethod.GET, "/api/admin/audit-events")).isEqualTo(403);
+        assertThat(status(AdminRole.ADMIN, HttpMethod.GET, "/api/admin/audit-events")).isEqualTo(404);
+    }
+
+    @Test
+    void aChangeTheRoleDoesNotAllowIsAuditedAsDeniedWithWhoTriedIt() throws Exception {
+        status(AdminRole.VIEWER, HttpMethod.POST, "/api/admin/clients/7f0c/rotate-key");
+
+        assertThat(auditLog.recorded()).singleElement().satisfies(event -> {
+            assertThat(event.actor()).isEqualTo("user");
+            assertThat(event.actorRole()).isEqualTo(AdminRole.VIEWER);
+            assertThat(event.path()).isEqualTo("/api/admin/clients/7f0c/rotate-key");
+            assertThat(event.statusCode()).isEqualTo(403);
+            assertThat(event.outcome()).isEqualTo(AuditOutcome.DENIED);
+        });
+    }
+
+    @Test
+    void anUnauthenticatedChangeAttemptIsAuditedWithoutAnActor() throws Exception {
+        status(null, HttpMethod.DELETE, "/api/admin/providers/1");
+
+        assertThat(auditLog.recorded()).singleElement().satisfies(event -> {
+            assertThat(event.actor()).isNull();
+            assertThat(event.statusCode()).isEqualTo(401);
+            assertThat(event.outcome()).isEqualTo(AuditOutcome.DENIED);
+        });
+    }
+
+    @Test
+    void aChangeThatPassesSecurityIsAuditedWithTheAuthenticatedRole() throws Exception {
+        status(AdminRole.OPERATOR, HttpMethod.POST, "/api/admin/dead-letters/reprocess");
+
+        assertThat(auditLog.recorded()).singleElement().extracting(AuditEvent::actorRole).isEqualTo(AdminRole.OPERATOR);
+    }
+
+    @Test
+    void readsAreNotAudited() throws Exception {
+        status(AdminRole.ADMIN, HttpMethod.GET, "/api/admin/clients");
+
+        assertThat(auditLog.recorded()).isEmpty();
     }
 
     @Test

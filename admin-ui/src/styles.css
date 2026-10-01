@@ -56,9 +56,9 @@ button.danger { color: var(--bad); }
 button.link { background: none; border: none; color: var(--muted); padding: 6px 8px; }
 button:disabled { opacity: .5; cursor: default; }
 .badge { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: 12px; background: color-mix(in srgb, var(--muted) 18%, transparent); }
-.badge.SENT, .badge.ACTIVE { background: color-mix(in srgb, var(--ok) 20%, transparent); color: var(--ok); }
-.badge.FAILED, .badge.DISABLED { background: color-mix(in srgb, var(--bad) 18%, transparent); color: var(--bad); }
-.badge.RETRYING { background: color-mix(in srgb, var(--warn) 20%, transparent); color: var(--warn); }
+.badge.SENT, .badge.ACTIVE, .badge.SUCCEEDED { background: color-mix(in srgb, var(--ok) 20%, transparent); color: var(--ok); }
+.badge.FAILED, .badge.DISABLED, .badge.DENIED { background: color-mix(in srgb, var(--bad) 18%, transparent); color: var(--bad); }
+.badge.RETRYING, .badge.REJECTED { background: color-mix(in srgb, var(--warn) 20%, transparent); color: var(--warn); }
 .badge.QUEUED, .badge.PROCESSING, .badge.PENDING { background: color-mix(in srgb, var(--info) 20%, transparent); color: var(--info); }
 .error { color: var(--bad); }
 .notice { background: color-mix(in srgb, var(--ok) 14%, var(--panel)); border: 1px solid var(--ok); border-radius: 8px; padding: 10px 12px; margin-bottom: 16px; word-break: break-all; }
