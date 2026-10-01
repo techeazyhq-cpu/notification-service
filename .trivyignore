@@ -1,0 +1,21 @@
+# Vulnerabilities accepted for now, each with a reason and a re-review date. See ADR-019 for the full write-up.
+# Review this file whenever it's touched, and at the latest by its earliest expiry date below.
+
+# io.netty:netty-handler, shaded inside org.apache.pulsar:pulsar-client 4.2.4 under org.apache.pulsar.shade.io.netty.
+# No newer pulsar-client release exists yet (4.2.4 is the latest stable; 5.0.0 is only pre-release milestones).
+# The flaw is in Netty's SNI-based virtual-host routing (SniHandler): a server using it to route inbound TLS
+# connections by server name can be made to fall back to a default handler on a fragmented ClientHello. Our usage
+# of this shaded Netty is as a TLS client connecting to one configured Pulsar broker (notification.pulsar.service-url),
+# never as an SNI-routing proxy accepting arbitrary inbound connections, so this code path is not reachable here.
+# Re-review: upgrade pulsar-client once a release ships with a patched shade, or sooner if Pulsar's own usage of
+# Netty's server-side SNI routing is found.
+CVE-2026-75595 exp:2026-12-31
+
+# org.bouncycastle:bcprov-jdk18on, shaded inside org.apache.pulsar:pulsar-client 4.2.4 the same way. The flaw is a
+# bypass of X.509 name-constraint enforcement (a constrained sub-CA's certificate accepted for a hostname outside
+# its constraint via a trailing dot). The private CA this project generates for Pulsar's own TLS
+# (scripts/postgres-init and deploy/tls/gen-certs.sh, see ADR-017) sets no name constraints at all, so there is
+# nothing for this bypass to defeat in the shipped configuration. A deployment that layers in its own constrained
+# PKI for the Pulsar broker should track this separately until pulsar-client ships a patched shade.
+# Re-review: upgrade pulsar-client once a release ships with a patched shade.
+CVE-2026-8763 exp:2026-12-31
