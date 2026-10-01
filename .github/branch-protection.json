@@ -1,0 +1,30 @@
+{
+  "required_status_checks": {
+    "strict": true,
+    "checks": [
+      {"context": "Backend build and tests", "app_id": 15368},
+      {"context": "admin-ui build and tests", "app_id": 15368},
+      {"context": "client-ui build and tests", "app_id": 15368},
+      {"context": "Docker images build (client-api, ., Dockerfile, MODULE=client-api)", "app_id": 15368},
+      {"context": "Docker images build (admin-api, ., Dockerfile, MODULE=admin-api)", "app_id": 15368},
+      {"context": "Docker images build (dispatcher, ., Dockerfile, MODULE=dispatcher)", "app_id": 15368},
+      {"context": "Docker images build (db-migration, ., Dockerfile, MODULE=db-migration)", "app_id": 15368},
+      {"context": "Docker images build (admin-ui, admin-ui, admin-ui/Dockerfile)", "app_id": 15368},
+      {"context": "Docker images build (client-ui, client-ui, client-ui/Dockerfile)", "app_id": 15368},
+      {"context": "Dependency and secret scan", "app_id": 15368},
+      {"context": "CodeQL (java-kotlin)", "app_id": 15368},
+      {"context": "CodeQL (javascript-typescript)", "app_id": 15368}
+    ]
+  },
+  "enforce_admins": true,
+  "required_pull_request_reviews": {
+    "required_approving_review_count": 0,
+    "dismiss_stale_reviews": true,
+    "require_code_owner_reviews": false
+  },
+  "restrictions": null,
+  "required_conversation_resolution": true,
+  "allow_force_pushes": false,
+  "allow_deletions": false,
+  "required_linear_history": false
+}
