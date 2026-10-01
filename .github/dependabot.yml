@@ -29,6 +29,11 @@ updates:
     ignore:
       - dependency-name: "*"
         update-types: ["version-update:semver-major"]
+      # The build image's JDK version is pinned deliberately (Lombok breaks silently above JDK 21 -- ADR-011,
+      # ADR-014, ADR-018). Dependabot's version classifier does not recognize a JDK suffix like "-24" in this tag
+      # as a major bump, so the semver-major rule above does not catch it; ignore this dependency outright instead.
+      # A JDK upgrade must be a deliberate, reviewed PR, the way ADR-018 describes, not an automated one.
+      - dependency-name: "maven"
   - package-ecosystem: docker
     directory: /admin-ui
     schedule: { interval: weekly }
