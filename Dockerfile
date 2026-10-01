@@ -14,10 +14,13 @@
 #
 # @author Vasantha Kumar <vasantha.kumar@hotmail.com>
 # Builds any deployable module:  docker build --build-arg MODULE=client-api -t notification-client-api .
-# Pinned to JDK 21: Lombok silently generates no methods on newer JDKs (JDK 24 confirmed in ADR-011; JDK 26 hit the
-# same failure and reached main anyway, since Dependabot's ignore rule for major versions does not recognize a JDK
-# suffix like "-24"/"-26" as one -- see ADR-011 and ADR-014). Bumping this tag needs a human to verify the build.
-FROM maven:3-eclipse-temurin-24 AS build
+# Pinned to JDK 21: Lombok silently generates no methods on newer JDKs (JDK 24 confirmed in ADR-011, and again in
+# ADR-018; JDK 26 hit the same failure in between, ADR-014). Dependabot has now reopened this exact PR three times
+# because it does not recognize a JDK suffix like "-21"/"-24"/"-26" in this tag as a major-version bump -- see
+# ADR-018, which stops relying on Dependabot's version classifier for this image at all. Bumping this tag needs a
+# human to verify the build (Lombok's generated code, not just compilation, since a no-op annotation processor can
+# still produce a jar that only fails at runtime).
+FROM maven:3.9-eclipse-temurin-21 AS build
 ARG MODULE
 WORKDIR /src
 COPY pom.xml .
