@@ -46,8 +46,18 @@ The owner chose:
      moment is never overruled.
    - An expired OTP cannot be requeued from the dead-letter screen.
    - `FailureKind.retryable()` now lists the retryable kinds explicitly, so a new kind is not retryable by accident.
-5. **Swept first.** The outbox sweeper republishes stuck OTPs before older ordinary messages; a partial index keeps
-   that query cheap.
+5. **Swept first, and in time.** The outbox sweeper recovers stuck OTPs before anything else, with thresholds of
+   their own under `notification.sweeper.otp.*`.
+   - The thresholds are PENDING 10 s, PROCESSING 60 s, QUEUED 60 s and RETRYING 90 s.
+   - The general thresholds (up to 900 s) are longer than an OTP's validity, so a lost OTP would only have been
+     recovered after it expired.
+   - The OTP sweep has its own query, served by the partial index `ix_message_inflight_otp` (migration 013).
+   - The general sweep reads `ix_message_status_updated` in order and stops at the batch size.
+   - An earlier version put OTPs first by sorting on category in the general query. That sorted the whole backlog on
+     every sweep, and its PENDING-only index did not match. `SweeperQueryPlanTest` pins both plans against a real
+     PostgreSQL.
+   - Migration 013 builds the index concurrently. The migration run lock now polls `pg_try_advisory_lock`, so that a
+     second migration waiting for the lock does not deadlock with the build.
 6. **Measured on their own.** Delivery latency carries a `category` tag, so OTP time-to-send can be watched and alerted
    on separately. Existing SLO rules sum over it and are unchanged.
 

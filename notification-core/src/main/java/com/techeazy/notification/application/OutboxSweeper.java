@@ -41,6 +41,10 @@ import java.util.UUID;
  * whose worker died mid-send (PROCESSING), and messages the broker acknowledged or lost without a worker ever
  * claiming them (QUEUED for longer than any healthy backlog). Delivery is therefore at-least-once; workers make
  * redelivery safe by atomically claiming a message before sending.
+ *
+ * <p>One-time passwords are swept first, with thresholds of seconds rather than minutes, because the general
+ * thresholds are longer than their validity: a lost one would otherwise only be recovered after it expired
+ * (ADR-033).
  */
 @Component
 @ConditionalOnProperty(prefix = "notification.sweeper", name = "enabled", havingValue = "true")
@@ -63,6 +67,7 @@ public class OutboxSweeper {
     public void sweep() {
         var cfg = props.getSweeper();
         Instant now = Instant.now();
+        sweepOneTimePasswords(cfg, now);
         republish(messages.lockStale(MessageStatus.PENDING.name(), now.minus(Duration.ofSeconds(cfg.getPendingAgeSeconds())),
                 cfg.getBatchSize()), "pending");
         republish(messages.lockStale(MessageStatus.PROCESSING.name(), now.minus(Duration.ofSeconds(cfg.getProcessingTimeoutSeconds())),
@@ -72,6 +77,21 @@ public class OutboxSweeper {
         republish(messages.lockStale(MessageStatus.RETRYING.name(),
                 now.minus(Duration.ofSeconds(cfg.getRetryingTimeoutSeconds())), cfg.getBatchSize()),
                 "retry never redelivered");
+    }
+
+    private void sweepOneTimePasswords(NotificationProperties.Sweeper cfg, Instant now) {
+        var otp = cfg.getOtp();
+        republish(messages.lockStaleOtp(MessageStatus.PENDING.name(),
+                now.minus(Duration.ofSeconds(otp.getPendingAgeSeconds())), cfg.getBatchSize()), "pending OTP");
+        republish(messages.lockStaleOtp(MessageStatus.PROCESSING.name(),
+                now.minus(Duration.ofSeconds(otp.getProcessingTimeoutSeconds())), cfg.getBatchSize()),
+                "stuck processing OTP");
+        republish(messages.lockStaleOtp(MessageStatus.QUEUED.name(),
+                now.minus(Duration.ofSeconds(otp.getQueuedTimeoutSeconds())), cfg.getBatchSize()),
+                "queued but never delivered OTP");
+        republish(messages.lockStaleOtp(MessageStatus.RETRYING.name(),
+                now.minus(Duration.ofSeconds(otp.getRetryingTimeoutSeconds())), cfg.getBatchSize()),
+                "retry never redelivered OTP");
     }
 
     private void republish(List<NotificationMessage> stale, String what) {

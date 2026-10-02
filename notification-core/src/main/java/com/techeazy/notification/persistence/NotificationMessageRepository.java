@@ -143,15 +143,32 @@ public interface NotificationMessageRepository
     int requeueFailed(@Param("id") UUID id, @Param("now") Instant now);
 
     /**
-     * Sweeper query: rows stuck in a status for longer than the cutoff, one-time passwords first (ADR-033). SKIP
-     * LOCKED lets several sweeper instances run concurrently without publishing the same rows.
+     * Sweeper query: rows stuck in a status for longer than the cutoff, oldest first, read in order from
+     * {@code ix_message_status_updated}. SKIP LOCKED lets several sweeper instances run concurrently without
+     * publishing the same rows.
      */
     @Query(value = """
             select * from notification_message
             where status = :status and updated_at < :cutoff
-            order by (category = 'OTP') desc, updated_at
+            order by updated_at
             limit :batch
             for update skip locked""", nativeQuery = true)
     List<NotificationMessage> lockStale(@Param("status") String status, @Param("cutoff") Instant cutoff,
                                         @Param("batch") int batch);
+
+    /**
+     * Sweeper query for one-time passwords stuck in a status, which are recovered within seconds rather than
+     * minutes so they still arrive before they expire (ADR-033). The literal category and status list match the
+     * predicate of {@code ix_message_inflight_otp}, so the partial index is used even by a generic plan in which the
+     * status is only a parameter.
+     */
+    @Query(value = """
+            select * from notification_message
+            where category = 'OTP' and status in ('PENDING', 'QUEUED', 'PROCESSING', 'RETRYING')
+              and status = :status and updated_at < :cutoff
+            order by updated_at
+            limit :batch
+            for update skip locked""", nativeQuery = true)
+    List<NotificationMessage> lockStaleOtp(@Param("status") String status, @Param("cutoff") Instant cutoff,
+                                           @Param("batch") int batch);
 }

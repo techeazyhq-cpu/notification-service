@@ -54,6 +54,8 @@ public class MigrationService {
     private static final Logger log = LoggerFactory.getLogger(MigrationService.class);
     /** Arbitrary constant identifying "a notification-service migration is running" to pg_advisory_lock. */
     private static final long RUN_LOCK_KEY = 7_242_019_931L;
+    /** How often a run waiting for another to finish tries the lock again. */
+    private static final long RUN_LOCK_POLL_MS = 250;
     private static final DateTimeFormatter TAG_TIME = DateTimeFormatter.ofPattern("yyyyMMddHHmmss").withZone(ZoneOffset.UTC);
 
     /** One row of the changelog history. */
@@ -204,13 +206,30 @@ public class MigrationService {
      * try to create that table (and the changelog table) first, and PostgreSQL rejects the loser with a duplicate-key
      * error. A session-level advisory lock is taken before Liquibase touches anything, and released when the
      * connection closes (also if this process dies), so a second run simply waits and then finds nothing to do.
+     *
+     * <p>The wait polls with {@code pg_try_advisory_lock} rather than blocking in {@code pg_advisory_lock}. A blocked
+     * statement keeps a snapshot open, and {@code CREATE INDEX CONCURRENTLY} in the running migration waits for every
+     * open snapshot to end, so the two runs would deadlock.
      */
     private void acquireRunLock(Connection connection) throws SQLException {
         if (!props.getUrl().startsWith("jdbc:postgresql:")) return;
         log.debug("Acquiring the migration run lock (waits if another migration is running)");
-        try (PreparedStatement ps = connection.prepareStatement("SELECT pg_advisory_lock(?)")) {
+        try (PreparedStatement ps = connection.prepareStatement("SELECT pg_try_advisory_lock(?)")) {
             ps.setLong(1, RUN_LOCK_KEY);
-            ps.execute();
+            while (!tryRunLock(ps)) {
+                try {
+                    Thread.sleep(RUN_LOCK_POLL_MS);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    throw new SQLException("Interrupted while waiting for another migration to finish", e);
+                }
+            }
+        }
+    }
+
+    private static boolean tryRunLock(PreparedStatement ps) throws SQLException {
+        try (ResultSet rs = ps.executeQuery()) {
+            return rs.next() && rs.getBoolean(1);
         }
     }
 

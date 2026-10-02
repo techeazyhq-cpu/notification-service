@@ -24,6 +24,7 @@ import com.techeazy.notification.domain.NotificationMessage;
 import com.techeazy.notification.persistence.NotificationMessageRepository;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -34,6 +35,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -85,6 +87,35 @@ class OutboxSweeperTest {
         verify(messages).lockStale(eq("RETRYING"), cutoff.capture(), anyInt());
         long secondsBack = Duration.between(cutoff.getValue(), before).abs().toSeconds();
         assertThat(secondsBack).isBetween(899L, 901L);
+    }
+
+    /** The general thresholds are longer than an OTP's validity, so a lost OTP has thresholds of its own. */
+    @Test
+    void recoversALostOneTimePasswordWithinAMinuteNotAfterItExpired() {
+        NotificationMessage lost = message(MessageStatus.QUEUED);
+        when(messages.lockStaleOtp(eq("QUEUED"), any(), anyInt())).thenReturn(List.of(lost));
+        when(outbox.publishOnly(List.of(lost))).thenReturn(List.of(lost.getId()));
+        ArgumentCaptor<Instant> cutoff = ArgumentCaptor.forClass(Instant.class);
+        Instant before = Instant.now();
+
+        sweeper.sweep();
+
+        verify(messages).lockStaleOtp(eq("QUEUED"), cutoff.capture(), anyInt());
+        assertThat(Duration.between(cutoff.getValue(), before).abs().toSeconds()).isBetween(59L, 61L);
+        verify(outbox).publishOnly(List.of(lost));
+        assertThat(lost.getStatus()).isEqualTo(MessageStatus.QUEUED);
+    }
+
+    @Test
+    void sweepsOneTimePasswordsInEveryInFlightStatusBeforeAnythingElse() {
+        sweeper.sweep();
+
+        InOrder order = inOrder(messages);
+        order.verify(messages).lockStaleOtp(eq("PENDING"), any(), anyInt());
+        order.verify(messages).lockStaleOtp(eq("PROCESSING"), any(), anyInt());
+        order.verify(messages).lockStaleOtp(eq("QUEUED"), any(), anyInt());
+        order.verify(messages).lockStaleOtp(eq("RETRYING"), any(), anyInt());
+        order.verify(messages).lockStale(eq("PENDING"), any(), anyInt());
     }
 
     @Test
