@@ -18,7 +18,7 @@
 
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { api, download, inFlight, MESSAGE_STATUSES, MessageStatus, MessageView, PageView, RequestView } from '../api';
+import { api, CATEGORY_LABELS, download, inFlight, MESSAGE_STATUSES, MessageStatus, MessageView, PageView, RequestView } from '../api';
 import { formatTime, ProgressBar, StatusBadge } from '../components';
 import { useDebounced, useLoad } from '../hooks';
 
@@ -73,6 +73,8 @@ export default function RequestDetail() {
           <dl className="kv">
             <dt>Channel</dt><dd>{r.channel}</dd>
             <dt>Type</dt><dd>{r.kind === 'BULK' ? `Bulk, ${r.total} recipients` : 'Single'}</dd>
+            <dt>Category</dt><dd>{CATEGORY_LABELS[r.category ?? 'TRANSACTIONAL']}</dd>
+            {r.expiresAt && <><dt>Valid until</dt><dd>{formatTime(r.expiresAt)} <span className="muted">(not sent after this)</span></dd></>}
             <dt>Submitted</dt><dd>{formatTime(r.createdAt)}</dd>
             <dt>Your reference</dt><dd>{r.clientReference ?? '–'}</dd>
           </dl>
@@ -110,7 +112,11 @@ export default function RequestDetail() {
                 <td className="mono">{m.recipient}</td>
                 <td><StatusBadge status={m.status} /></td>
                 <td>{m.attempts}</td>
-                <td className="mono" title={m.messageId}>{m.lastError ?? m.providerMessageId ?? ''}</td>
+                <td className="mono" title={m.messageId}>
+                  {m.errorId && <a className="plain" href={`/v1/errors/${m.errorId}`} target="_blank" rel="noreferrer" title={m.errorCode}>{m.errorId}</a>}
+                  {m.errorId && ' '}
+                  {m.errorCode === 'OTP_EXPIRED' ? 'Expired before it could be sent' : (m.lastError ?? m.providerMessageId ?? '')}
+                </td>
                 <td>{m.sentAt ? formatTime(m.sentAt) : ''}</td>
               </tr>
             ))}

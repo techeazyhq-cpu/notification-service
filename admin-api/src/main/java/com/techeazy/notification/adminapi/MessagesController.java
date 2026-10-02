@@ -22,6 +22,7 @@ import com.techeazy.notification.error.ErrorCode;
 import com.techeazy.notification.application.OutboxPublisher;
 import com.techeazy.notification.domain.Channel;
 import com.techeazy.notification.domain.Client;
+import com.techeazy.notification.domain.MessageCategory;
 import com.techeazy.notification.domain.MessageStatus;
 import com.techeazy.notification.domain.NotificationMessage;
 import com.techeazy.notification.persistence.ClientRepository;
@@ -46,9 +47,10 @@ import java.util.stream.Collectors;
 @RequestMapping("/api/admin/messages")
 class MessagesController {
 
+    /** {@code expiresAt} is set for one-time passwords only (ADR-033). */
     record Row(UUID id, UUID requestId, UUID clientId, String clientName, Channel channel, String recipient,
                MessageStatus status, int attempts, String lastError, String providerMessageId, Instant createdAt,
-               Instant sentAt, ErrorCode errorCode, String errorId) {}
+               Instant sentAt, ErrorCode errorCode, String errorId, MessageCategory category, Instant expiresAt) {}
 
     record Page(List<Row> items, int page, int size, long totalItems) {}
 
@@ -103,6 +105,6 @@ class MessagesController {
         return new Row(m.getId(), m.getRequestId(), m.getClientId(), clientNames.getOrDefault(m.getClientId(), "unknown"),
                 m.getChannel(), m.getRecipient(), m.getStatus(), m.getAttempts(), m.getLastError(),
                 m.getProviderMessageId(), m.getCreatedAt(), m.getSentAt(), m.getErrorCode(),
-                m.getErrorCode() == null ? null : m.getErrorCode().errorId());
+                m.getErrorCode() == null ? null : m.getErrorCode().errorId(), m.getCategory(), m.getExpiresAt());
     }
 }
