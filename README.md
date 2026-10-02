@@ -222,6 +222,13 @@ PostgreSQL Flexible Server with zone-redundant HA and geo-redundant backups, Azu
 backup account in the paired region, all behind private endpoints. Pulsar uses the same values as on AWS. Step by
 step: [docs/azure-deployment.md](docs/azure-deployment.md). See ADR-029.
 
+### On Google Cloud
+
+`deploy/terraform/gcp` builds the same shape on Google Cloud: regional GKE with Dataplane V2 and Workload Identity,
+regional Cloud SQL with point-in-time recovery and backups in a second region, Memorystore with AUTH and TLS, Secret
+Manager, and a backup bucket in the recovery region. Step by step: [docs/gcp-deployment.md](docs/gcp-deployment.md).
+See ADR-030.
+
 ## Backups and disaster recovery
 
 Only PostgreSQL holds state that needs backing up; Pulsar and Redis are rebuilt from it or refill by themselves. PostgreSQL runs with a synchronous standby and automatic failover, continuous WAL archiving for point-in-time recovery (reference manifests for CloudNativePG in `deploy/k8s/postgres`), and logical dumps with a restore drill that proves a backup is complete (`deploy/backup`). [docs/disaster-recovery.md](docs/disaster-recovery.md) has the objectives (no data lost on a primary crash, at most 5 minutes otherwise), measured results and the procedures. See ADR-026.
