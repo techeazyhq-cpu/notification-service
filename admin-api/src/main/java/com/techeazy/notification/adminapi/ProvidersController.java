@@ -19,7 +19,6 @@
 package com.techeazy.notification.adminapi;
 
 import com.techeazy.notification.application.ProviderDestinationPolicy;
-import com.techeazy.notification.application.ProviderDestinationRefusedException;
 import com.techeazy.notification.domain.Channel;
 import com.techeazy.notification.domain.ProviderConfig;
 import com.techeazy.notification.domain.ProviderType;
@@ -30,7 +29,6 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseEntity;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
@@ -55,7 +53,6 @@ class ProvidersController {
     record ProviderView(UUID id, Channel channel, String name, ProviderType type, Map<String, String> settings,
                         boolean enabled, int priority, Instant updatedAt) {}
 
-    record Refusal(String code, String message) {}
 
     private final ProviderConfigRepository repo;
     private final ProviderSecrets secrets;
@@ -111,11 +108,6 @@ class ProvidersController {
         p.setEnabled(in.enabled());
         p.setPriority(in.priority() == null ? 100 : in.priority());
         p.setUpdatedAt(Instant.now());
-    }
-
-    @ExceptionHandler(ProviderDestinationRefusedException.class)
-    ResponseEntity<Refusal> destinationRefused(ProviderDestinationRefusedException refused) {
-        return ResponseEntity.badRequest().body(new Refusal("PROVIDER_DESTINATION_REFUSED", refused.getMessage()));
     }
 
     private static ProviderView view(ProviderConfig p) {

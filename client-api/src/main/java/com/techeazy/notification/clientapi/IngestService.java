@@ -18,6 +18,7 @@
 
 package com.techeazy.notification.clientapi;
 
+import com.techeazy.notification.error.ErrorCode;
 import com.techeazy.notification.application.OutboxPublisher;
 import com.techeazy.notification.application.TemplateRenderer;
 import com.techeazy.notification.billing.application.Admission;
@@ -31,7 +32,6 @@ import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.dao.DataIntegrityViolationException;
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
@@ -136,7 +136,7 @@ public class IngestService {
 
     private void requireChannelAllowed(AuthenticatedClient client, Channel channel) {
         if (!client.allows(channel)) {
-            throw new ApiException(HttpStatus.FORBIDDEN, "CHANNEL_NOT_ALLOWED", "Client is not allowed to use channel " + channel);
+            throw new ApiException(ErrorCode.CHANNEL_NOT_ALLOWED, "Client is not allowed to use channel " + channel);
         }
     }
 

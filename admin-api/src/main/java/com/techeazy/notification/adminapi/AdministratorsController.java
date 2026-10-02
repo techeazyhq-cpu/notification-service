@@ -31,7 +31,6 @@ import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
-import java.util.Map;
 import java.util.UUID;
 
 /** Other administrator accounts: list, create, change role, remove. Always requires the ADMIN role (see ADR-015). */
@@ -70,15 +69,5 @@ class AdministratorsController {
     ResponseEntity<Void> delete(@PathVariable UUID id, Authentication authentication) {
         auth.deleteAdmin(authentication.getName(), id);
         return ResponseEntity.noContent().build();
-    }
-
-    @ExceptionHandler(AuthException.class)
-    ResponseEntity<Map<String, String>> refused(AuthException e) {
-        return ResponseEntity.status(e.status()).body(Map.of("code", e.code(), "message", e.getMessage()));
-    }
-
-    @ExceptionHandler(org.springframework.web.bind.MethodArgumentNotValidException.class)
-    ResponseEntity<Map<String, String>> invalid() {
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of("code", "INVALID_REQUEST", "message", "All required fields must be filled in"));
     }
 }

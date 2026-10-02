@@ -25,7 +25,9 @@ import java.util.List;
 /** CSV layout for exported messages. */
 final class MessageCsv {
 
-    static final List<String> HEADER = List.of("recipient", "status", "attempts", "lastError", "providerMessageId", "sentAt");
+    static final List<String> HEADER = List.of("recipient", "status", "attempts", "lastError", "providerMessageId",
+            "sentAt",
+            "errorCode", "errorId");
 
     private MessageCsv() {}
 
@@ -36,7 +38,9 @@ final class MessageCsv {
                 Integer.toString(m.attempts()),
                 neutralize(m.lastError()),
                 neutralize(m.providerMessageId()),
-                m.sentAt() == null ? "" : m.sentAt().toString());
+                m.sentAt() == null ? "" : m.sentAt().toString(),
+                m.errorCode() == null ? "" : m.errorCode(),
+                m.errorId() == null ? "" : m.errorId());
     }
 
     /**

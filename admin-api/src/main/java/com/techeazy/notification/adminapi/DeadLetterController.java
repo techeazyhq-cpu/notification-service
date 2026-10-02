@@ -18,6 +18,7 @@
 
 package com.techeazy.notification.adminapi;
 
+import com.techeazy.notification.error.ErrorCode;
 import com.techeazy.notification.application.PersonalData;
 import com.techeazy.notification.domain.Channel;
 import com.techeazy.notification.domain.Client;
@@ -50,7 +51,9 @@ import java.util.stream.Collectors;
 class DeadLetterController {
 
     record Row(UUID id, UUID requestId, UUID clientId, String clientName, Channel channel, String recipient, FailureKind kind,
-               boolean retryable, boolean erased, int attempts, int reprocessCount, String lastError, Instant failedAt, Instant createdAt) {}
+               boolean retryable, boolean erased, int attempts, int reprocessCount, String lastError, Instant failedAt,
+                       Instant createdAt,
+               ErrorCode errorCode, String errorId) {}
 
     record Page(List<Row> items, int page, int size, long totalItems) {}
 
@@ -123,6 +126,7 @@ class DeadLetterController {
         FailureKind kind = m.getFailureKind();
         return new Row(m.getId(), m.getRequestId(), m.getClientId(), clientNames.getOrDefault(m.getClientId(), "unknown"), m.getChannel(),
                 m.getRecipient(), kind, !erased && (kind == null || kind.retryable()), erased, m.getAttempts(), m.getReprocessCount(),
-                m.getLastError(), m.getUpdatedAt(), m.getCreatedAt());
+                m.getLastError(), m.getUpdatedAt(), m.getCreatedAt(), m.getErrorCode(),
+                m.getErrorCode() == null ? null : m.getErrorCode().errorId());
     }
 }

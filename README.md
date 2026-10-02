@@ -181,6 +181,13 @@ encrypted, including the storage-level encryption the recipient column needs in 
 database while messages are in flight) write to `docs/benchmarks`. Results and analysis:
 [docs/quality-attributes-analysis.md](docs/quality-attributes-analysis.md).
 
+## Error codes
+
+Every error from the client and admin APIs carries a stable `code` (what programs branch on), a numbered `errorId`
+such as `NS-5001` (what to quote to support), `retryable`, and the request's `traceId`. A failed message reports its
+cause the same way in `errorCode` and `errorId`. The dictionary of every code with its cause and resolution is
+[docs/error-codes.md](docs/error-codes.md), also served without an API key at `GET /v1/errors`. See ADR-031.
+
 ## Continuous integration
 
 GitHub Actions run on every pull request and on `main` (`.github/workflows`):

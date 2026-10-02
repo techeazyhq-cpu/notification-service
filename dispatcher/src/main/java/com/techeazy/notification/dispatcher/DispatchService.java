@@ -18,6 +18,7 @@
 
 package com.techeazy.notification.dispatcher;
 
+import com.techeazy.notification.error.ErrorCode;
 import com.techeazy.notification.application.RateLimitService;
 import com.techeazy.notification.application.TemplateRenderer;
 import com.techeazy.notification.dispatcher.provider.ChannelProvider.Outbound;
@@ -125,18 +126,21 @@ public class DispatchService {
             messages.release(messageId, Instant.now());
             count(m.getChannel(), "circuit_open");
             return new Outcome.Unavailable(UNAVAILABLE_POLL_MS);
-        } catch (PermanentSendException | TemplateRenderer.MissingVariableException e) {
-            messages.markFailed(messageId, FailureKind.PERMANENT, truncate(e.getMessage()), Instant.now());
-            count(m.getChannel(), "failed_permanent");
-            return new Outcome.Done();
+        } catch (MessageContentMissingException e) {
+            return failPermanently(m, ErrorCode.MESSAGE_CONTENT_MISSING, e);
+        } catch (TemplateRenderer.MissingVariableException e) {
+            return failPermanently(m, ErrorCode.TEMPLATE_VARIABLE_MISSING, e);
+        } catch (PermanentSendException e) {
+            return failPermanently(m, ErrorCode.DELIVERY_REJECTED, e);
         } catch (RuntimeException e) {
             if (attempt >= props.getMaxAttempts()) {
-                messages.markFailed(messageId, FailureKind.EXHAUSTED,
+                messages.markFailed(messageId, FailureKind.EXHAUSTED, ErrorCode.DELIVERY_ATTEMPTS_EXHAUSTED,
                         truncate("Gave up after " + attempt + " attempts: " + e.getMessage()), Instant.now());
                 count(m.getChannel(), "failed_exhausted");
                 return new Outcome.Done();
             }
-            messages.markFailedOrRetry(messageId, MessageStatus.RETRYING, truncate(e.getMessage()), Instant.now());
+            messages.markFailedOrRetry(messageId, MessageStatus.RETRYING, ErrorCode.PROVIDER_TEMPORARILY_FAILING,
+                    truncate(e.getMessage()), Instant.now());
             count(m.getChannel(), "retry");
             return new Outcome.Retry(backoff(attempt));
         }
@@ -144,15 +148,30 @@ public class DispatchService {
 
     private Outbound render(NotificationMessage m) {
         NotificationRequest req = requests.findById(m.getRequestId())
-                .orElseThrow(() -> new PermanentSendException("Request " + m.getRequestId() + " not found"));
+                .orElseThrow(() -> new MessageContentMissingException("Request " + m.getRequestId() + " not found"));
         // The request holds a snapshot of the content taken when it was accepted (from a template or inline), so
         // editing or deleting a template never changes or breaks a request that is already in flight.
-        if (req.getBody() == null) throw new PermanentSendException("Request " + req.getId() + " has no content");
+        if (req.getBody() == null) {
+            throw new MessageContentMissingException("Request " + req.getId() + " has no content");
+        }
         Map<String, String> vars = new HashMap<>(m.getVariables());
         vars.put(TemplateRenderer.RECIPIENT, m.getRecipient());
         return new Outbound(m.getId(), m.getChannel(), m.getRecipient(),
                 TemplateRenderer.render(req.getSubject(), vars), TemplateRenderer.render(req.getBody(), vars),
                 req.getSenderEmail(), req.getSenderName());
+    }
+
+    private Outcome failPermanently(NotificationMessage m, ErrorCode errorCode, RuntimeException cause) {
+        messages.markFailed(m.getId(), FailureKind.PERMANENT, errorCode, truncate(cause.getMessage()), Instant.now());
+        count(m.getChannel(), "failed_permanent");
+        return new Outcome.Done();
+    }
+
+    /** The request behind a message has no content to render, typically because its personal data was erased. */
+    static final class MessageContentMissingException extends RuntimeException {
+        MessageContentMissingException(String message) {
+            super(message);
+        }
     }
 
     Duration backoff(int attempt) {

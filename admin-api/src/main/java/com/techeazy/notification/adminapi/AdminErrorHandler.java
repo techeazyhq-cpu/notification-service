@@ -15,14 +15,16 @@
  *
  * @author Vasantha Kumar <vasantha.kumar@hotmail.com>
  */
+package com.techeazy.notification.adminapi;
 
-package com.techeazy.notification.clientapi;
-
+import com.techeazy.notification.adminapi.auth.AuthException;
+import com.techeazy.notification.application.ProviderDestinationRefusedException;
 import com.techeazy.notification.billing.domain.AccountSuspendedException;
 import com.techeazy.notification.billing.domain.BillingNotFoundException;
 import com.techeazy.notification.billing.domain.InsufficientCreditException;
 import com.techeazy.notification.billing.domain.InvalidBillingDataException;
 import com.techeazy.notification.billing.domain.InvalidBillingStateException;
+import com.techeazy.notification.billing.domain.InvoiceAlreadyExistsException;
 import com.techeazy.notification.billing.domain.SpendCapExceededException;
 import com.techeazy.notification.error.ErrorBody;
 import com.techeazy.notification.error.ErrorCode;
@@ -31,30 +33,64 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.core.AuthenticationException;
 import org.springframework.web.ErrorResponse;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
-import org.springframework.web.multipart.MaxUploadSizeExceededException;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.util.stream.Collectors;
 
-/** Answers every refusal and failure of the client API with an {@link ErrorBody} from the catalogue (ADR-031). */
+/**
+ * Answers every refusal and failure of the admin API with an {@link ErrorBody} from the catalogue (ADR-031), so the
+ * admin console and scripts read the same shape as client integrations do.
+ */
 @RestControllerAdvice
-public class ApiExceptionHandler {
+public class AdminErrorHandler {
 
-    private static final Logger log = LoggerFactory.getLogger(ApiExceptionHandler.class);
+    private static final Logger log = LoggerFactory.getLogger(AdminErrorHandler.class);
 
     private final TraceIdSource traceIds;
 
-    public ApiExceptionHandler(TraceIdSource traceIds) {
+    public AdminErrorHandler(TraceIdSource traceIds) {
         this.traceIds = traceIds;
     }
 
-    @ExceptionHandler(ApiException.class)
-    ResponseEntity<ErrorBody> api(ApiException e) {
+    @ExceptionHandler(AuthException.class)
+    ResponseEntity<ErrorBody> authentication(AuthException e) {
         return respond(e.errorCode(), e.getMessage());
+    }
+
+    @ExceptionHandler(ResponseStatusException.class)
+    ResponseEntity<ErrorBody> statusOnly(ResponseStatusException e) {
+        if (e.getStatusCode().is5xxServerError()) {
+            return unexpected(e);
+        }
+        ErrorCode errorCode = ErrorCode.forHttpRefusal(e.getStatusCode().value());
+        return respond(errorCode, e.getReason() == null ? errorCode.title() : e.getReason());
+    }
+
+    @ExceptionHandler(ProviderDestinationRefusedException.class)
+    ResponseEntity<ErrorBody> destinationRefused(ProviderDestinationRefusedException e) {
+        return respond(ErrorCode.PROVIDER_DESTINATION_REFUSED, e.getMessage());
+    }
+
+    @ExceptionHandler(BillingNotFoundException.class)
+    ResponseEntity<ErrorBody> billingNotFound(BillingNotFoundException e) {
+        return respond(ErrorCode.NOT_FOUND, e.getMessage());
+    }
+
+    @ExceptionHandler({InvalidBillingStateException.class, InvoiceAlreadyExistsException.class})
+    ResponseEntity<ErrorBody> billingConflict(RuntimeException e) {
+        return respond(ErrorCode.INVALID_STATE, e.getMessage());
+    }
+
+    @ExceptionHandler(InvalidBillingDataException.class)
+    ResponseEntity<ErrorBody> billingInvalid(InvalidBillingDataException e) {
+        return respond(ErrorCode.INVALID_REQUEST, e.getMessage());
     }
 
     @ExceptionHandler(InsufficientCreditException.class)
@@ -63,28 +99,13 @@ public class ApiExceptionHandler {
     }
 
     @ExceptionHandler(SpendCapExceededException.class)
-    ResponseEntity<ErrorBody> spendCap(SpendCapExceededException e) {
+    ResponseEntity<ErrorBody> spendCapExceeded(SpendCapExceededException e) {
         return respond(ErrorCode.SPEND_CAP_EXCEEDED, e.getMessage());
     }
 
     @ExceptionHandler(AccountSuspendedException.class)
     ResponseEntity<ErrorBody> suspended(AccountSuspendedException e) {
         return respond(ErrorCode.ACCOUNT_SUSPENDED, e.getMessage());
-    }
-
-    @ExceptionHandler(BillingNotFoundException.class)
-    ResponseEntity<ErrorBody> billingNotFound(BillingNotFoundException e) {
-        return respond(ErrorCode.NOT_FOUND, e.getMessage());
-    }
-
-    @ExceptionHandler(InvalidBillingStateException.class)
-    ResponseEntity<ErrorBody> billingConflict(InvalidBillingStateException e) {
-        return respond(ErrorCode.INVALID_STATE, e.getMessage());
-    }
-
-    @ExceptionHandler(InvalidBillingDataException.class)
-    ResponseEntity<ErrorBody> billingInvalid(InvalidBillingDataException e) {
-        return respond(ErrorCode.INVALID_REQUEST, e.getMessage());
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
@@ -99,15 +120,18 @@ public class ApiExceptionHandler {
         return respond(ErrorCode.INVALID_REQUEST, "Malformed request: " + e.getMessage());
     }
 
-    @ExceptionHandler(MaxUploadSizeExceededException.class)
-    ResponseEntity<ErrorBody> tooLarge(MaxUploadSizeExceededException e) {
-        return respond(ErrorCode.PAYLOAD_TOO_LARGE, "Upload too large");
+    /**
+     * Rethrown so Spring Security answers them through its entry point and access-denied handler, which already write
+     * the same error body; handling them here would bypass the account-setup explanation.
+     */
+    @ExceptionHandler({AccessDeniedException.class, AuthenticationException.class})
+    void security(RuntimeException e) {
+        throw e;
     }
 
     /**
-     * Spring's own refusals (unknown path, unsupported method or media type, missing parameter) carry their status.
-     * They are the caller's mistake, so they keep it and are not logged as errors. Anything else is an opaque 500
-     * whose trace id leads to the logged cause.
+     * Spring's own refusals (unknown path, unsupported method or media type) keep their status and are not logged as
+     * errors. Anything else is an opaque 500 whose trace id leads to the logged cause.
      */
     @ExceptionHandler(Exception.class)
     ResponseEntity<ErrorBody> unexpected(Exception e) {

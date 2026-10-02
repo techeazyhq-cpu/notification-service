@@ -21,10 +21,8 @@ package com.techeazy.notification.adminapi.auth;
 import com.techeazy.notification.adminapi.audit.AuditTrailFilter;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.constraints.NotBlank;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
-import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -33,7 +31,6 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.time.Instant;
 import java.util.List;
-import java.util.Map;
 
 /** Sign-in, sign-out and account security for administrators. Only {@code /login} is reachable without a session. */
 @RestController
@@ -103,16 +100,6 @@ class AuthController {
     @PostMapping("/2fa/recovery-codes")
     RecoveryCodes newRecoveryCodes(Authentication authentication, @RequestBody @jakarta.validation.Valid Reauthentication request) {
         return new RecoveryCodes(auth.regenerateRecoveryCodes(authentication.getName(), request.password(), request.verificationCode()));
-    }
-
-    @ExceptionHandler(AuthException.class)
-    ResponseEntity<Map<String, String>> refused(AuthException e) {
-        return ResponseEntity.status(e.status()).body(Map.of("code", e.code(), "message", e.getMessage()));
-    }
-
-    @ExceptionHandler(org.springframework.web.bind.MethodArgumentNotValidException.class)
-    ResponseEntity<Map<String, String>> invalid() {
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of("code", "INVALID_REQUEST", "message", "All required fields must be filled in"));
     }
 
     private static String tokenHash(Authentication authentication) {

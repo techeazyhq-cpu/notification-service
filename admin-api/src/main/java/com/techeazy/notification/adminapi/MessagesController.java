@@ -18,6 +18,7 @@
 
 package com.techeazy.notification.adminapi;
 
+import com.techeazy.notification.error.ErrorCode;
 import com.techeazy.notification.application.OutboxPublisher;
 import com.techeazy.notification.domain.Channel;
 import com.techeazy.notification.domain.Client;
@@ -47,7 +48,7 @@ class MessagesController {
 
     record Row(UUID id, UUID requestId, UUID clientId, String clientName, Channel channel, String recipient,
                MessageStatus status, int attempts, String lastError, String providerMessageId, Instant createdAt,
-               Instant sentAt) {}
+               Instant sentAt, ErrorCode errorCode, String errorId) {}
 
     record Page(List<Row> items, int page, int size, long totalItems) {}
 
@@ -101,6 +102,7 @@ class MessagesController {
     private static Row toRow(NotificationMessage m, Map<UUID, String> clientNames) {
         return new Row(m.getId(), m.getRequestId(), m.getClientId(), clientNames.getOrDefault(m.getClientId(), "unknown"),
                 m.getChannel(), m.getRecipient(), m.getStatus(), m.getAttempts(), m.getLastError(),
-                m.getProviderMessageId(), m.getCreatedAt(), m.getSentAt());
+                m.getProviderMessageId(), m.getCreatedAt(), m.getSentAt(), m.getErrorCode(),
+                m.getErrorCode() == null ? null : m.getErrorCode().errorId());
     }
 }

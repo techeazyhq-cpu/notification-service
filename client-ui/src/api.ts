@@ -56,7 +56,9 @@ async function request(path: string, init: { method?: string; body?: unknown } =
   if (!res.ok) {
     let message = `HTTP ${res.status}`;
     try {
-      message = (await res.json()).message ?? message;
+      const body = await res.json();
+      message = body.message ?? message;
+      if (body.errorId) message += ` (${body.errorId})`;
     } catch { /* keep the status text */ }
     throw new ApiError(res.status, message);
   }

@@ -15,56 +15,62 @@
  *
  * @author Vasantha Kumar <vasantha.kumar@hotmail.com>
  */
-
 package com.techeazy.notification.adminapi.auth;
 
+import com.techeazy.notification.error.ErrorCode;
 import org.springframework.http.HttpStatus;
 
-/** A refused authentication or account operation, carrying the stable code and HTTP status the API reports. */
+/** A refused authentication or account operation, named by its {@link ErrorCode} (ADR-031). */
 public class AuthException extends RuntimeException {
 
-    private final transient String code;
-    private final transient HttpStatus status;
+    private final transient ErrorCode errorCode;
 
-    AuthException(HttpStatus status, String code, String message) {
+    private AuthException(ErrorCode errorCode, String message) {
         super(message);
-        this.code = code;
-        this.status = status;
+        this.errorCode = errorCode;
+    }
+
+    public static AuthException of(ErrorCode errorCode, String message) {
+        return new AuthException(errorCode, message);
+    }
+
+    public ErrorCode errorCode() {
+        return errorCode;
     }
 
     public String code() {
-        return code;
+        return errorCode.code();
     }
 
     public HttpStatus status() {
-        return status;
+        return HttpStatus.valueOf(errorCode.httpStatus().orElseThrow());
     }
 
     static AuthException invalidCredentials() {
-        return new AuthException(HttpStatus.UNAUTHORIZED, "INVALID_CREDENTIALS", "Invalid user name, password or verification code");
+        return of(ErrorCode.INVALID_CREDENTIALS, "Invalid user name, password or verification code");
     }
 
     static AuthException otpRequired() {
-        return new AuthException(HttpStatus.UNAUTHORIZED, "OTP_REQUIRED", "A verification code is required");
+        return of(ErrorCode.OTP_REQUIRED, "A verification code is required");
     }
 
     static AuthException locked() {
-        return new AuthException(HttpStatus.TOO_MANY_REQUESTS, "ACCOUNT_LOCKED", "Too many failed attempts; try again later");
+        return of(ErrorCode.ACCOUNT_LOCKED, "Too many failed attempts; try again later");
     }
 
     static AuthException reauthenticationFailed() {
-        return new AuthException(HttpStatus.FORBIDDEN, "REAUTHENTICATION_FAILED", "The current password or verification code is incorrect");
+        return of(ErrorCode.REAUTHENTICATION_FAILED, "The current password or verification code is incorrect");
     }
 
     static AuthException invalid(String message) {
-        return new AuthException(HttpStatus.BAD_REQUEST, "INVALID_REQUEST", message);
+        return of(ErrorCode.INVALID_REQUEST, message);
     }
 
     static AuthException conflict(String message) {
-        return new AuthException(HttpStatus.CONFLICT, "INVALID_STATE", message);
+        return of(ErrorCode.INVALID_STATE, message);
     }
 
     static AuthException notFound(String message) {
-        return new AuthException(HttpStatus.NOT_FOUND, "NOT_FOUND", message);
+        return of(ErrorCode.NOT_FOUND, message);
     }
 }

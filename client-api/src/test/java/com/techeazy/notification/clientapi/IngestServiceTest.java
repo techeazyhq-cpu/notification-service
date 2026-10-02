@@ -18,6 +18,7 @@
 
 package com.techeazy.notification.clientapi;
 
+import com.techeazy.notification.error.ErrorCode;
 import com.techeazy.notification.application.OutboxPublisher;
 import com.techeazy.notification.billing.application.Admission;
 import com.techeazy.notification.billing.application.AdmissionControl;
@@ -271,7 +272,8 @@ class IngestServiceTest {
 
     @Test
     void anUnverifiedSenderRefusesTheRequestBeforeAnythingIsStored() {
-        when(senders.resolve(me, Channel.EMAIL, "spoof@other.com")).thenThrow(new ApiException(HttpStatus.UNPROCESSABLE_ENTITY, "SENDER_NOT_VERIFIED", "no"));
+        when(senders.resolve(me, Channel.EMAIL,
+                "spoof@other.com")).thenThrow(new ApiException(ErrorCode.SENDER_NOT_VERIFIED, "no"));
 
         assertThatThrownBy(() -> service.submit(me, new SubmitCommand(RequestKind.SINGLE, Channel.EMAIL, null, "Hi", "hello",
                 List.of(to("bob@example.com", Map.of())), null, null, "spoof@other.com")))

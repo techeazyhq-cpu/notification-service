@@ -18,6 +18,7 @@
 
 package com.techeazy.notification.clientapi;
 
+import com.techeazy.notification.error.ErrorCode;
 import com.techeazy.notification.application.ProviderDestinationPolicy;
 import com.techeazy.notification.domain.Channel;
 import com.techeazy.notification.domain.ProviderConfig;
@@ -28,7 +29,6 @@ import com.techeazy.notification.persistence.ProviderConfigRepository;
 import jakarta.mail.internet.MimeMessage;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.http.HttpStatus;
 import org.springframework.mail.javamail.JavaMailSenderImpl;
 import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.stereotype.Component;
@@ -57,8 +57,8 @@ public class SmtpVerificationMailer implements VerificationMailer {
 
     @Override
     public void send(String toAddress, String clientName, String verificationUrl) {
-        ProviderConfig provider = firstSmtpProvider().orElseThrow(() -> new ApiException(HttpStatus.SERVICE_UNAVAILABLE,
-                "EMAIL_NOT_AVAILABLE", "No e-mail provider is configured, so the confirmation e-mail cannot be sent"));
+        ProviderConfig provider = firstSmtpProvider().orElseThrow(() -> new ApiException(ErrorCode.EMAIL_NOT_AVAILABLE,
+                "No e-mail provider is configured, so the confirmation e-mail cannot be sent"));
         try {
             var settings = secrets.decryptForUse(provider.getSettings());
             destinations.check(ProviderType.SMTP, settings);
@@ -74,7 +74,8 @@ public class SmtpVerificationMailer implements VerificationMailer {
             sender.send(mime);
         } catch (jakarta.mail.MessagingException | RuntimeException e) {
             LOG.warn("Could not send sender confirmation to {}: {}", toAddress, e.getMessage());
-            throw new ApiException(HttpStatus.SERVICE_UNAVAILABLE, "EMAIL_NOT_AVAILABLE", "The confirmation e-mail could not be sent; try again later");
+            throw new ApiException(ErrorCode.EMAIL_NOT_AVAILABLE,
+                    "The confirmation e-mail could not be sent; try again later");
         }
     }
 

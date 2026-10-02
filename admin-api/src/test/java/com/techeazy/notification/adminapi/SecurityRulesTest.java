@@ -27,6 +27,7 @@ import com.techeazy.notification.adminapi.auth.AdminRole;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import jakarta.servlet.Filter;
+import com.techeazy.notification.error.TraceIdSource;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -76,6 +77,11 @@ class SecurityRulesTest {
         @Bean
         MeterRegistry meterRegistry() {
             return new SimpleMeterRegistry();
+        }
+
+        @Bean
+        TraceIdSource traceIdSource() {
+            return Optional::empty;
         }
     }
 

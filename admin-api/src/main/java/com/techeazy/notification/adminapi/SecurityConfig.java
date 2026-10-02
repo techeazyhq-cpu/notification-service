@@ -31,7 +31,8 @@ import org.springframework.security.config.annotation.web.configurers.AbstractHt
 import org.springframework.security.config.http.SessionCreationPolicy;
 import com.techeazy.notification.adminapi.audit.AuditLog;
 import com.techeazy.notification.adminapi.audit.AuditTrailFilter;
-import com.techeazy.notification.adminapi.auth.AccountSetupAccessDeniedHandler;
+import com.techeazy.notification.adminapi.auth.SecurityRefusals;
+import com.techeazy.notification.error.TraceIdSource;
 import com.techeazy.notification.adminapi.auth.AdminAuthService;
 import com.techeazy.notification.adminapi.auth.BearerTokenFilter;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
@@ -40,8 +41,6 @@ import org.springframework.security.crypto.factory.PasswordEncoderFactories;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.security.web.SecurityFilterChain;
-import org.springframework.security.web.authentication.HttpStatusEntryPoint;
-import org.springframework.http.HttpStatus;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
@@ -85,7 +84,8 @@ class SecurityConfig {
      */
     @Bean
     @SuppressWarnings("java:S4502") // reviewed: stateless header-authenticated API, see Javadoc
-    SecurityFilterChain chain(HttpSecurity http, AdminAuthService auth, AuditLog auditLog, MeterRegistry meters)
+    SecurityFilterChain chain(HttpSecurity http, AdminAuthService auth, AuditLog auditLog, MeterRegistry meters,
+                              TraceIdSource traceIds)
             throws Exception {
         http.csrf(AbstractHttpConfigurer::disable)
                 .cors(Customizer.withDefaults())
@@ -112,8 +112,8 @@ class SecurityConfig {
                         .anyRequest().denyAll())
                 .addFilterBefore(new BearerTokenFilter(auth), UsernamePasswordAuthenticationFilter.class)
                 .addFilterAfter(new AuditTrailFilter(auditLog, Clock.systemUTC(), meters), BearerTokenFilter.class)
-                .exceptionHandling(e -> e.authenticationEntryPoint(new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED))
-                        .accessDeniedHandler(new AccountSetupAccessDeniedHandler()));
+                .exceptionHandling(e -> e.authenticationEntryPoint(new SecurityRefusals(traceIds))
+                        .accessDeniedHandler(new SecurityRefusals(traceIds)));
         return http.build();
     }
 
