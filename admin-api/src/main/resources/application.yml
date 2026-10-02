@@ -71,6 +71,9 @@ admin:
   cors-origins: ${ADMIN_CORS_ORIGINS:http://localhost:5173}
 
 management:
+  tracing:
+    sampling:
+      probability: ${TRACING_SAMPLING_PROBABILITY:0.1}
   server:
     port: ${MANAGEMENT_PORT:9081}
   endpoints:
@@ -83,3 +86,8 @@ springdoc:
     enabled: ${API_DOCS_ENABLED:false}
   swagger-ui:
     enabled: ${API_DOCS_ENABLED:false}
+
+logging:
+  structured:
+    format:
+      console: ${LOG_FORMAT:ecs}

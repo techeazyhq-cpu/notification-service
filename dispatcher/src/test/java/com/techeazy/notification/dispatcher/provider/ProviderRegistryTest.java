@@ -30,6 +30,8 @@ import com.techeazy.notification.persistence.ProviderConfigRepository;
 import io.github.resilience4j.circuitbreaker.CircuitBreaker;
 import io.github.resilience4j.circuitbreaker.CircuitBreakerConfig;
 import io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry;
+import io.micrometer.observation.tck.TestObservationRegistry;
+import io.micrometer.observation.tck.TestObservationRegistryAssert;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -73,6 +75,7 @@ class ProviderRegistryTest {
     CircuitBreakerRegistry breakers;
     ProviderRegistry registry;
     Outbound message = new Outbound(UUID.randomUUID(), Channel.SMS, "+14155550123", null, "hi");
+    TestObservationRegistry observations = TestObservationRegistry.create();
     ProviderDestinationPolicy destinations =
             new ProviderDestinationPolicy(Set.of(), true, host -> List.of(InetAddress.getAllByName(host)));
 
@@ -91,7 +94,7 @@ class ProviderRegistryTest {
     void withProviders(ProviderConfig... configs) {
         when(repo.findByChannelAndEnabledTrueOrderByPriorityAsc(Channel.SMS)).thenReturn(List.of(configs));
         registry = new ProviderRegistry(List.of(primary, backup), repo, secrets, breakers, new DispatcherProperties(),
-                destinations);
+                destinations, observations);
     }
 
     /**
@@ -146,6 +149,28 @@ class ProviderRegistryTest {
         assertThatThrownBy(() -> registry.send(message)).isInstanceOf(TransientSendException.class)
                 .hasMessageContaining("not a public address");
         assertThat(primary.calls.get()).isZero();
+    }
+
+    @Test
+    void eachProviderCallIsObservedWithTheProviderItsTypeAndTheChannelIncludingFailures() {
+        withProviders(config("sms-primary", ProviderType.HTTP_JSON, 10), config("sms-backup", ProviderType.SMTP, 20));
+
+        registry.send(message);
+
+        TestObservationRegistryAssert.assertThat(observations)
+                .hasNumberOfObservationsWithNameEqualTo(ProviderRegistry.PROVIDER_CALL_OBSERVATION, 2)
+                .forAllObservationsWithNameEqualTo(ProviderRegistry.PROVIDER_CALL_OBSERVATION,
+                        observation -> observation.hasLowCardinalityKeyValue("channel", "SMS"))
+                .hasAnObservation(observation -> {
+                    observation.hasLowCardinalityKeyValue("provider", "sms-primary");
+                    observation.hasLowCardinalityKeyValue("provider.type", "HTTP_JSON");
+                    observation.assertThatError().hasMessage("gateway down");
+                })
+                .hasAnObservation(observation -> {
+                    observation.hasLowCardinalityKeyValue("provider", "sms-backup");
+                    observation.hasLowCardinalityKeyValue("provider.type", "SMTP");
+                    observation.doesNotHaveError();
+                });
     }
 
     @Test
@@ -228,7 +253,8 @@ class ProviderRegistryTest {
         props.getCircuitBreaker().setEnabled(false);
         when(repo.findByChannelAndEnabledTrueOrderByPriorityAsc(Channel.SMS))
                 .thenReturn(List.of(config("sms-primary", ProviderType.HTTP_JSON, 10)));
-        registry = new ProviderRegistry(List.of(primary, backup), repo, secrets, breakers, props, destinations);
+        registry = new ProviderRegistry(List.of(primary, backup), repo, secrets, breakers, props, destinations,
+                observations);
 
         failTimes(10);
         assertThat(primary.calls.get()).isEqualTo(10);

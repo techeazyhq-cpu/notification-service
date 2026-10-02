@@ -71,6 +71,9 @@ client-api:
   cors-origins: ${CLIENT_API_CORS_ORIGINS:http://localhost:5174}
 
 management:
+  tracing:
+    sampling:
+      probability: ${TRACING_SAMPLING_PROBABILITY:0.1}
   server:
     port: ${MANAGEMENT_PORT:9080}
   endpoints:
@@ -83,3 +86,8 @@ springdoc:
   swagger-ui:
     enabled: ${API_DOCS_ENABLED:true}
     path: /swagger-ui.html
+
+logging:
+  structured:
+    format:
+      console: ${LOG_FORMAT:ecs}

@@ -18,6 +18,8 @@
 
 package com.techeazy.notification.dispatcher;
 
+import io.micrometer.observation.Observation;
+import io.micrometer.observation.ObservationRegistry;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.techeazy.notification.config.NotificationProperties;
 import com.techeazy.notification.dispatcher.DispatchService.Outcome;
@@ -60,13 +62,16 @@ public class DispatchConsumers {
     private final DispatchService dispatch;
     private final ObjectMapper mapper;
     private final ProviderRegistry providers;
+    private final ObservationRegistry observations;
     private final List<Consumer<byte[]>> consumers = new ArrayList<>();
     private final Map<Channel, List<Consumer<byte[]>>> byChannel = new ConcurrentHashMap<>();
     private final Set<Channel> pausedChannels = ConcurrentHashMap.newKeySet();
 
     public DispatchConsumers(PulsarClient client, NotificationProperties notificationProps, DispatcherProperties props,
-                             DispatchService dispatch, ObjectMapper mapper, ProviderRegistry providers) {
+                             DispatchService dispatch, ObjectMapper mapper, ProviderRegistry providers,
+                             ObservationRegistry observations) {
         this.providers = providers;
+        this.observations = observations;
         this.client = client;
         this.notificationProps = notificationProps;
         this.props = props;
@@ -105,8 +110,14 @@ public class DispatchConsumers {
     }
 
     private void handle(Consumer<byte[]> consumer, Message<byte[]> msg, Channel channel) {
+        Observation handling = BrokerMessageObservation.receiving(msg, channel, observations);
+        handling.observe(() -> handleWithin(handling, consumer, msg, channel));
+    }
+
+    private void handleWithin(Observation handling, Consumer<byte[]> consumer, Message<byte[]> msg, Channel channel) {
         try {
             Envelope env = mapper.readValue(msg.getData(), Envelope.class);
+            BrokerMessageObservation.identify(handling, env.messageId());
             Outcome outcome = processWithBackpressure(env.messageId());
             if (outcome instanceof Outcome.Done) {
                 consumer.acknowledge(msg);
@@ -120,6 +131,7 @@ public class DispatchConsumers {
             consumer.negativeAcknowledge(msg);
         } catch (Exception e) {
             log.error("Unexpected error handling broker message {} on {}; negative-acking", msg.getMessageId(), channel, e);
+            handling.error(e);
             consumer.negativeAcknowledge(msg);
         }
     }

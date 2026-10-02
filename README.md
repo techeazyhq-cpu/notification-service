@@ -191,6 +191,16 @@ GitHub Actions run on every pull request and on `main` (`.github/workflows`):
 
 Make the **CI** and **Security** checks required in the branch protection rules of `main` so nothing merges while they are red.
 
+## Tracing and logs
+
+Every request gets a trace that follows the message through Pulsar to the dispatcher and each provider call; responses return its id in `X-Trace-Id`, and every log line carries the same `traceId`. Quote it when reporting a problem. Logs are JSON (Elastic Common Schema) unless `LOG_FORMAT` is set empty, which `docker compose` does. Spans are exported over OTLP when `MANAGEMENT_OTLP_TRACING_ENDPOINT` is set; `TRACING_SAMPLING_PROBABILITY` (default 0.1) decides how many. To see traces locally:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.observability.yml --profile app up -d --build
+```
+
+then open Jaeger at http://localhost:16686. See ADR-023.
+
 ## Where providers may connect
 
 Whoever can edit a provider decides where the platform connects, so provider destinations are checked when a provider is saved (`400 PROVIDER_DESTINATION_REFUSED` with the reason), before every send, and before a sender confirmation e-mail. A host listed in `PROVIDER_TRUSTED_HOSTS` (comma-separated exact names, or `*.example.com` for subdomains) is allowed as it is, including internal addresses and plain HTTP, for an on-premises gateway or relay. Any other host must be reached over HTTPS (for HTTP gateways) and must resolve only to public addresses: loopback, private ranges, link-local (including cloud metadata at `169.254.169.254`), CGNAT and IPv6 local ranges are refused, whether written as an address or reached through DNS. URLs with credentials in them are refused, and redirects are never followed. `PROVIDER_OTHER_PUBLIC_HOSTS_ALLOWED=false` allows only the trusted hosts. `docker compose` trusts `mailpit` and `catcher`. Set the same values on admin-api, client-api and the dispatcher. See ADR-022.

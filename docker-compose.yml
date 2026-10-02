@@ -102,6 +102,8 @@ services:
       # Encrypts message template variables (names, one-time codes) at rest; the same value on every service.
       DATA_ENCRYPTION_KEY: ${DATA_ENCRYPTION_KEY:-development-only-change-me}
       PROVIDER_TRUSTED_HOSTS: ${PROVIDER_TRUSTED_HOSTS:-mailpit,catcher}
+      LOG_FORMAT: ${LOG_FORMAT:-}
+      TRACING_SAMPLING_PROBABILITY: ${TRACING_SAMPLING_PROBABILITY:-1.0}
       # Without this, a service refuses to start with the default DB_PASSWORD/ADMIN_PASSWORD/keys above
       # (see notification-core's InsecureDefaults and ADR-013).
       SPRING_PROFILES_ACTIVE: local

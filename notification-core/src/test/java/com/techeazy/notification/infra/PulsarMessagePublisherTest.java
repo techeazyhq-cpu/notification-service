@@ -26,9 +26,16 @@ import org.apache.pulsar.client.api.Producer;
 import org.apache.pulsar.client.api.ProducerBuilder;
 import org.apache.pulsar.client.api.PulsarClient;
 import org.apache.pulsar.client.api.TypedMessageBuilder;
+import io.micrometer.observation.Observation;
+import io.micrometer.observation.ObservationHandler;
+import io.micrometer.observation.tck.TestObservationRegistry;
+import io.micrometer.observation.tck.TestObservationRegistryAssert;
+import io.micrometer.observation.transport.SenderContext;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
 
+import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
@@ -49,7 +56,24 @@ class PulsarMessagePublisherTest {
     private final Producer<byte[]> producer = mock(Producer.class);
     @SuppressWarnings("unchecked")
     private final TypedMessageBuilder<byte[]> message = mock(TypedMessageBuilder.class, Mockito.RETURNS_SELF);
-    private final PulsarMessagePublisher publisher = new PulsarMessagePublisher(client, new NotificationProperties(), new ObjectMapper());
+    private final TestObservationRegistry observations = TestObservationRegistry.create();
+    private final PulsarMessagePublisher publisher =
+            new PulsarMessagePublisher(client, new NotificationProperties(), new ObjectMapper(), observations);
+
+    /** Stands in for the tracing handler: writes a W3C trace header into whatever carrier a send provides. */
+    private static final class TraceHeaderWriter implements ObservationHandler<SenderContext<Object>> {
+        @Override
+        public void onStart(SenderContext<Object> context) {
+            context.getSetter().set(context.getCarrier(), "traceparent", TRACE_PARENT);
+        }
+
+        @Override
+        public boolean supportsContext(Observation.Context context) {
+            return context instanceof SenderContext;
+        }
+    }
+
+    private static final String TRACE_PARENT = "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01";
 
     @SuppressWarnings("unchecked")
     private void brokerAvailable() {
@@ -86,6 +110,44 @@ class PulsarMessagePublisherTest {
         assertThatThrownBy(first::get).isInstanceOf(ExecutionException.class).hasRootCauseMessage("broker down");
         assertThat(publisher.publish(Channel.SMS, id, client).join()).isNull();
         verify(builder, times(2)).createAsync();
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void theTraceOfTheRequestThatPublishesTravelsInTheMessageProperties() {
+        brokerAvailable();
+        observations.observationConfig().observationHandler(new TraceHeaderWriter());
+        Observation request = Observation.start("http.server.requests", observations);
+
+        try (Observation.Scope scope = request.openScope()) {
+            publisher.publish(Channel.SMS, UUID.randomUUID(), UUID.randomUUID()).join();
+        } finally {
+            request.stop();
+        }
+
+        ArgumentCaptor<Map<String, String>> properties = ArgumentCaptor.forClass(Map.class);
+        verify(message).properties(properties.capture());
+        assertThat(properties.getValue()).containsEntry("traceparent", TRACE_PARENT);
+        TestObservationRegistryAssert.assertThat(observations)
+                .hasObservationWithNameEqualTo(PulsarMessagePublisher.PUBLISH_OBSERVATION).that()
+                .hasBeenStarted().hasBeenStopped()
+                .hasParentObservationEqualTo(request)
+                .hasLowCardinalityKeyValue("channel", "SMS");
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void aFailedPublishIsRecordedOnItsObservation() {
+        when(client.newProducer()).thenReturn(builder);
+        when(builder.createAsync())
+                .thenReturn(CompletableFuture.failedFuture(new IllegalStateException("broker down")));
+
+        CompletableFuture<Void> publish = publisher.publish(Channel.SMS, UUID.randomUUID(), UUID.randomUUID());
+
+        assertThatThrownBy(publish::join).hasRootCauseMessage("broker down");
+        TestObservationRegistryAssert.assertThat(observations)
+                .hasObservationWithNameEqualTo(PulsarMessagePublisher.PUBLISH_OBSERVATION).that()
+                .hasBeenStopped().assertThatError().hasRootCauseMessage("broker down");
     }
 
     @Test
