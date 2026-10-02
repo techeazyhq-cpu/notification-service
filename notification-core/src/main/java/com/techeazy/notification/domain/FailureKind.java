@@ -23,12 +23,13 @@ package com.techeazy.notification.domain;
  * {@code PERMANENT}: the provider or the content rejected it (bad recipient, missing variable), so sending again
  * will fail the same way until something is corrected. {@code EXHAUSTED}: every attempt failed for a temporary
  * reason (provider outage, timeouts). {@code DEAD_LETTERED}: the broker gave up delivering it to a worker.
+ * {@code EXPIRED}: a one-time password whose validity ran out before it could be sent (ADR-033).
  */
 public enum FailureKind {
-    PERMANENT, EXHAUSTED, DEAD_LETTERED;
+    PERMANENT, EXHAUSTED, DEAD_LETTERED, EXPIRED;
 
     /** Worth reprocessing without changing anything first. */
     public boolean retryable() {
-        return this != PERMANENT;
+        return this == EXHAUSTED || this == DEAD_LETTERED;
     }
 }

@@ -17,6 +17,7 @@
  */
 package com.techeazy.notification.infra;
 
+import com.techeazy.notification.domain.MessageCategory;
 import com.techeazy.notification.config.NotificationProperties;
 import com.techeazy.notification.domain.Channel;
 import com.techeazy.notification.port.BrokerUnavailableException;
@@ -62,7 +63,7 @@ class CircuitBreakingMessagePublisherTest {
 
     @Test
     void whileTheBrokerAnswersEveryPublishGoesThrough() {
-        when(broker.publish(any(), any(), any())).thenReturn(CompletableFuture.completedFuture(null));
+        when(broker.publish(any(), any(), any(), any())).thenReturn(CompletableFuture.completedFuture(null));
 
         assertThat(publish()).isCompleted();
 
@@ -71,7 +72,8 @@ class CircuitBreakingMessagePublisherTest {
 
     @Test
     void repeatedFailuresOpenTheCircuitAndLaterPublishesFailAtOnceWithoutTouchingTheBroker() {
-        when(broker.publish(any(), any(), any())).thenReturn(CompletableFuture.failedFuture(new TimeoutException()));
+        when(broker.publish(any(), any(), any(),
+                any())).thenReturn(CompletableFuture.failedFuture(new TimeoutException()));
         for (int attempt = 0; attempt < 4; attempt++) {
             publish();
         }
@@ -81,17 +83,18 @@ class CircuitBreakingMessagePublisherTest {
         assertThat(publisher.state()).isEqualTo(CircuitBreaker.State.OPEN);
         assertThat(refused).isCompletedExceptionally();
         assertThat(refused.exceptionNow()).isInstanceOf(BrokerUnavailableException.class);
-        verify(broker, times(4)).publish(any(), any(), any());
+        verify(broker, times(4)).publish(any(), any(), any(), any());
     }
 
     @Test
     void aSuccessfulProbeAfterTheWaitClosesTheCircuitAgain() {
-        when(broker.publish(any(), any(), any())).thenReturn(CompletableFuture.failedFuture(new TimeoutException()));
+        when(broker.publish(any(), any(), any(),
+                any())).thenReturn(CompletableFuture.failedFuture(new TimeoutException()));
         for (int attempt = 0; attempt < 4; attempt++) {
             publish();
         }
         publisher.circuitBreaker().transitionToHalfOpenState();
-        when(broker.publish(any(), any(), any())).thenReturn(CompletableFuture.completedFuture(null));
+        when(broker.publish(any(), any(), any(), any())).thenReturn(CompletableFuture.completedFuture(null));
 
         assertThat(publish()).isCompleted();
 
@@ -100,7 +103,7 @@ class CircuitBreakingMessagePublisherTest {
 
     @Test
     void aFailureRaisedBeforeAFutureExistsCountsAgainstTheBrokerToo() {
-        when(broker.publish(any(), any(), any())).thenThrow(new IllegalStateException("client closed"));
+        when(broker.publish(any(), any(), any(), any())).thenThrow(new IllegalStateException("client closed"));
 
         assertThat(publish()).isCompletedExceptionally();
 
@@ -112,13 +115,14 @@ class CircuitBreakingMessagePublisherTest {
         NotificationProperties properties = new NotificationProperties();
         properties.getPulsar().getCircuitBreaker().setEnabled(false);
         CircuitBreakingMessagePublisher unguarded = new CircuitBreakingMessagePublisher(broker, properties, meters);
-        when(broker.publish(any(), any(), any())).thenReturn(CompletableFuture.failedFuture(new TimeoutException()));
+        when(broker.publish(any(), any(), any(),
+                any())).thenReturn(CompletableFuture.failedFuture(new TimeoutException()));
 
         for (int attempt = 0; attempt < 10; attempt++) {
-            unguarded.publish(Channel.SMS, UUID.randomUUID(), UUID.randomUUID());
+            unguarded.publish(Channel.SMS, MessageCategory.TRANSACTIONAL, UUID.randomUUID(), UUID.randomUUID());
         }
 
-        verify(broker, times(10)).publish(any(), any(), any());
+        verify(broker, times(10)).publish(any(), any(), any(), any());
         assertThat(unguarded.state()).isEqualTo(CircuitBreaker.State.DISABLED);
     }
 
@@ -139,6 +143,6 @@ class CircuitBreakingMessagePublisherTest {
     }
 
     private CompletableFuture<Void> publish() {
-        return publisher.publish(Channel.SMS, UUID.randomUUID(), UUID.randomUUID());
+        return publisher.publish(Channel.SMS, MessageCategory.TRANSACTIONAL, UUID.randomUUID(), UUID.randomUUID());
     }
 }

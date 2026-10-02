@@ -93,7 +93,7 @@ public class OutboxPublisher {
     private List<UUID> publishChunk(List<NotificationMessage> chunk) {
         List<CompletableFuture<Void>> futures = new ArrayList<>(chunk.size());
         for (NotificationMessage m : chunk) {
-            futures.add(publisher.publish(m.getChannel(), m.getId(), m.getClientId()));
+            futures.add(publisher.publish(m.getChannel(), m.getCategory(), m.getId(), m.getClientId()));
         }
         List<UUID> ok = new ArrayList<>(chunk.size());
         int brokerUnavailable = 0;

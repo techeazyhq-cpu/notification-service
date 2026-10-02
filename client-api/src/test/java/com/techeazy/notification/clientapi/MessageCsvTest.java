@@ -48,7 +48,7 @@ class MessageCsvTest {
     @Test
     void rowKeepsPhoneNumbersIntactAndMatchesHeaderWidth() {
         MessageView m = new MessageView(UUID.randomUUID(), "+14155550123", MessageStatus.FAILED, 3,
-                "=bad", null, null, Instant.now(), "DELIVERY_REJECTED", "NS-6001");
+                "=bad", null, null, Instant.now(), "DELIVERY_REJECTED", "NS-6001", null, null);
 
         List<String> row = MessageCsv.row(m);
 
@@ -62,7 +62,7 @@ class MessageCsvTest {
     @Test
     void theErrorCodeAndIdComeLastSoExistingColumnsKeepTheirPlaces() {
         MessageView m = new MessageView(UUID.randomUUID(), "+14155550123", MessageStatus.FAILED, 3,
-                "invalid number", null, null, Instant.now(), "DELIVERY_REJECTED", "NS-6001");
+                "invalid number", null, null, Instant.now(), "DELIVERY_REJECTED", "NS-6001", null, null);
 
         List<String> row = MessageCsv.row(m);
 
@@ -73,7 +73,7 @@ class MessageCsvTest {
     @Test
     void aMessageWithoutAnErrorLeavesTheErrorColumnsEmpty() {
         MessageView m = new MessageView(UUID.randomUUID(), "+14155550123", MessageStatus.SENT, 1,
-                null, "provider-1", Instant.now(), Instant.now(), null, null);
+                null, "provider-1", Instant.now(), Instant.now(), null, null, null, null);
 
         assertThat(MessageCsv.row(m)).endsWith("", "");
     }

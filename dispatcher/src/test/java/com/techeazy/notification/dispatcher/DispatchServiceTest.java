@@ -18,6 +18,7 @@
 
 package com.techeazy.notification.dispatcher;
 
+import com.techeazy.notification.domain.MessageCategory;
 import com.techeazy.notification.error.ErrorCode;
 import com.techeazy.notification.application.RateLimitService;
 import com.techeazy.notification.dispatcher.DispatchService.Outcome;
@@ -79,9 +80,56 @@ class DispatchServiceTest {
         req.setBody("Hi {{name}}");
         when(requests.findById(message.getRequestId())).thenReturn(Optional.of(req));
 
-        when(rateLimits.checkDelivery(any(), any())).thenReturn(Decision.GRANTED);
+        when(rateLimits.checkDelivery(any(), any(), any())).thenReturn(Decision.GRANTED);
         when(messages.claim(eq(id), any(), any())).thenReturn(1);
         when(providers.isAvailable(any())).thenReturn(true);
+    }
+
+    @Test
+    void anExpiredOneTimePasswordFailsAsExpiredWithoutATokenOrAProviderCall() {
+        message.setCategory(MessageCategory.OTP);
+        message.setExpiresAt(Instant.now().minusSeconds(1));
+
+        assertThat(service.process(id)).isInstanceOf(Outcome.Done.class);
+
+        verify(messages).markFailed(eq(id), eq(FailureKind.EXPIRED), eq(ErrorCode.OTP_EXPIRED),
+                contains("expired"), any());
+        verifyNoInteractions(rateLimits);
+        verify(providers, never()).send(any());
+    }
+
+    @Test
+    void anExpiredOneTimePasswordIsDroppedEvenWhileEveryProviderIsDown() {
+        message.setCategory(MessageCategory.OTP);
+        message.setExpiresAt(Instant.now().minusSeconds(1));
+        when(providers.isAvailable(Channel.SMS)).thenReturn(false);
+
+        assertThat(service.process(id)).isInstanceOf(Outcome.Done.class);
+
+        verify(messages).markFailed(eq(id), eq(FailureKind.EXPIRED), eq(ErrorCode.OTP_EXPIRED), any(), any());
+    }
+
+    @Test
+    void aOneTimePasswordStillValidIsSentAndRateLimitedAsPriority() {
+        message.setCategory(MessageCategory.OTP);
+        message.setExpiresAt(Instant.now().plusSeconds(120));
+        when(providers.send(any())).thenReturn(new SendResult("prov-otp"));
+
+        assertThat(service.process(id)).isInstanceOf(Outcome.Done.class);
+
+        verify(rateLimits).checkDelivery(message.getClientId(), Channel.SMS, MessageCategory.OTP);
+        verify(messages).markSent(eq(id), eq("prov-otp"), any());
+    }
+
+    @Test
+    void deliveryLatencyIsRecordedPerCategorySoOneTimePasswordsCanBeWatchedOnTheirOwn() {
+        message.setCategory(MessageCategory.OTP);
+        message.setCreatedAt(Instant.now().minusSeconds(3));
+        when(providers.send(any())).thenReturn(new SendResult("prov-otp"));
+
+        service.process(id);
+
+        assertThat(meters.find(DispatchService.DELIVERY_LATENCY).tag("category", "OTP").timer()).isNotNull();
     }
 
     @Test
@@ -161,7 +209,7 @@ class DispatchServiceTest {
 
     @Test
     void rateLimitedMessagesAreNotClaimed() {
-        when(rateLimits.checkDelivery(any(), any())).thenReturn(new Decision(false, 250));
+        when(rateLimits.checkDelivery(any(), any(), any())).thenReturn(new Decision(false, 250));
 
         assertThat(service.process(id)).isEqualTo(new Outcome.RateLimited(250));
 

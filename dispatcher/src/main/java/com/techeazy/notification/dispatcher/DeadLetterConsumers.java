@@ -68,16 +68,18 @@ class DeadLetterConsumers {
     @EventListener(ApplicationReadyEvent.class)
     void start() throws PulsarClientException {
         for (Channel channel : Channel.values()) {
-            String topic = PulsarMessagePublisher.topicFor(properties, channel) + "-dlq";
-            consumers.add(client.newConsumer(Schema.BYTES)
-                    .topic(topic)
-                    .subscriptionName(SUBSCRIPTION)
-                    .subscriptionType(SubscriptionType.Shared)
-                    .subscriptionInitialPosition(SubscriptionInitialPosition.Earliest)
-                    .negativeAckRedeliveryDelay(30, TimeUnit.SECONDS)
-                    .messageListener((consumer, message) -> handle(consumer, message, channel))
-                    .subscribe());
-            LOG.info("Recording dead letters from {}", topic);
+            for (boolean priority : new boolean[] {false, true}) {
+                String topic = PulsarMessagePublisher.topicFor(properties, channel, priority) + "-dlq";
+                consumers.add(client.newConsumer(Schema.BYTES)
+                        .topic(topic)
+                        .subscriptionName(SUBSCRIPTION)
+                        .subscriptionType(SubscriptionType.Shared)
+                        .subscriptionInitialPosition(SubscriptionInitialPosition.Earliest)
+                        .negativeAckRedeliveryDelay(30, TimeUnit.SECONDS)
+                        .messageListener((consumer, message) -> handle(consumer, message, channel))
+                        .subscribe());
+                LOG.info("Recording dead letters from {}", topic);
+            }
         }
     }
 

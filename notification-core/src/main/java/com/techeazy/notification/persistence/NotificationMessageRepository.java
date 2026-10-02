@@ -143,13 +143,13 @@ public interface NotificationMessageRepository
     int requeueFailed(@Param("id") UUID id, @Param("now") Instant now);
 
     /**
-     * Sweeper query: rows stuck in a status for longer than the cutoff. SKIP LOCKED lets several
-     * sweeper instances run concurrently without publishing the same rows.
+     * Sweeper query: rows stuck in a status for longer than the cutoff, one-time passwords first (ADR-033). SKIP
+     * LOCKED lets several sweeper instances run concurrently without publishing the same rows.
      */
     @Query(value = """
             select * from notification_message
             where status = :status and updated_at < :cutoff
-            order by updated_at
+            order by (category = 'OTP') desc, updated_at
             limit :batch
             for update skip locked""", nativeQuery = true)
     List<NotificationMessage> lockStale(@Param("status") String status, @Param("cutoff") Instant cutoff,
