@@ -34,3 +34,12 @@ dist/
 # Local k3s trial (deploy/k8s/dev/README.md): cluster credentials and image archives
 /kubeconfig
 /images.tar
+
+# Terraform working directories, state and per-environment backend settings (deploy/terraform)
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+deploy/terraform/**/backend.hcl
+deploy/terraform/**/*.auto.tfvars
+deploy/terraform/aws/modules/**/.terraform.lock.hcl

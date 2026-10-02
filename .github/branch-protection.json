@@ -6,6 +6,7 @@
       {"context": "admin-ui build and tests", "app_id": 15368},
       {"context": "client-ui build and tests", "app_id": 15368},
       {"context": "Helm chart", "app_id": 15368},
+      {"context": "Terraform", "app_id": 15368},
       {"context": "Docker images build (client-api, ., Dockerfile, MODULE=client-api)", "app_id": 15368},
       {"context": "Docker images build (admin-api, ., Dockerfile, MODULE=admin-api)", "app_id": 15368},
       {"context": "Docker images build (dispatcher, ., Dockerfile, MODULE=dispatcher)", "app_id": 15368},

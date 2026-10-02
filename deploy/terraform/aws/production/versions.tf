@@ -1,0 +1,50 @@
+# Copyright 2026 Vasantha Kumar
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+# @author Vasantha Kumar <vasantha.kumar@hotmail.com>
+
+terraform {
+  required_version = ">= 1.10.0"
+
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = "~> 6.67"
+    }
+  }
+
+  # State in S3 with native locking. Bucket, key and region are passed at init time, so no account detail is
+  # committed: terraform init -backend-config=backend.hcl (see docs/aws-deployment.md).
+  backend "s3" {
+    encrypt      = true
+    use_lockfile = true
+  }
+}
+
+provider "aws" {
+  region = var.region
+
+  default_tags {
+    tags = local.tags
+  }
+}
+
+provider "aws" {
+  alias  = "disaster_recovery"
+  region = var.disaster_recovery_region
+
+  default_tags {
+    tags = local.tags
+  }
+}
