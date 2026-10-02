@@ -94,6 +94,7 @@ class DispatchServiceTest {
 
         verify(messages).markFailed(eq(id), eq(FailureKind.EXPIRED), eq(ErrorCode.OTP_EXPIRED),
                 contains("expired"), any());
+        assertThat(errors("SMS", ErrorCode.OTP_EXPIRED)).isEqualTo(1.0);
         verifyNoInteractions(rateLimits);
         verify(providers, never()).send(any());
     }
@@ -225,6 +226,7 @@ class DispatchServiceTest {
         verify(messages).markFailedOrRetry(eq(id), eq(MessageStatus.RETRYING),
                 eq(ErrorCode.PROVIDER_TEMPORARILY_FAILING),
                 contains("timeout"), any());
+        assertThat(errors("SMS", ErrorCode.PROVIDER_TEMPORARILY_FAILING)).isEqualTo(1.0);
 
         message.setAttempts(1);
         assertThat(service.process(id)).isEqualTo(new Outcome.Retry(Duration.ofSeconds(10)));
@@ -239,6 +241,7 @@ class DispatchServiceTest {
 
         verify(messages).markFailed(eq(id), eq(FailureKind.EXHAUSTED), eq(ErrorCode.DELIVERY_ATTEMPTS_EXHAUSTED),
                 contains("Gave up after 3"), any());
+        assertThat(errors("SMS", ErrorCode.DELIVERY_ATTEMPTS_EXHAUSTED)).isEqualTo(1.0);
     }
 
     @Test
@@ -249,6 +252,9 @@ class DispatchServiceTest {
 
         verify(messages).markFailed(eq(id), eq(FailureKind.PERMANENT), eq(ErrorCode.DELIVERY_REJECTED),
                 contains("invalid recipient"), any());
+        assertThat(errors("SMS", ErrorCode.DELIVERY_REJECTED)).isEqualTo(1.0);
+        assertThat(meters.get(DispatchService.DELIVERY_ERRORS).tag("code", "DELIVERY_REJECTED").counter().getId()
+                .getTag("error_id")).isEqualTo(ErrorCode.DELIVERY_REJECTED.errorId());
     }
 
     @Test
@@ -273,5 +279,20 @@ class DispatchServiceTest {
         verify(providers, never()).send(any());
         verify(messages).markFailed(eq(id), eq(FailureKind.PERMANENT), eq(ErrorCode.MESSAGE_CONTENT_MISSING),
                 contains("no content"), any());
+        assertThat(errors("SMS", ErrorCode.MESSAGE_CONTENT_MISSING)).isEqualTo(1.0);
+    }
+
+    @Test
+    void aSentMessageCountsNoDeliveryError() {
+        when(providers.send(any())).thenReturn(new SendResult("prov-1"));
+
+        service.process(id);
+
+        assertThat(meters.find(DispatchService.DELIVERY_ERRORS).counters()).isEmpty();
+    }
+
+    private double errors(String channel, ErrorCode errorCode) {
+        return meters.get(DispatchService.DELIVERY_ERRORS).tag("channel", channel).tag("code", errorCode.code())
+                .counter().count();
     }
 }

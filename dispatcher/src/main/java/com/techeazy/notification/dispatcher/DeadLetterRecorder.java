@@ -19,6 +19,7 @@
 package com.techeazy.notification.dispatcher;
 
 import com.techeazy.notification.domain.MessageStatus;
+import com.techeazy.notification.error.ErrorCode;
 import com.techeazy.notification.persistence.NotificationMessageRepository;
 import io.micrometer.core.instrument.MeterRegistry;
 import org.slf4j.Logger;
@@ -54,6 +55,7 @@ class DeadLetterRecorder {
         if (changed) {
             LOG.warn("Message {} on {} was dead-lettered by the broker and is now FAILED", messageId, channel);
             meters.counter("notification.dead_letter", "channel", channel).increment();
+            DispatchService.countError(meters, channel, ErrorCode.DELIVERY_DEAD_LETTERED);
         }
         return changed;
     }
