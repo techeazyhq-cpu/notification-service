@@ -65,6 +65,11 @@ public class DispatchService {
 
     /** Acceptance-to-sent time per channel; see {@link #recordDeliveryLatency}. */
     public static final String DELIVERY_LATENCY = "notification.delivery.latency";
+    /**
+     * Every failure or retry of a delivery, by channel and error code (ADR-031), so a rise in one cause, such as
+     * providers rejecting recipients on one channel, is visible and alerted on its own.
+     */
+    public static final String DELIVERY_ERRORS = "notification.delivery.errors";
     private static final Duration[] DELIVERY_LATENCY_THRESHOLDS = {
             Duration.ofSeconds(10), Duration.ofSeconds(30), Duration.ofMinutes(1), Duration.ofMinutes(5)};
 
@@ -142,11 +147,13 @@ public class DispatchService {
                 messages.markFailed(messageId, FailureKind.EXHAUSTED, ErrorCode.DELIVERY_ATTEMPTS_EXHAUSTED,
                         truncate("Gave up after " + attempt + " attempts: " + e.getMessage()), Instant.now());
                 count(m.getChannel(), "failed_exhausted");
+                countError(metrics, m.getChannel().name(), ErrorCode.DELIVERY_ATTEMPTS_EXHAUSTED);
                 return new Outcome.Done();
             }
             messages.markFailedOrRetry(messageId, MessageStatus.RETRYING, ErrorCode.PROVIDER_TEMPORARILY_FAILING,
                     truncate(e.getMessage()), Instant.now());
             count(m.getChannel(), "retry");
+            countError(metrics, m.getChannel().name(), ErrorCode.PROVIDER_TEMPORARILY_FAILING);
             return new Outcome.Retry(backoff(attempt));
         }
     }
@@ -178,12 +185,14 @@ public class DispatchService {
         messages.markFailed(m.getId(), FailureKind.EXPIRED, ErrorCode.OTP_EXPIRED,
                 "The one-time password expired at " + m.getExpiresAt() + " before it could be sent", Instant.now());
         count(m.getChannel(), "failed_expired");
+        countError(metrics, m.getChannel().name(), ErrorCode.OTP_EXPIRED);
         return new Outcome.Done();
     }
 
     private Outcome failPermanently(NotificationMessage m, ErrorCode errorCode, RuntimeException cause) {
         messages.markFailed(m.getId(), FailureKind.PERMANENT, errorCode, truncate(cause.getMessage()), Instant.now());
         count(m.getChannel(), "failed_permanent");
+        countError(metrics, m.getChannel().name(), errorCode);
         return new Outcome.Done();
     }
 
@@ -214,6 +223,12 @@ public class DispatchService {
                 .serviceLevelObjectives(DELIVERY_LATENCY_THRESHOLDS)
                 .register(metrics)
                 .record(Duration.between(m.getCreatedAt(), sentAt));
+    }
+
+    /** Counts one delivery error under {@link #DELIVERY_ERRORS}, tagged with its code and numbered error id. */
+    static void countError(MeterRegistry meters, String channel, ErrorCode errorCode) {
+        meters.counter(DELIVERY_ERRORS, "channel", channel, "code", errorCode.code(), "error_id", errorCode.errorId())
+                .increment();
     }
 
     private void count(Channel channel, String outcome) {

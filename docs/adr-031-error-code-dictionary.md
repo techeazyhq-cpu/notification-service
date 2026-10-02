@@ -98,5 +98,7 @@ Negative / accepted:
 
 ## Follow-ups
 
-- Count failures by `error_code` in metrics and dashboards, so a rise in `DELIVERY_REJECTED` is visible per channel.
+- ~~Count failures by `error_code` in metrics.~~ Done: `notification_delivery_errors_total{channel, code, error_id}`
+  counts every delivery failure and retry. `NotificationDeliveryRejectionsRising` fires when providers reject over 5%
+  of a channel's messages ([slo.md](slo.md#delivery-rejections-rising)).
 - OTP validity (ADR-033) adds `OTP_EXPIRED` to the delivery range.
