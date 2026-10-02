@@ -1,0 +1,86 @@
+# Copyright 2026 Vasantha Kumar
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+# @author Vasantha Kumar <vasantha.kumar@hotmail.com>
+#
+# PostgreSQL for production on Kubernetes with CloudNativePG (operator 1.30+, Barman Cloud plugin 0.15+, which needs
+# cert-manager): three instances with one synchronous standby (no committed transaction is lost when the primary
+# fails), automatic failover, continuous WAL archiving and a daily base backup for point-in-time recovery, and the
+# two roles of ADR-012. Pair it with object-store.yaml. See docs/disaster-recovery.md and ADR-026.
+# Secrets (kubernetes.io/basic-auth): notification-db-owner (username notification) for the migration job,
+# notification-db-app (username notification_app) for the services.
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: notification-db
+  namespace: datastores
+spec:
+  instances: 3
+  imageName: ghcr.io/cloudnative-pg/postgresql:16
+  postgresql:
+    synchronous:
+      method: any
+      number: 1
+      dataDurability: required
+    parameters:
+      max_connections: "200"
+  bootstrap:
+    initdb:
+      database: notification
+      owner: notification
+      secret:
+        name: notification-db-owner
+      postInitApplicationSQL:
+        - CREATE ROLE notification_app LOGIN
+        - GRANT USAGE ON SCHEMA public TO notification_app
+        - >-
+          ALTER DEFAULT PRIVILEGES FOR ROLE notification IN SCHEMA public
+          GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO notification_app
+        - >-
+          ALTER DEFAULT PRIVILEGES FOR ROLE notification IN SCHEMA public
+          GRANT USAGE, SELECT ON SEQUENCES TO notification_app
+  managed:
+    roles:
+      - name: notification_app
+        ensure: present
+        login: true
+        passwordSecret:
+          name: notification-db-app
+  storage:
+    size: 20Gi
+  walStorage:
+    size: 10Gi
+  affinity:
+    enablePodAntiAffinity: true
+    topologyKey: kubernetes.io/hostname
+  plugins:
+    - name: barman-cloud.cloudnative-pg.io
+      isWALArchiver: true
+      parameters:
+        barmanObjectName: notification-backups
+---
+apiVersion: postgresql.cnpg.io/v1
+kind: ScheduledBackup
+metadata:
+  name: notification-db-daily
+  namespace: datastores
+spec:
+  schedule: "0 0 2 * * *"
+  immediate: true
+  backupOwnerReference: self
+  cluster:
+    name: notification-db
+  method: plugin
+  pluginConfiguration:
+    name: barman-cloud.cloudnative-pg.io

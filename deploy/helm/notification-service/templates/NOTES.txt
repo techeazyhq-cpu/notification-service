@@ -1,0 +1,20 @@
+notification-service {{ .Chart.AppVersion }} is installed as release "{{ .Release.Name }}".
+
+Client API:  https://{{ .Values.ingress.hosts.api }}
+Client UI:   https://{{ .Values.ingress.hosts.app }}
+Admin UI:    https://{{ .Values.ingress.hosts.admin }}
+
+Sign in as "{{ .Values.config.admin.username }}" with ADMIN_PASSWORD from the Secret "{{ .Values.secrets.existingSecret }}".
+The first sign-in must replace that password and turn on two-factor authentication (ADR-020).
+
+{{- if .Values.networkPolicy.enabled }}
+{{- if not .Values.networkPolicy.datastoreEgress }}
+
+WARNING: networkPolicy.datastoreEgress is empty, so the services cannot reach PostgreSQL, Redis or Pulsar.
+{{- end }}
+NetworkPolicies are applied; they only take effect if the cluster's network plugin enforces them.
+{{- end }}
+{{- if ne .Release.Name "notification" }}
+
+NOTE: the NotificationServiceDown alert matches jobs named notification-*; with release "{{ .Release.Name }}", adapt it.
+{{- end }}

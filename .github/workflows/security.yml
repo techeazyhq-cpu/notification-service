@@ -26,6 +26,7 @@ jobs:
           ignore-unfixed: true
           exit-code: "1"
           trivyignores: .trivyignore
+          skip-dirs: deploy/k8s/dev
 
   codeql:
     name: CodeQL (${{ matrix.language }})

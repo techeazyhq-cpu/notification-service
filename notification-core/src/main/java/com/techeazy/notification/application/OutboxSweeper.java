@@ -69,6 +69,9 @@ public class OutboxSweeper {
                 cfg.getBatchSize()), "stuck processing");
         republish(messages.lockStale(MessageStatus.QUEUED.name(), now.minus(Duration.ofSeconds(cfg.getQueuedTimeoutSeconds())),
                 cfg.getBatchSize()), "queued but never delivered");
+        republish(messages.lockStale(MessageStatus.RETRYING.name(),
+                now.minus(Duration.ofSeconds(cfg.getRetryingTimeoutSeconds())), cfg.getBatchSize()),
+                "retry never redelivered");
     }
 
     private void republish(List<NotificationMessage> stale, String what) {

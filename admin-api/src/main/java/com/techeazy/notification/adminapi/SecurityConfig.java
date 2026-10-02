@@ -93,7 +93,7 @@ class SecurityConfig {
                 .authorizeHttpRequests(a -> a
                         // Boot forwards failures (400/404/409...) to /error; without this the fallback denyAll turns them into 403.
                         .dispatcherTypeMatchers(DispatcherType.ERROR).permitAll()
-                        .requestMatchers("/actuator/health", "/actuator/prometheus").permitAll()
+                        .requestMatchers("/actuator/health", "/actuator/health/**", "/actuator/prometheus").permitAll()
                         .requestMatchers("/swagger-ui/**", "/swagger-ui.html", "/v3/api-docs/**").permitAll()
                         .requestMatchers("/api/admin/auth/login").permitAll()
                         .requestMatchers("/api/admin/auth/**").hasAnyRole(VIEWER, BearerTokenFilter.ACCOUNT_SETUP_ROLE)

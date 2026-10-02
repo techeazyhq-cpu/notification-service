@@ -74,8 +74,9 @@ client-api 870 MB, dispatcher 648 MB, admin-api 500 MB, PostgreSQL 457 MB, Pulsa
   which is the right trade for an accept path.
 - **Personal data lifecycle:** finished messages lose recipient and variables after 90 days and are deleted after 400
   (ADR-009); erasure on request.
-- **Gap:** no backups, point-in-time recovery or restore drill in this repository. Durability of the datastores
-  themselves is a deployment concern (see the checklist).
+- **Since ADR-026:** synchronous standby and automatic failover for PostgreSQL (a hard primary crash lost nothing and
+  failed no accepts), point-in-time recovery from archived WAL, and a restore drill tested in CI. Pulsar and Redis
+  need no backups: the sweeper rebuilds the broker's contents from PostgreSQL. See [disaster-recovery.md](disaster-recovery.md).
 
 ## Reliability and fault tolerance (drills)
 

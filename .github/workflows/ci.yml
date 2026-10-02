@@ -26,6 +26,11 @@ jobs:
           cache: maven
       - name: Build and test (includes the PostgreSQL integration tests, which need Docker)
         run: mvn -B -ntp verify
+      - name: Check the backup scripts and run the backup and restore drill self-test
+        run: |
+          docker run --rm -v "$PWD/deploy/backup:/mnt:ro" koalaman/shellcheck:v0.11.0 \
+            /mnt/postgres-backup.sh /mnt/restore-drill.sh /mnt/self-test.sh
+          bash deploy/backup/self-test.sh
       - name: Check and unit-test the Prometheus SLO rules and alerts
         run: >-
           docker run --rm -v "$PWD/deploy/observability/prometheus:/rules:ro" -w /rules --entrypoint promtool
@@ -68,6 +73,34 @@ jobs:
         run: npm test
       - name: Known vulnerabilities in runtime dependencies
         run: npm audit --omit=dev --audit-level=high
+
+  deployment:
+    name: Helm chart
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - name: Lint the chart
+        run: >-
+          docker run --rm -v "$PWD/deploy:/deploy" -w /deploy alpine/helm:4.3.0
+          lint helm/notification-service --strict
+      - name: Render with default and development values and validate against the Kubernetes schemas
+        run: |
+          for values_file in "" "k8s/dev/values-k3s.yaml"; do
+            values_arguments=()
+            if [ -n "$values_file" ]; then values_arguments=(-f "$values_file"); fi
+            docker run --rm -v "$PWD/deploy:/deploy" -w /deploy alpine/helm:4.3.0 \
+              template notification helm/notification-service "${values_arguments[@]}" > rendered.yaml
+            if grep -n "from: \[\]" rendered.yaml; then
+              echo "A NetworkPolicy allows traffic from anywhere"; exit 1
+            fi
+            docker run --rm -v "$PWD:/work" ghcr.io/yannh/kubeconform:v0.8.0 \
+              -strict -summary -kubernetes-version 1.33.0 /work/rendered.yaml
+          done
+      - name: Validate the development datastores manifest
+        run: >-
+          docker run --rm -v "$PWD:/work" ghcr.io/yannh/kubeconform:v0.8.0
+          -strict -summary -kubernetes-version 1.33.0 /work/deploy/k8s/dev/datastores.yaml
 
   images:
     name: Docker images build

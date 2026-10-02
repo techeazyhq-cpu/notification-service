@@ -30,3 +30,7 @@ dist/
 .idea/
 *.iml
 .vscode/
+
+# Local k3s trial (deploy/k8s/dev/README.md): cluster credentials and image archives
+/kubeconfig
+/images.tar

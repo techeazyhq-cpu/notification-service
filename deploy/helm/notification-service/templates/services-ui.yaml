@@ -1,0 +1,86 @@
+{{/*
+Copyright 2026 Vasantha Kumar. Licensed under the Apache License, Version 2.0.
+@author Vasantha Kumar <vasantha.kumar@hotmail.com>
+
+admin-ui and client-ui: static single-page apps on unprivileged nginx. The ingress sends /api and /v1 straight to
+the APIs, so the UIs' own proxy locations are not used here.
+*/}}
+{{- $root := . -}}
+{{- $components := list
+      (dict "component" "admin-ui" "settings" .Values.adminUi)
+      (dict "component" "client-ui" "settings" .Values.clientUi) -}}
+{{- range $components }}
+{{- $component := .component }}
+{{- $settings := .settings }}
+{{- $context := dict "root" $root "component" $component }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "notification.componentName" $context }}
+  labels:
+    {{- include "notification.labels" $context | nindent 4 }}
+spec:
+  replicas: {{ $settings.replicas }}
+  revisionHistoryLimit: 5
+  strategy:
+    type: RollingUpdate
+    rollingUpdate: {maxUnavailable: 0, maxSurge: 1}
+  selector:
+    matchLabels:
+      {{- include "notification.selectorLabels" $context | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "notification.selectorLabels" $context | nindent 8 }}
+    spec:
+      serviceAccountName: {{ $root.Release.Name }}-notification
+      automountServiceAccountToken: false
+      securityContext:
+        {{- include "notification.podSecurityContext" (dict "uid" 101) | nindent 8 }}
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              {{- include "notification.selectorLabels" $context | nindent 14 }}
+      {{- with $root.Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: {{ $component }}
+          image: {{ include "notification.image" $context }}
+          imagePullPolicy: {{ $root.Values.image.pullPolicy }}
+          ports:
+            - {name: http, containerPort: {{ $settings.port }}}
+          livenessProbe:
+            httpGet: {path: /, port: http}
+            periodSeconds: 10
+          readinessProbe:
+            httpGet: {path: /, port: http}
+            periodSeconds: 5
+          resources:
+            {{- toYaml $settings.resources | nindent 12 }}
+          securityContext:
+            {{- include "notification.containerSecurityContext" . | nindent 12 }}
+          volumeMounts:
+            - {name: tmp, mountPath: /tmp}
+      volumes:
+        - name: tmp
+          emptyDir: {sizeLimit: 64Mi}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "notification.componentName" $context }}
+  labels:
+    {{- include "notification.labels" $context | nindent 4 }}
+spec:
+  type: ClusterIP
+  selector:
+    {{- include "notification.selectorLabels" $context | nindent 4 }}
+  ports:
+    - {name: http, port: {{ $settings.port }}, targetPort: http}
+{{- end }}

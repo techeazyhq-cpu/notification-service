@@ -60,6 +60,11 @@ public class NotificationProperties {
         private long processingTimeoutSeconds = 300;
         /** QUEUED rows older than this were lost between the broker and a worker; republishing is safe because workers claim atomically. */
         private long queuedTimeoutSeconds = 900;
+        /**
+         * RETRYING rows older than this lost their delayed redelivery in the broker. Well past the longest backoff
+         * (dispatcher.max-backoff-seconds, 300), so a retry that is merely waiting is never sent twice early.
+         */
+        private long retryingTimeoutSeconds = 900;
         private int batchSize = 500;
     }
 }
