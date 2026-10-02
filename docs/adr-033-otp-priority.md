@@ -89,3 +89,14 @@ Negative / accepted:
 
 - An SLO for OTP time-to-send (for example 99 % within 30 seconds) with burn-rate alerts, using the new tag.
 - Per-category pricing in billing, if the business wants OTPs priced differently.
+
+## Amendment (2026-10-02): lane isolation and template edits
+
+- **Each dispatcher consumer is drained by a worker thread of its own.** The consumers used Pulsar message listeners,
+  which the client runs on one shared thread by default. Handling blocks: a provider call, or holding a message
+  while it is rate limited or every provider is down. So one held message stopped every lane of every channel, and
+  an OTP waited behind a rate-limited bulk message, which defeated decision 2. Workers stop before the consumers
+  close, so a message being held is handed back to the broker.
+- **An edit that leaves out `category` keeps the template's category.** Both consoles saved templates without the
+  field, which reset an OTP template to TRANSACTIONAL with no error. The consoles now show and send the category,
+  and the APIs keep the stored one when a caller leaves it out. Sending `TRANSACTIONAL` resets it.

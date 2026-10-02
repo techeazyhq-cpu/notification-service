@@ -111,6 +111,7 @@ class TemplatesController {
         return t;
     }
 
+    /** An update that leaves {@code category} out keeps the template's category (ADR-033). */
     private static void apply(Template t, TemplateInput in) {
         if (in.channel() == Channel.EMAIL && (in.subject() == null || in.subject().isBlank())) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "EMAIL templates need a subject");
@@ -122,7 +123,9 @@ class TemplatesController {
         t.setChannel(in.channel());
         t.setSubject(in.subject());
         t.setBody(in.body());
-        t.setCategory(in.category());
+        if (in.category() != null) {
+            t.setCategory(in.category());
+        }
         t.setUpdatedAt(Instant.now());
     }
 
