@@ -211,9 +211,16 @@ The chart's `values.yaml` documents every setting. To try it locally on k3s in D
 
 `deploy/terraform/aws` builds an environment: a three-zone VPC, EKS with network-policy enforcement, RDS PostgreSQL
 Multi-AZ with point-in-time recovery and backups replicated to a second region, ElastiCache with TLS, and a backup
-bucket in the recovery region. Pulsar runs on EKS from the Apache chart (`deploy/k8s/pulsar/values-aws.yaml`), and
+bucket in the recovery region. Pulsar runs on EKS from the Apache chart (`deploy/k8s/pulsar/values.yaml`), and
 External Secrets feeds the chart's Secret from Secrets Manager. The datastores module is unit-tested at plan time in
 CI. Step by step: [docs/aws-deployment.md](docs/aws-deployment.md). See ADR-028.
+
+### On Azure
+
+`deploy/terraform/azure` builds the same shape on Azure: AKS with Cilium network policies and workload identity,
+PostgreSQL Flexible Server with zone-redundant HA and geo-redundant backups, Azure Managed Redis, Key Vault, and a
+backup account in the paired region, all behind private endpoints. Pulsar uses the same values as on AWS. Step by
+step: [docs/azure-deployment.md](docs/azure-deployment.md). See ADR-029.
 
 ## Backups and disaster recovery
 

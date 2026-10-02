@@ -62,6 +62,18 @@ capabilities:
   value: {{ $config.redis.host | quote }}
 - name: REDIS_PORT
   value: {{ $config.redis.port | quote }}
+{{- if $config.redis.passwordFromSecret }}
+- name: SPRING_DATA_REDIS_PASSWORD
+  valueFrom: {secretKeyRef: {name: {{ .Values.secrets.existingSecret }}, key: REDIS_PASSWORD}}
+{{- end }}
+{{- with $config.redis.tlsTrustCertificateFile }}
+- name: SPRING_DATA_REDIS_SSL_ENABLED
+  value: "true"
+- name: SPRING_DATA_REDIS_SSL_BUNDLE
+  value: redis
+- name: SPRING_SSL_BUNDLE_PEM_REDIS_TRUSTSTORE_CERTIFICATE
+  value: {{ . | quote }}
+{{- end }}
 - name: PULSAR_URL
   value: {{ $config.pulsar.url | quote }}
 - name: PULSAR_TLS_TRUST_CERTS_FILE

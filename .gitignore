@@ -42,4 +42,4 @@ dist/
 *.tfplan
 deploy/terraform/**/backend.hcl
 deploy/terraform/**/*.auto.tfvars
-deploy/terraform/aws/modules/**/.terraform.lock.hcl
+deploy/terraform/*/modules/**/.terraform.lock.hcl

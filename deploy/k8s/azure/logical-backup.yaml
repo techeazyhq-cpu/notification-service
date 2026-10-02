@@ -1,0 +1,140 @@
+# Copyright 2026 Vasantha Kumar
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+# @author Vasantha Kumar <vasantha.kumar@hotmail.com>
+#
+# Daily logical dump of the Flexible Server database to the storage account in the recovery region (ADR-026, ADR-029).
+# The dump runs deploy/backup/postgres-backup.sh as the read-capable runtime role; the upload signs in with the
+# notification-logical-backup workload identity, which can only write to the dump container. Fill the placeholders
+# from `terraform output manifest_values`, naming them so the shell variables below are left alone:
+#   kubectl -n notification create configmap notification-backup-scripts --from-file=deploy/backup/postgres-backup.sh
+#   envsubst '${LOGICAL_BACKUP_CLIENT_ID} ${POSTGRES_FQDN} ${BACKUP_STORAGE_ACCOUNT} ${POSTGRES_SUBNET_CIDR}
+#     ${PRIVATE_ENDPOINT_SUBNET_CIDR}' < logical-backup.yaml | kubectl apply -f -
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: notification-logical-backup
+  namespace: notification
+  annotations:
+    azure.workload.identity/client-id: "${LOGICAL_BACKUP_CLIENT_ID}"
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: notification-logical-backup
+  namespace: notification
+spec:
+  schedule: "30 3 * * *"
+  timeZone: Etc/UTC
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      activeDeadlineSeconds: 7200
+      ttlSecondsAfterFinished: 604800
+      template:
+        metadata:
+          labels:
+            app.kubernetes.io/name: notification-logical-backup
+            azure.workload.identity/use: "true"
+        spec:
+          serviceAccountName: notification-logical-backup
+          restartPolicy: Never
+          securityContext:
+            runAsNonRoot: true
+            seccompProfile: {type: RuntimeDefault}
+          initContainers:
+            - name: dump
+              image: postgres:16
+              command: [bash, /scripts/postgres-backup.sh, --output-dir, /backups]
+              env:
+                - {name: DATABASE_URL, value: "postgresql://notification_app@${POSTGRES_FQDN}:5432/notification"}
+                - {name: PGSSLMODE, value: verify-full}
+                - {name: PGSSLROOTCERT, value: /etc/db-ca/ca-bundle.pem}
+                - name: PGPASSWORD
+                  valueFrom: {secretKeyRef: {name: notification-secrets, key: DB_PASSWORD}}
+              securityContext: &hardened
+                runAsUser: 999
+                runAsGroup: 999
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities: {drop: [ALL]}
+              resources:
+                requests: {cpu: 250m, memory: 256Mi}
+                limits: {memory: 1Gi}
+              volumeMounts:
+                - {name: scripts, mountPath: /scripts, readOnly: true}
+                - {name: db-ca, mountPath: /etc/db-ca, readOnly: true}
+                - {name: backups, mountPath: /backups}
+                - {name: tmp, mountPath: /tmp}
+          containers:
+            - name: upload
+              image: mcr.microsoft.com/azure-cli:2.90.0
+              command: [sh, -c]
+              args:
+                - >-
+                  az login --service-principal --username "$AZURE_CLIENT_ID" --tenant "$AZURE_TENANT_ID"
+                  --federated-token "$$(cat "$AZURE_FEDERATED_TOKEN_FILE")" --allow-no-subscriptions --output none
+                  && az storage blob upload-batch --auth-mode login --account-name "${BACKUP_STORAGE_ACCOUNT}"
+                  --destination logical-dumps --destination-path "$$(date -u +%Y/%m/%d)" --source /backups
+                  --only-show-errors --output none
+              env:
+                - {name: HOME, value: /tmp}
+              securityContext: *hardened
+              resources:
+                requests: {cpu: 100m, memory: 256Mi}
+                limits: {memory: 768Mi}
+              volumeMounts:
+                - {name: backups, mountPath: /backups, readOnly: true}
+                - {name: tmp, mountPath: /tmp}
+          volumes:
+            - name: scripts
+              configMap: {name: notification-backup-scripts}
+            - name: db-ca
+              configMap: {name: db-ca-bundle}
+            - name: backups
+              emptyDir: {sizeLimit: 20Gi}
+            - name: tmp
+              emptyDir: {sizeLimit: 256Mi}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: notification-logical-backup
+  namespace: notification
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: notification-logical-backup
+  policyTypes: [Ingress, Egress]
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels: {kubernetes.io/metadata.name: kube-system}
+          podSelector:
+            matchLabels: {k8s-app: kube-dns}
+      ports:
+        - {protocol: UDP, port: 53}
+        - {protocol: TCP, port: 53}
+    - to:
+        - ipBlock: {cidr: "${POSTGRES_SUBNET_CIDR}"}
+      ports:
+        - {protocol: TCP, port: 5432}
+    - to:
+        - ipBlock: {cidr: "${PRIVATE_ENDPOINT_SUBNET_CIDR}"}
+        - ipBlock: {cidr: 0.0.0.0/0}
+      ports:
+        - {protocol: TCP, port: 443}
