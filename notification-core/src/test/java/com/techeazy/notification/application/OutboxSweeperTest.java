@@ -23,7 +23,10 @@ import com.techeazy.notification.domain.MessageStatus;
 import com.techeazy.notification.domain.NotificationMessage;
 import com.techeazy.notification.persistence.NotificationMessageRepository;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 
+import java.time.Duration;
+import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 
@@ -32,6 +35,7 @@ import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 class OutboxSweeperTest {
@@ -57,6 +61,30 @@ class OutboxSweeperTest {
 
         assertThat(lost.getStatus()).isEqualTo(MessageStatus.QUEUED);
         assertThat(lost.getUpdatedAt()).isNotNull();
+    }
+
+    /** A retry waits in the broker's retry topic; if the broker loses it, only this sweep brings the message back. */
+    @Test
+    void republishesARetryWhoseDelayedRedeliveryNeverArrived() {
+        NotificationMessage stranded = message(MessageStatus.RETRYING);
+        when(messages.lockStale(eq("RETRYING"), any(), anyInt())).thenReturn(List.of(stranded));
+        when(outbox.publishOnly(List.of(stranded))).thenReturn(List.of(stranded.getId()));
+
+        sweeper.sweep();
+
+        assertThat(stranded.getStatus()).isEqualTo(MessageStatus.QUEUED);
+    }
+
+    @Test
+    void leavesARetryAloneUntilWellPastTheLongestBackoff() {
+        ArgumentCaptor<Instant> cutoff = ArgumentCaptor.forClass(Instant.class);
+        Instant before = Instant.now();
+
+        sweeper.sweep();
+
+        verify(messages).lockStale(eq("RETRYING"), cutoff.capture(), anyInt());
+        long secondsBack = Duration.between(cutoff.getValue(), before).abs().toSeconds();
+        assertThat(secondsBack).isBetween(899L, 901L);
     }
 
     @Test

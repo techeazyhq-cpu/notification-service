@@ -207,6 +207,10 @@ PostgreSQL, Redis and Pulsar are external. Before installing:
 The chart's `values.yaml` documents every setting. To try it locally on k3s in Docker, follow
 [deploy/k8s/dev/README.md](deploy/k8s/dev/README.md). See ADR-025.
 
+## Backups and disaster recovery
+
+Only PostgreSQL holds state that needs backing up; Pulsar and Redis are rebuilt from it or refill by themselves. PostgreSQL runs with a synchronous standby and automatic failover, continuous WAL archiving for point-in-time recovery (reference manifests for CloudNativePG in `deploy/k8s/postgres`), and logical dumps with a restore drill that proves a backup is complete (`deploy/backup`). [docs/disaster-recovery.md](docs/disaster-recovery.md) has the objectives (no data lost on a primary crash, at most 5 minutes otherwise), measured results and the procedures. See ADR-026.
+
 ## Tracing and logs
 
 Every request gets a trace that follows the message through Pulsar to the dispatcher and each provider call; responses return its id in `X-Trace-Id`, and every log line carries the same `traceId`. Quote it when reporting a problem. Logs are JSON (Elastic Common Schema) unless `LOG_FORMAT` is set empty, which `docker compose` does. Spans are exported over OTLP when `MANAGEMENT_OTLP_TRACING_ENDPOINT` is set; `TRACING_SAMPLING_PROBABILITY` (default 0.1) decides how many. To see traces locally:
