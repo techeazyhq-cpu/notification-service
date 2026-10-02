@@ -20,6 +20,15 @@ const KEY = 'notification-client-api-key';
 
 export const CHANNELS = ['EMAIL', 'SMS', 'WHATSAPP', 'PUSH'] as const;
 export type Channel = (typeof CHANNELS)[number];
+
+/** What a template's sends are for; OTP sends are one-time passwords, delivered with priority and dropped once expired. */
+export const CATEGORIES = ['TRANSACTIONAL', 'OTP', 'PROMOTIONAL'] as const;
+export type Category = (typeof CATEGORIES)[number];
+export const CATEGORY_LABELS: Record<Category, string> = {
+  TRANSACTIONAL: 'Transactional',
+  OTP: 'One-time password',
+  PROMOTIONAL: 'Promotional',
+};
 export const MESSAGE_STATUSES = ['PENDING', 'QUEUED', 'PROCESSING', 'RETRYING', 'SENT', 'FAILED'] as const;
 export type MessageStatus = (typeof MESSAGE_STATUSES)[number];
 export type RequestStatus = 'PROCESSING' | 'COMPLETED' | 'PARTIALLY_FAILED' | 'FAILED';
@@ -104,9 +113,9 @@ export const inFlight = (c: StatusCounts) => c.pending + c.queued + c.processing
 
 export interface Template {
   id: string; name: string; channel: Channel; subject?: string; body: string; variables: string[];
-  scope: 'OWNED' | 'SHARED'; readOnly: boolean; createdAt: string; updatedAt: string;
+  scope: 'OWNED' | 'SHARED'; readOnly: boolean; createdAt: string; updatedAt: string; category?: Category;
 }
-export interface TemplateInput { name: string; channel: Channel; subject?: string; body: string }
+export interface TemplateInput { name: string; channel: Channel; subject?: string; body: string; category: Category }
 export interface Preview { subject?: string; body: string; requiredVariables: string[]; missingVariables: string[] }
 
 /** Same placeholder syntax the server uses: {{name}}; {{recipient}} is built in and never needs a value. */

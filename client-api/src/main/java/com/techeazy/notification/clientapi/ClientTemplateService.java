@@ -148,12 +148,15 @@ public class ClientTemplateService {
         }
     }
 
+    /** An update that leaves {@code category} out keeps the template's category (ADR-033). */
     private static void apply(Template t, TemplateInput in) {
         t.setName(in.name());
         t.setChannel(in.channel());
         t.setSubject(in.subject() == null || in.subject().isBlank() ? null : in.subject());
         t.setBody(in.body());
-        t.setCategory(in.category());
+        if (in.category() != null) {
+            t.setCategory(in.category());
+        }
         t.setUpdatedAt(Instant.now());
     }
 

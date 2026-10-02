@@ -21,6 +21,15 @@ const KEY = 'notification-admin-auth';
 export const CHANNELS = ['EMAIL', 'SMS', 'WHATSAPP', 'PUSH'] as const;
 export type Channel = (typeof CHANNELS)[number];
 
+/** What a template's sends are for; OTP sends are one-time passwords, delivered with priority and dropped once expired. */
+export const CATEGORIES = ['TRANSACTIONAL', 'OTP', 'PROMOTIONAL'] as const;
+export type Category = (typeof CATEGORIES)[number];
+export const CATEGORY_LABELS: Record<Category, string> = {
+  TRANSACTIONAL: 'Transactional',
+  OTP: 'One-time password',
+  PROMOTIONAL: 'Promotional',
+};
+
 export const auth = {
   get: () => sessionStorage.getItem(KEY),
   set: (token: string) => sessionStorage.setItem(KEY, 'Bearer ' + token),
@@ -95,7 +104,7 @@ export async function api<T = unknown>(method: string, path: string, body?: unkn
 
 export interface Client { id: string; name: string; status: 'ACTIVE' | 'DISABLED'; allowedChannels: Channel[]; apiKeyPrefix: string; createdAt: string }
 /** ownerClientId is null for shared templates (managed here); otherwise the template belongs to that client. */
-export interface Template { id: string; ownerClientId?: string; ownerName?: string; name: string; channel: Channel; subject?: string; body: string }
+export interface Template { id: string; ownerClientId?: string; ownerName?: string; name: string; channel: Channel; subject?: string; body: string; category?: Category }
 export interface Provider { id: string; channel: Channel; name: string; type: 'SMTP' | 'HTTP_JSON'; settings: Record<string, string>; enabled: boolean; priority: number }
 export interface RateLimit { id: string; scope: 'CLIENT_API' | 'CLIENT_CHANNEL' | 'GLOBAL_CHANNEL'; clientId?: string; channel?: Channel; ratePerSecond: number; burst: number; enabled: boolean }
 export interface Count { channel: string; status: string; count: number }

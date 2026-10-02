@@ -17,10 +17,10 @@
  */
 
 import { useState } from 'react';
-import { api, Channel, CHANNELS, Template } from '../api';
+import { api, CATEGORIES, Category, CATEGORY_LABELS, Channel, CHANNELS, Template } from '../api';
 import { useLoad } from '../hooks';
 
-const EMPTY = { name: '', channel: 'EMAIL' as Channel, subject: '', body: '' };
+const EMPTY = { name: '', channel: 'EMAIL' as Channel, subject: '', body: '', category: 'TRANSACTIONAL' as Category };
 
 export default function Templates() {
   const { data, error, reload } = useLoad(() => api<Template[]>('GET', '/templates'));
@@ -42,7 +42,7 @@ export default function Templates() {
     try { await api('DELETE', `/templates/${t.id}`); reload(); } catch (err) { alert((err as Error).message); }
   }
 
-  const edit = (t: Template) => { setEditing(t.id); setForm({ name: t.name, channel: t.channel, subject: t.subject ?? '', body: t.body }); };
+  const edit = (t: Template) => { setEditing(t.id); setForm({ name: t.name, channel: t.channel, subject: t.subject ?? '', body: t.body, category: t.category ?? 'TRANSACTIONAL' }); };
 
   return (
     <>
@@ -54,6 +54,11 @@ export default function Templates() {
           <label><span>Channel</span>
             <select value={form.channel} onChange={(e) => setForm({ ...form, channel: e.target.value as Channel })}>
               {CHANNELS.map((c) => <option key={c}>{c}</option>)}
+            </select>
+          </label>
+          <label><span>Category</span>
+            <select value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value as Category })}>
+              {CATEGORIES.map((c) => <option key={c} value={c}>{CATEGORY_LABELS[c]}</option>)}
             </select>
           </label>
           <label style={{ flex: 1 }}>Subject / title<input value={form.subject} onChange={(e) => setForm({ ...form, subject: e.target.value })} /></label>
@@ -70,13 +75,13 @@ export default function Templates() {
       {error && <p className="error">{error}</p>}
       <div className="card">
         <table>
-          <thead><tr><th>Name</th><th>Owner</th><th>Channel</th><th>Subject</th><th>Body</th><th></th></tr></thead>
+          <thead><tr><th>Name</th><th>Owner</th><th>Channel</th><th>Category</th><th>Subject</th><th>Body</th><th></th></tr></thead>
           <tbody>
             {data?.map((t) => (
               <tr key={t.id}>
                 <td>{t.name}</td>
                 <td><span className={t.ownerClientId ? 'badge' : 'badge ACTIVE'}>{t.ownerClientId ? (t.ownerName ?? 'client') : 'Shared'}</span></td>
-                <td>{t.channel}</td><td>{t.subject}</td>
+                <td>{t.channel}</td><td>{CATEGORY_LABELS[t.category ?? 'TRANSACTIONAL']}</td><td>{t.subject}</td>
                 <td className="mono">{t.body.length > 80 ? t.body.slice(0, 80) + '…' : t.body}</td>
                 <td>
                   {t.ownerClientId ? <span className="muted">read-only</span> : (
@@ -88,7 +93,7 @@ export default function Templates() {
                 </td>
               </tr>
             ))}
-            {data?.length === 0 && <tr><td colSpan={6} className="muted">No templates yet.</td></tr>}
+            {data?.length === 0 && <tr><td colSpan={7} className="muted">No templates yet.</td></tr>}
           </tbody>
         </table>
       </div>
