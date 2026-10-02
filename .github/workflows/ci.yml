@@ -26,6 +26,12 @@ jobs:
           cache: maven
       - name: Build and test (includes the PostgreSQL integration tests, which need Docker)
         run: mvn -B -ntp verify
+      - name: Check and unit-test the Prometheus SLO rules and alerts
+        run: >-
+          docker run --rm -v "$PWD/deploy/observability/prometheus:/rules:ro" -w /rules --entrypoint promtool
+          prom/prometheus:v3.13.4 check rules notification-slo.rules.yml
+          && docker run --rm -v "$PWD/deploy/observability/prometheus:/rules:ro" -w /rules --entrypoint promtool
+          prom/prometheus:v3.13.4 test rules notification-slo.test.yml
       - name: Upload test and coverage reports
         if: always()
         uses: actions/upload-artifact@v7

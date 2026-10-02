@@ -111,8 +111,9 @@ is single-node.
   admin API call, including refused attempts and sign-ins, is in an append-only audit log (ADR-019).
 - **Since ADR-023:** one OpenTelemetry trace per request, carried through Pulsar to the dispatcher and each provider
   call, its id returned in `X-Trace-Id` and present in every (JSON) log line.
-- **Still missing:** service level objectives and alerts; spans for database and Redis calls; republished messages
-  start a new trace.
+- **Since ADR-024:** four service level objectives with burn-rate alerts and symptom alerts, unit-tested with
+  `promtool`; a delivery-latency histogram and backlog-age gauges; [docs/slo.md](slo.md) is the runbook.
+- **Still missing:** spans for database and Redis calls; republished messages start a new trace.
 
 ## Scalability
 
@@ -122,11 +123,11 @@ is single-node.
 | dispatcher | ~300 messages/s with 2 consumers per channel | more consumers per channel, more instances, partitioned topics |
 | PostgreSQL | single primary; `notification_message` unpartitioned, status counted on read | time-partition messages, read model for status and dashboards, read replica |
 | Pulsar | standalone, single-partition topics | cluster, partition per channel |
-| Redis | single node; rate limiter fails open | replicas; alert on limiter errors |
+| Redis | single node; rate limiter fails open (ADR-024: errors counted and alerted, Redis skipped for 5 s after an error) | replicas |
 
 ## Enhancements, in priority order
 
-1. **Traceability:** done in ADR-023; SLOs and alerts next.
+1. **Traceability and alerting:** done in ADR-023 and ADR-024.
 2. **Resilience:** circuit breaker on the publisher so ingest stays fast during a broker outage; shorter, configurable
    stuck-processing timeout with a heartbeat instead of a fixed 5 minutes; provider idempotency keys.
 3. **Scale:** partitioned topics and per-channel consumer tuning; time-partitioned `notification_message` with retention by

@@ -28,14 +28,17 @@ import com.techeazy.notification.domain.*;
 import com.techeazy.notification.persistence.NotificationMessageRepository;
 import com.techeazy.notification.persistence.NotificationRequestRepository;
 import com.techeazy.notification.port.RateLimiter.Decision;
+import io.micrometer.core.instrument.Timer;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
+import java.time.Instant;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.*;
@@ -48,6 +51,7 @@ class DispatchServiceTest {
     RateLimitService rateLimits = mock(RateLimitService.class);
     ProviderRegistry providers = mock(ProviderRegistry.class);
     DispatcherProperties props = new DispatcherProperties();
+    SimpleMeterRegistry meters = new SimpleMeterRegistry();
     DispatchService service;
 
     UUID id = UUID.randomUUID();
@@ -57,7 +61,7 @@ class DispatchServiceTest {
     void setUp() {
         props.setMaxAttempts(3);
         props.setBaseBackoffSeconds(5);
-        service = new DispatchService(messages, requests, rateLimits, providers, props, new SimpleMeterRegistry());
+        service = new DispatchService(messages, requests, rateLimits, providers, props, meters);
 
         message = new NotificationMessage();
         message.setId(id);
@@ -98,6 +102,31 @@ class DispatchServiceTest {
 
         verify(messages).release(eq(id), any());
         verify(messages, never()).markFailedOrRetry(any(), any(), any(), any());
+    }
+
+    @Test
+    void theTimeFromAcceptanceToSendingIsMeasuredPerChannelAgainstTheFreshnessThresholds() {
+        message.setCreatedAt(Instant.now().minusSeconds(42));
+        when(providers.send(any())).thenReturn(new SendResult("prov-1"));
+
+        service.process(id);
+
+        Timer latency = meters.get(DispatchService.DELIVERY_LATENCY).tag("channel", "SMS").timer();
+        assertThat(latency.count()).isEqualTo(1);
+        assertThat(latency.totalTime(TimeUnit.SECONDS)).isBetween(42.0, 60.0);
+        assertThat(latency.takeSnapshot().histogramCounts())
+                .extracting(bucket -> bucket.bucket(TimeUnit.SECONDS))
+                .contains(10.0, 30.0, 60.0, 300.0);
+    }
+
+    @Test
+    void aMessageThatIsNotSentIsNotMeasuredAsDelivered() {
+        message.setCreatedAt(Instant.now().minusSeconds(42));
+        when(providers.send(any())).thenThrow(new PermanentSendException("invalid number"));
+
+        service.process(id);
+
+        assertThat(meters.find(DispatchService.DELIVERY_LATENCY).timer()).isNull();
     }
 
     @Test

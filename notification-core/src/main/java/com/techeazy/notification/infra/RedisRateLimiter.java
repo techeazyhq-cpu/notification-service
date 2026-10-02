@@ -19,11 +19,20 @@
 package com.techeazy.notification.infra;
 
 import com.techeazy.notification.port.RateLimiter;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.script.DefaultRedisScript;
 import org.springframework.stereotype.Component;
 
+import java.time.Clock;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * Token bucket evaluated atomically in Redis (Lua). Time comes from the Redis server so that
@@ -31,6 +40,11 @@ import java.util.List;
  */
 @Component
 public class RedisRateLimiter implements RateLimiter {
+
+    public static final String ERRORS_METRIC = "notification.rate_limiter.errors";
+    static final Duration SKIP_AFTER_ERROR = Duration.ofSeconds(5);
+
+    private static final Logger LOG = LoggerFactory.getLogger(RedisRateLimiter.class);
 
     private static final String LUA = """
             local rate = tonumber(ARGV[1])
@@ -58,16 +72,50 @@ public class RedisRateLimiter implements RateLimiter {
     @SuppressWarnings({"rawtypes", "unchecked"})
     private final DefaultRedisScript<List> script = new DefaultRedisScript<>(LUA, List.class);
     private final StringRedisTemplate redis;
+    private final Clock clock;
+    private final Counter errors;
+    private final AtomicReference<Instant> skipRedisUntil = new AtomicReference<>(Instant.MIN);
 
-    public RedisRateLimiter(StringRedisTemplate redis) {
-        this.redis = redis;
+    @Autowired
+    public RedisRateLimiter(StringRedisTemplate redis, MeterRegistry meters) {
+        this(redis, meters, Clock.systemUTC());
     }
 
+    RedisRateLimiter(StringRedisTemplate redis, MeterRegistry meters, Clock clock) {
+        this.redis = redis;
+        this.clock = clock;
+        this.errors = Counter.builder(ERRORS_METRIC)
+                .description("Rate-limit checks that failed open because Redis could not answer")
+                .register(meters);
+    }
+
+    /**
+     * Fails open: when Redis cannot answer, the call is let through and counted in {@value #ERRORS_METRIC}, and Redis
+     * is left alone for {@link #SKIP_AFTER_ERROR}, so an outage neither stops the platform nor adds a timeout to every
+     * call. Limits are not enforced meanwhile, which is why the counter has an alert (see ADR-024).
+     */
     @Override
     public Decision tryAcquire(String key, double ratePerSecond, int burst) {
-        List<?> r = redis.execute(script, List.of("rl:" + key), Double.toString(ratePerSecond), Integer.toString(burst));
-        if (r == null || r.size() < 2) return Decision.GRANTED; // fail open: never block traffic on limiter faults
-        boolean allowed = ((Number) r.get(0)).longValue() == 1;
-        return allowed ? Decision.GRANTED : new Decision(false, ((Number) r.get(1)).longValue());
+        if (clock.instant().isBefore(skipRedisUntil.get())) {
+            return Decision.GRANTED;
+        }
+        try {
+            List<?> reply = redis.execute(script, List.of("rl:" + key), Double.toString(ratePerSecond),
+                    Integer.toString(burst));
+            if (reply == null || reply.size() < 2) {
+                return failOpen("an unexpected reply from the rate-limit script", null);
+            }
+            boolean allowed = ((Number) reply.get(0)).longValue() == 1;
+            return allowed ? Decision.GRANTED : new Decision(false, ((Number) reply.get(1)).longValue());
+        } catch (RuntimeException failure) {
+            return failOpen(failure.getMessage(), failure);
+        }
+    }
+
+    private Decision failOpen(String reason, RuntimeException failure) {
+        errors.increment();
+        skipRedisUntil.set(clock.instant().plus(SKIP_AFTER_ERROR));
+        LOG.warn("Rate limiting skipped for {} s: {}", SKIP_AFTER_ERROR.toSeconds(), reason, failure);
+        return Decision.GRANTED;
     }
 }
