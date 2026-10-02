@@ -18,6 +18,7 @@
 
 package com.techeazy.notification.clientapi;
 
+import com.techeazy.notification.application.ProviderDestinationPolicy;
 import com.techeazy.notification.domain.Channel;
 import com.techeazy.notification.domain.ProviderConfig;
 import com.techeazy.notification.domain.ProviderType;
@@ -45,10 +46,13 @@ public class SmtpVerificationMailer implements VerificationMailer {
 
     private final ProviderConfigRepository providers;
     private final ProviderSecrets secrets;
+    private final ProviderDestinationPolicy destinations;
 
-    public SmtpVerificationMailer(ProviderConfigRepository providers, ProviderSecrets secrets) {
+    public SmtpVerificationMailer(ProviderConfigRepository providers, ProviderSecrets secrets,
+                                  ProviderDestinationPolicy destinations) {
         this.providers = providers;
         this.secrets = secrets;
+        this.destinations = destinations;
     }
 
     @Override
@@ -57,6 +61,7 @@ public class SmtpVerificationMailer implements VerificationMailer {
                 "EMAIL_NOT_AVAILABLE", "No e-mail provider is configured, so the confirmation e-mail cannot be sent"));
         try {
             var settings = secrets.decryptForUse(provider.getSettings());
+            destinations.check(ProviderType.SMTP, settings);
             JavaMailSenderImpl sender = SmtpSenderFactory.build(settings);
             MimeMessage mime = sender.createMimeMessage();
             MimeMessageHelper helper = new MimeMessageHelper(mime, "UTF-8");

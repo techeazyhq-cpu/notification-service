@@ -35,7 +35,8 @@ first, the ports are the same).
 
 Infra only (run services from your IDE): `docker compose up -d`, then `mvn -q -DskipTests package` and
 `java -jar client-api/target/client-api-*.jar` (likewise `admin-api`, `dispatcher`). If the dispatcher runs on your host,
-seed with `SMTP_HOST=localhost CATCHER_URL=http://localhost:9000 node scripts/seed.mjs`.
+seed with `SMTP_HOST=localhost CATCHER_URL=http://localhost:9000 node scripts/seed.mjs`, and start admin-api,
+client-api and the dispatcher with `PROVIDER_TRUSTED_HOSTS=localhost` so they accept those local providers.
 
 ## Try it
 
@@ -189,6 +190,10 @@ GitHub Actions run on every pull request and on `main` (`.github/workflows`):
 - **Dependabot** opens weekly update pull requests for Maven, npm, Docker and the workflows themselves.
 
 Make the **CI** and **Security** checks required in the branch protection rules of `main` so nothing merges while they are red.
+
+## Where providers may connect
+
+Whoever can edit a provider decides where the platform connects, so provider destinations are checked when a provider is saved (`400 PROVIDER_DESTINATION_REFUSED` with the reason), before every send, and before a sender confirmation e-mail. A host listed in `PROVIDER_TRUSTED_HOSTS` (comma-separated exact names, or `*.example.com` for subdomains) is allowed as it is, including internal addresses and plain HTTP, for an on-premises gateway or relay. Any other host must be reached over HTTPS (for HTTP gateways) and must resolve only to public addresses: loopback, private ranges, link-local (including cloud metadata at `169.254.169.254`), CGNAT and IPv6 local ranges are refused, whether written as an address or reached through DNS. URLs with credentials in them are refused, and redirects are never followed. `PROVIDER_OTHER_PUBLIC_HOSTS_ALLOWED=false` allows only the trusted hosts. `docker compose` trusts `mailpit` and `catcher`. Set the same values on admin-api, client-api and the dispatcher. See ADR-022.
 
 ## Dead letters and reprocessing
 

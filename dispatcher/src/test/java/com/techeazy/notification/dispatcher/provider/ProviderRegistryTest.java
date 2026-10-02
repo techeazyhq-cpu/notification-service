@@ -18,6 +18,7 @@
 
 package com.techeazy.notification.dispatcher.provider;
 
+import com.techeazy.notification.application.ProviderDestinationPolicy;
 import com.techeazy.notification.dispatcher.DispatcherProperties;
 import com.techeazy.notification.dispatcher.provider.ChannelProvider.*;
 import com.techeazy.notification.domain.Channel;
@@ -32,9 +33,11 @@ import io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import java.net.InetAddress;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Supplier;
@@ -70,6 +73,8 @@ class ProviderRegistryTest {
     CircuitBreakerRegistry breakers;
     ProviderRegistry registry;
     Outbound message = new Outbound(UUID.randomUUID(), Channel.SMS, "+14155550123", null, "hi");
+    ProviderDestinationPolicy destinations =
+            new ProviderDestinationPolicy(Set.of(), true, host -> List.of(InetAddress.getAllByName(host)));
 
     static ProviderConfig config(String name, ProviderType type, int priority) {
         ProviderConfig c = new ProviderConfig();
@@ -85,7 +90,8 @@ class ProviderRegistryTest {
 
     void withProviders(ProviderConfig... configs) {
         when(repo.findByChannelAndEnabledTrueOrderByPriorityAsc(Channel.SMS)).thenReturn(List.of(configs));
-        registry = new ProviderRegistry(List.of(primary, backup), repo, secrets, breakers, new DispatcherProperties());
+        registry = new ProviderRegistry(List.of(primary, backup), repo, secrets, breakers, new DispatcherProperties(),
+                destinations);
     }
 
     /**
@@ -115,6 +121,31 @@ class ProviderRegistryTest {
         for (int i = 0; i < n; i++) {
             assertThatThrownBy(() -> registry.send(message)).isInstanceOf(TransientSendException.class);
         }
+    }
+
+    @Test
+    void aProviderPointedAtAnInternalAddressIsNeverCalledAndTheNextProviderIsUsed() {
+        primary.behaviour = () -> new SendResult("ok");
+        ProviderConfig internal = config("sms-internal", ProviderType.HTTP_JSON, 10);
+        internal.getSettings().put("url", "https://169.254.169.254/latest/meta-data/");
+        withProviders(internal, config("sms-backup", ProviderType.SMTP, 20));
+
+        SendResult result = registry.send(message);
+
+        assertThat(primary.calls.get()).isZero();
+        assertThat(backup.calls.get()).isEqualTo(1);
+        assertThat(result.providerMessageId()).isEqualTo("ok");
+    }
+
+    @Test
+    void aRefusedDestinationIsATransientFailureSoTheMessageIsRetriedOnceTheProviderIsFixed() {
+        ProviderConfig internal = config("sms-internal", ProviderType.HTTP_JSON, 10);
+        internal.getSettings().put("url", "https://10.0.0.5/send");
+        withProviders(internal);
+
+        assertThatThrownBy(() -> registry.send(message)).isInstanceOf(TransientSendException.class)
+                .hasMessageContaining("not a public address");
+        assertThat(primary.calls.get()).isZero();
     }
 
     @Test
@@ -197,7 +228,7 @@ class ProviderRegistryTest {
         props.getCircuitBreaker().setEnabled(false);
         when(repo.findByChannelAndEnabledTrueOrderByPriorityAsc(Channel.SMS))
                 .thenReturn(List.of(config("sms-primary", ProviderType.HTTP_JSON, 10)));
-        registry = new ProviderRegistry(List.of(primary, backup), repo, secrets, breakers, props);
+        registry = new ProviderRegistry(List.of(primary, backup), repo, secrets, breakers, props, destinations);
 
         failTimes(10);
         assertThat(primary.calls.get()).isEqualTo(10);
