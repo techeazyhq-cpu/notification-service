@@ -128,7 +128,7 @@ export default function Overview() {
               <tr key={r.requestId}>
                 <td>{formatTime(r.createdAt)}</td>
                 <td className="mono"><Link className="plain" to={`/requests/${r.requestId}`}>{shortId(r.requestId)}</Link></td>
-                <td>{r.channel}</td><td>{r.kind === 'BULK' ? `Bulk (${r.total})` : 'Single'}</td>
+                <td>{r.channel}</td><td>{r.kind === 'BULK' ? `Bulk (${r.total})` : 'Single'}{r.category === 'OTP' && <> <span className="badge" title="One-time password: delivered with priority, never after it expires">OTP</span></>}</td>
                 <td>{r.clientReference}</td>
                 <td><ProgressBar counts={r.counts} total={r.total} /></td>
                 <td><StatusBadge status={r.status} /></td>

@@ -99,11 +99,12 @@ export interface Me { id: string; name: string; allowedChannels: Channel[] }
 export interface StatusCounts { pending: number; queued: number; processing: number; retrying: number; sent: number; failed: number }
 export interface RequestView {
   requestId: string; kind: 'SINGLE' | 'BULK'; channel: Channel; status: RequestStatus; total: number;
-  counts: StatusCounts; clientReference?: string; createdAt: string;
+  counts: StatusCounts; clientReference?: string; createdAt: string; category?: Category; expiresAt?: string;
 }
 export interface MessageView {
   messageId: string; recipient: string; status: MessageStatus; attempts: number; lastError?: string;
-  providerMessageId?: string; sentAt?: string; updatedAt: string;
+  providerMessageId?: string; sentAt?: string; updatedAt: string; errorCode?: string; errorId?: string;
+  category?: Category; expiresAt?: string;
 }
 export interface PageView<T> { items: T[]; page: number; size: number; totalItems: number; totalPages: number }
 export interface ChannelStatusCount { channel: Channel; status: MessageStatus; count: number }

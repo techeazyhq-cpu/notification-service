@@ -63,10 +63,16 @@ export default function Messages() {
               <tr key={m.id}>
                 <td>{new Date(m.createdAt).toLocaleString()}</td>
                 <td>{m.clientName}</td><td>{m.channel}</td><td className="mono">{m.recipient}</td>
-                <td><span className={`badge ${m.status}`}>{m.status}</span></td>
+                <td>
+                  <span className={`badge ${m.status}`}>{m.status}</span>
+                  {m.category === 'OTP' && <> <span className="badge" title={m.expiresAt ? `Valid until ${new Date(m.expiresAt).toLocaleString()}` : ''}>OTP</span></>}
+                </td>
                 <td>{m.attempts}</td>
-                <td className="mono" title={m.id}>{m.lastError ?? m.providerMessageId ?? ''}</td>
-                <td>{m.status === 'FAILED' && <button type="button" onClick={() => retry(m.id)}>Retry</button>}</td>
+                <td className="mono" title={m.id}>
+                  {m.errorId && <span title={m.errorCode}>{m.errorId} </span>}
+                  {m.lastError ?? m.providerMessageId ?? ''}
+                </td>
+                <td>{m.status === 'FAILED' && m.errorCode !== 'OTP_EXPIRED' && <button type="button" onClick={() => retry(m.id)}>Retry</button>}</td>
               </tr>
             ))}
             {data?.items.length === 0 && <tr><td colSpan={8} className="muted">No messages match.</td></tr>}
