@@ -239,6 +239,16 @@ class SecurityRulesTest {
         assertThat(status(null, HttpMethod.GET, "/actuator/env")).isEqualTo(401);
     }
 
+    /** Every admin error links here, including the refusal of an anonymous caller, so it needs no session. */
+    @Test
+    void theErrorDictionaryNeedsNoSessionButCannotBeChanged() throws Exception {
+        assertThat(status(null, HttpMethod.GET, "/api/admin/errors")).isEqualTo(404);
+        assertThat(status(null, HttpMethod.GET, "/api/admin/errors/NS-2001")).isEqualTo(404);
+        assertThat(status(AdminRole.VIEWER, HttpMethod.GET, "/api/admin/errors/NS-2001")).isEqualTo(404);
+        assertThat(status(null, HttpMethod.POST, "/api/admin/errors")).isEqualTo(401);
+        assertThat(status(null, HttpMethod.GET, "/api/admin/errors/NS-2001/more")).isEqualTo(401);
+    }
+
     @Test
     void anythingOutsideTheApiIsDenied() throws Exception {
         assertThat(status(AdminRole.ADMIN, HttpMethod.GET, "/somewhere-else")).isEqualTo(403);

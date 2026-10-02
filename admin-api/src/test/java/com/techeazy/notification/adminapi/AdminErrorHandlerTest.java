@@ -46,7 +46,7 @@ class AdminErrorHandlerTest {
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
         assertThat(response.getBody()).isEqualTo(new ErrorBody("OTP_REQUIRED", "A verification code is required",
-                "NS-2003", ErrorCategory.ACCESS, false, TRACE_ID, "/v1/errors/NS-2003"));
+                "NS-2003", ErrorCategory.ACCESS, false, TRACE_ID, "/api/admin/errors/NS-2003"));
     }
 
     @Test

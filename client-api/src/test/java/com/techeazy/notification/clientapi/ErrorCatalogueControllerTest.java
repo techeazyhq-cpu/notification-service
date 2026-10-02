@@ -17,9 +17,9 @@
  */
 package com.techeazy.notification.clientapi;
 
-import com.techeazy.notification.clientapi.ErrorCatalogueController.ErrorCodeView;
 import com.techeazy.notification.error.ErrorCategory;
 import com.techeazy.notification.error.ErrorCode;
+import com.techeazy.notification.error.ErrorCodeView;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;

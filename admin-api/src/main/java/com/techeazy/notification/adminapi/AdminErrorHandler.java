@@ -144,6 +144,7 @@ public class AdminErrorHandler {
 
     private ResponseEntity<ErrorBody> respond(ErrorCode errorCode, String message) {
         return ResponseEntity.status(errorCode.httpStatus().orElseThrow())
-                .body(ErrorBody.of(errorCode, message, traceIds.currentTraceId().orElse(null)));
+                .body(ErrorBody.of(errorCode, message, traceIds.currentTraceId().orElse(null),
+                        ErrorCatalogueController.PATH));
     }
 }

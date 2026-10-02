@@ -112,6 +112,6 @@ public class ClientAuthFilter extends OncePerRequestFilter {
         res.setContentType(MediaType.APPLICATION_JSON_VALUE);
         if (retryAfter != null) res.setHeader("Retry-After", Long.toString(retryAfter));
         mapper.writeValue(res.getOutputStream(), ErrorBody.of(errorCode, message,
-                traceIds.currentTraceId().orElse(null)));
+                traceIds.currentTraceId().orElse(null), ErrorCatalogueController.PATH));
     }
 }

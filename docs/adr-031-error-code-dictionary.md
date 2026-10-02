@@ -66,6 +66,9 @@ complaint with logs had to start from a timestamp.
 5. **The dictionary is published two ways from the same source.** `GET /v1/errors` and `GET /v1/errors/{errorId or
    code}` work without an API key, and `docs/error-codes.md` is generated from the enum. A test fails the build if
    the document is stale, and the same test regenerates it when run with `-Derror-catalogue.update=true`.
+   - *Amended:* the admin API serves the same dictionary at `GET /api/admin/errors` and `GET /api/admin/errors/{errorId
+     or code}`, also without a session. Each API's `docs` link points at its own copy. The admin API's error bodies
+     used to link to `/v1/errors/...`, which only the client API serves, so the link was dead on the admin host.
 6. **The consoles show the error id** next to the message, so a user reporting a problem quotes it.
 
 ## Options considered
