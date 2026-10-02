@@ -3,6 +3,7 @@ name: CI
 on:
   push:
     branches: [main]
+    tags: ["v*"]
   pull_request:
 
 permissions:
@@ -10,7 +11,7 @@ permissions:
 
 concurrency:
   group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   backend:
@@ -137,3 +138,81 @@ jobs:
           ignore-unfixed: true
           exit-code: "1"
           trivyignores: .trivyignore
+
+  publish:
+    name: Publish signed image (${{ matrix.name }})
+    if: github.event_name == 'push'
+    needs: [backend, ui, deployment, images]
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: client-api, context: ., file: Dockerfile, args: "MODULE=client-api" }
+          - { name: admin-api, context: ., file: Dockerfile, args: "MODULE=admin-api" }
+          - { name: dispatcher, context: ., file: Dockerfile, args: "MODULE=dispatcher" }
+          - { name: db-migration, context: ., file: Dockerfile, args: "MODULE=db-migration" }
+          - { name: admin-ui, context: admin-ui, file: admin-ui/Dockerfile, args: "" }
+          - { name: client-ui, context: client-ui, file: client-ui/Dockerfile, args: "" }
+    env:
+      IMAGE: ghcr.io/${{ github.repository_owner }}/notification-${{ matrix.name }}
+      SIGNER_IDENTITY: https://github.com/${{ github.repository }}/.github/workflows/ci.yml@${{ github.ref }}
+      OIDC_ISSUER: https://token.actions.githubusercontent.com
+    steps:
+      - uses: actions/checkout@v7
+      - uses: docker/setup-buildx-action@v4
+      - uses: sigstore/cosign-installer@v4
+      - uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - id: metadata
+        uses: docker/metadata-action@v6
+        with:
+          images: ${{ env.IMAGE }}
+          tags: |
+            type=sha,format=long
+            type=ref,event=branch
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+      - id: build
+        uses: docker/build-push-action@v7
+        with:
+          context: ${{ matrix.context }}
+          file: ${{ matrix.file }}
+          build-args: ${{ matrix.args }}
+          push: true
+          provenance: mode=max
+          tags: ${{ steps.metadata.outputs.tags }}
+          labels: ${{ steps.metadata.outputs.labels }}
+          cache-from: type=gha,scope=${{ matrix.name }}
+      - name: Generate the SPDX software bill of materials
+        uses: anchore/sbom-action@v0
+        with:
+          image: ${{ env.IMAGE }}@${{ steps.build.outputs.digest }}
+          registry-username: ${{ github.actor }}
+          registry-password: ${{ secrets.GITHUB_TOKEN }}
+          format: spdx-json
+          output-file: sbom-${{ matrix.name }}.spdx.json
+          artifact-name: sbom-${{ matrix.name }}.spdx.json
+      - name: Sign the image and attest its SBOM (keyless, GitHub OIDC)
+        env:
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          cosign sign --yes "$IMAGE@$DIGEST"
+          cosign attest --yes --type spdxjson --predicate "sbom-${{ matrix.name }}.spdx.json" "$IMAGE@$DIGEST"
+      - name: Verify the signature and the SBOM attestation
+        env:
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          cosign verify --certificate-identity "$SIGNER_IDENTITY" \
+            --certificate-oidc-issuer "$OIDC_ISSUER" "$IMAGE@$DIGEST" > /dev/null
+          cosign verify-attestation --type spdxjson --certificate-identity "$SIGNER_IDENTITY" \
+            --certificate-oidc-issuer "$OIDC_ISSUER" "$IMAGE@$DIGEST" > /dev/null
+          echo "Published, signed and attested $IMAGE@$DIGEST" >> "$GITHUB_STEP_SUMMARY"
