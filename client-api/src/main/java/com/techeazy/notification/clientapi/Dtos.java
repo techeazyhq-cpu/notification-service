@@ -92,7 +92,8 @@ public final class Dtos {
             @NotNull Channel channel,
             @Size(max = 500) String subject,
             @NotBlank @Size(max = 10000) String body,
-            @Schema(description = "Default category of sends from this template; OTP makes them one-time passwords")
+            @Schema(description = "Default category of sends from this template; OTP makes them one-time passwords. "
+                    + "Left out of an update, the current category is kept.")
             MessageCategory category) {
 
         public TemplateInput(String name, Channel channel, String subject, String body) {

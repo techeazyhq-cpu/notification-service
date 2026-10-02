@@ -50,11 +50,18 @@ import java.util.concurrent.TimeUnit;
 /**
  * Subscribes to one topic per channel with a Shared subscription. Transient failures go to the
  * Pulsar retry topic with exponential delay; poison messages end up in the dead-letter topic.
+ *
+ * <p>Every consumer is drained by a worker thread of its own. Handling blocks (a provider call, a rate-limit or
+ * outage hold), and the Pulsar client runs all message listeners on one shared thread by default, so listeners
+ * would serialise every lane and channel behind whichever message is held: a one-time password would wait behind a
+ * rate-limited bulk message, and an SMS outage would stall e-mail (ADR-033).
  */
 @Component
 public class DispatchConsumers {
 
     private static final Logger log = LoggerFactory.getLogger(DispatchConsumers.class);
+    private static final int RECEIVE_POLL_MS = 500;
+    private static final long STOP_WAIT_MS = 5_000;
 
     private final PulsarClient client;
     private final NotificationProperties notificationProps;
@@ -66,6 +73,8 @@ public class DispatchConsumers {
     private final List<Consumer<byte[]>> consumers = new ArrayList<>();
     private final Map<Channel, List<Consumer<byte[]>>> byChannel = new ConcurrentHashMap<>();
     private final Set<Channel> pausedChannels = ConcurrentHashMap.newKeySet();
+    private final List<Thread> workers = new CopyOnWriteArrayList<>();
+    private volatile boolean running = true;
 
     public DispatchConsumers(PulsarClient client, NotificationProperties notificationProps, DispatcherProperties props,
                              DispatchService dispatch, ObjectMapper mapper, ProviderRegistry providers,
@@ -112,12 +121,36 @@ public class DispatchConsumers {
                             .retryLetterTopic(topic + "-retry")
                             .deadLetterTopic(topic + "-dlq")
                             .build())
-                    .messageListener((consumer, msg) -> handle(consumer, msg, channel))
                     .subscribe();
             consumers.add(created);
             forChannel.add(created);
+            Thread worker = Thread.ofPlatform().name("dispatcher-" + lane + "-" + i)
+                    .unstarted(() -> drain(created, channel));
+            workers.add(worker);
+            worker.start();
         }
         log.info("Started {} consumer(s) on {}", count, topic);
+    }
+
+    /** Receives and handles one message at a time until the consumers are stopped. */
+    private void drain(Consumer<byte[]> consumer, Channel channel) {
+        while (running) {
+            Message<byte[]> msg;
+            try {
+                msg = consumer.receive(RECEIVE_POLL_MS, TimeUnit.MILLISECONDS);
+            } catch (PulsarClientException.AlreadyClosedException e) {
+                return;
+            } catch (PulsarClientException e) {
+                if (!running || Thread.currentThread().isInterrupted()) {
+                    return;
+                }
+                log.warn("Receiving from {} failed; trying again: {}", consumer.getTopic(), e.toString());
+                continue;
+            }
+            if (msg != null) {
+                handle(consumer, msg, channel);
+            }
+        }
     }
 
     private void handle(Consumer<byte[]> consumer, Message<byte[]> msg, Channel channel) {
@@ -196,8 +229,22 @@ public class DispatchConsumers {
         }
     }
 
+    /**
+     * Stops the workers first, so a message being held is handed back to the broker rather than abandoned, then
+     * closes the consumers.
+     */
     @PreDestroy
     void stop() {
+        running = false;
+        workers.forEach(Thread::interrupt);
+        for (Thread worker : workers) {
+            try {
+                worker.join(STOP_WAIT_MS);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                break;
+            }
+        }
         consumers.forEach(Consumer::closeAsync);
     }
 }

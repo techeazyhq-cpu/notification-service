@@ -20,6 +20,7 @@ package com.techeazy.notification.clientapi;
 
 import com.techeazy.notification.clientapi.Dtos.*;
 import com.techeazy.notification.domain.Channel;
+import com.techeazy.notification.domain.MessageCategory;
 import com.techeazy.notification.domain.Template;
 import com.techeazy.notification.persistence.TemplateRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -117,6 +118,30 @@ class ClientTemplateServiceTest {
 
         assertThat(v.body()).isEqualTo("New {{code}}");
         assertRejected(() -> service.update(me, mine.getId(), new TemplateInput("otp", Channel.EMAIL, "s", "b")), HttpStatus.BAD_REQUEST, null);
+    }
+
+    @Test
+    void anUpdateWithoutACategoryKeepsTheTemplatesCategory() {
+        Template mine = stored(me.id(), "login-code", Channel.SMS);
+        mine.setCategory(MessageCategory.OTP);
+        when(repo.findById(mine.getId())).thenReturn(Optional.of(mine));
+
+        TemplateView v = service.update(me, mine.getId(), sms("login-code", "Your code is {{code}}"));
+
+        assertThat(v.category()).isEqualTo(MessageCategory.OTP);
+        assertThat(mine.getCategory()).isEqualTo(MessageCategory.OTP);
+    }
+
+    @Test
+    void anUpdateWithACategoryChangesIt() {
+        Template mine = stored(me.id(), "login-code", Channel.SMS);
+        mine.setCategory(MessageCategory.OTP);
+        when(repo.findById(mine.getId())).thenReturn(Optional.of(mine));
+
+        TemplateView v = service.update(me, mine.getId(),
+                new TemplateInput("login-code", Channel.SMS, null, "Hello {{name}}", MessageCategory.TRANSACTIONAL));
+
+        assertThat(v.category()).isEqualTo(MessageCategory.TRANSACTIONAL);
     }
 
     @Test

@@ -17,10 +17,10 @@
  */
 
 import { useEffect, useState } from 'react';
-import { api, Channel, CHANNELS, Me, Preview, send, Template, TemplateInput, variablesOf } from '../api';
+import { api, CATEGORIES, Category, CATEGORY_LABELS, Channel, CHANNELS, Me, Preview, send, Template, TemplateInput, variablesOf } from '../api';
 import { useDebounced, useLoad } from '../hooks';
 
-const EMPTY: TemplateInput = { name: '', channel: 'SMS', subject: '', body: '' };
+const EMPTY: TemplateInput = { name: '', channel: 'SMS', subject: '', body: '', category: 'TRANSACTIONAL' };
 
 function heading(t: Template | null): string {
   if (!t) return 'New template';
@@ -93,7 +93,7 @@ export default function Templates() {
     setEditing(t);
     setFormError('');
     setValues({});
-    setForm(t ? { name: t.name, channel: t.channel, subject: t.subject ?? '', body: t.body } : { ...EMPTY, channel: channels[0] ?? 'SMS' });
+    setForm(t ? { name: t.name, channel: t.channel, subject: t.subject ?? '', body: t.body, category: t.category ?? 'TRANSACTIONAL' } : { ...EMPTY, channel: channels[0] ?? 'SMS' });
   }
 
   async function save(e: React.SubmitEvent<HTMLFormElement>) {
@@ -148,6 +148,12 @@ export default function Templates() {
           <label><span>Channel</span>
             <select value={form.channel} onChange={(e) => setForm({ ...form, channel: e.target.value as Channel })} disabled={readOnly || !!editing}>
               {CHANNELS.filter((c) => channels.includes(c)).map((c) => <option key={c}>{c}</option>)}
+            </select>
+          </label>
+          <label><span>Category</span>
+            <select value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value as Category })} disabled={readOnly}
+              title="One-time passwords are delivered ahead of other traffic and never after they expire">
+              {CATEGORIES.map((c) => <option key={c} value={c}>{CATEGORY_LABELS[c]}</option>)}
             </select>
           </label>
           <label style={{ flex: 1 }}><span>Subject / title (required for EMAIL)</span>
