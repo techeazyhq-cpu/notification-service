@@ -64,6 +64,8 @@ class DeadLetterTest {
         assertThat(recorder.recordDeadLetter(id, "SMS")).isTrue();
 
         assertThat(meters.get("notification.dead_letter").tag("channel", "SMS").counter().count()).isEqualTo(1.0);
+        assertThat(meters.get(DispatchService.DELIVERY_ERRORS).tag("channel", "SMS")
+                .tag("code", "DELIVERY_DEAD_LETTERED").counter().count()).isEqualTo(1.0);
     }
 
     @Test
