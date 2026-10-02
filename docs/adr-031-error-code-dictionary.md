@@ -69,6 +69,10 @@ complaint with logs had to start from a timestamp.
    - *Amended:* the admin API serves the same dictionary at `GET /api/admin/errors` and `GET /api/admin/errors/{errorId
      or code}`, also without a session. Each API's `docs` link points at its own copy. The admin API's error bodies
      used to link to `/v1/errors/...`, which only the client API serves, so the link was dead on the admin host.
+   - *Amended:* both copies are rate-limited, since without credentials no per-client limit applies. All callers
+     share one bucket per path (20 requests per second, burst 100, configurable under `notification.rate-limit`), and
+     answers carry `Cache-Control: public, max-age=3600`. A refusal is the usual `RATE_LIMITED` body with
+     `Retry-After`.
 6. **The consoles show the error id** next to the message, so a user reporting a problem quotes it.
 
 ## Options considered

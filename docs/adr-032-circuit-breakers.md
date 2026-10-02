@@ -19,6 +19,9 @@ broker outage into slow responses for every client, and a pile-up of request thr
    - While open, publishes fail at once with `BrokerUnavailableException`. The accept answers immediately; the
      messages are already committed as `PENDING`, and the outbox sweeper publishes them once the broker is back.
    - After 10 seconds, three probe publishes decide whether to close.
+   - Slow publishes count too: one the broker confirms only after 2 seconds is slow, and 50 % slow publishes open
+     the circuit like failures do. A broker that hangs rather than refuses is caught before every publish waits out
+     its 5-second timeout (`slow-call-duration-threshold-ms`, `slow-call-rate-threshold`).
    - The thresholds are under `notification.pulsar.circuit-breaker.*`, and `enabled: false` turns the breaker off.
    - The outbox logs one summary line per batch instead of a warning per message while the circuit is open.
 2. **The breaker is visible and alerted.**

@@ -58,6 +58,13 @@ public class NotificationProperties {
             private long waitDurationInOpenStateMs = 10_000;
             /** Probe publishes while half-open; enough of them must succeed to close the circuit. */
             private int permittedCallsInHalfOpenState = 3;
+            /**
+             * A publish the broker confirms only after this long counts as slow. Healthy publishes take milliseconds;
+             * a broker this slow is failing, even before publishes start to time out.
+             */
+            private long slowCallDurationThresholdMs = 2_000;
+            /** Percentage of slow publishes, failed or not, that opens the circuit. */
+            private float slowCallRateThreshold = 50;
         }
     }
 
@@ -69,6 +76,12 @@ public class NotificationProperties {
         private long policyCacheSeconds = 10;
         /** Share of each delivery bucket that only priority messages (one-time passwords) may use (ADR-033). */
         private double priorityReserveFraction = 0.2;
+        /**
+         * Requests per second, across all callers and instances, to an error dictionary served without credentials
+         * (ADR-031). Its answers are cacheable, so honest readers rarely reach it twice.
+         */
+        private double publicCatalogueRate = 20;
+        private int publicCatalogueBurst = 100;
     }
 
     @Getter @Setter

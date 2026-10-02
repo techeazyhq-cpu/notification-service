@@ -64,6 +64,15 @@ public class RateLimitService {
         return limiter.tryAcquire("api:" + clientId, rate, burst);
     }
 
+    /**
+     * One token per request to the error dictionary at {@code cataloguePath}, which is served without credentials, so
+     * there is no client to charge: every caller shares one bucket per path.
+     */
+    public Decision checkPublicCatalogue(String cataloguePath) {
+        return limiter.tryAcquire("public:" + cataloguePath, props.getRateLimit().getPublicCatalogueRate(),
+                props.getRateLimit().getPublicCatalogueBurst());
+    }
+
     /** One token per message delivery: the client's own quota first, then the platform-wide channel cap. */
     public Decision checkDelivery(UUID clientId, Channel channel, MessageCategory category) {
         Decision worst = Decision.GRANTED;
