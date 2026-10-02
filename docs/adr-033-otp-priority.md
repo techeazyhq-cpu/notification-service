@@ -104,7 +104,8 @@ Negative / accepted:
 
 - ~~An SLO for OTP time-to-send with burn-rate alerts.~~ Done: **OTP delivery**, 99% within 30 seconds, with expired
   OTPs counted as bad events ([slo.md](slo.md#otp-delivery)).
-- Per-category pricing in billing, if the business wants OTPs priced differently.
+- ~~Per-category pricing in billing.~~ Done: each tenant may set its own price per OTP and channel
+  ([ADR-034](adr-034-per-tenant-otp-pricing.md)).
 
 ## Amendment (2026-10-02): lane isolation and template edits
 

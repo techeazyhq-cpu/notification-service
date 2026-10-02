@@ -39,6 +39,7 @@ function useAccount() {
 
 function AccountCard({ account }: Readonly<{ account: BillingAccount }>) {
   const prepaid = account.mode === 'PREPAID';
+  const otpPriced = account.rates.some((r) => r.otpUnitPrice);
   return (
     <div className="card">
       <div className="spread">
@@ -54,10 +55,14 @@ function AccountCard({ account }: Readonly<{ account: BillingAccount }>) {
         <div className="stat"><span>Tax</span><b>{account.taxRate}%</b></div>
       </div>
       <table>
-        <thead><tr><th>Channel</th><th>Price per message</th><th>Free per month</th></tr></thead>
+        <thead><tr><th>Channel</th><th>Price per message</th>{otpPriced && <th>Price per one-time password</th>}<th>Free per month</th></tr></thead>
         <tbody>
           {account.rates.map((r) => (
-            <tr key={r.channel}><td>{r.channel}</td><td>{money(r.unitPrice, account.currency)}</td><td>{prepaid ? 'not applied (prepaid)' : r.freeAllowance}</td></tr>
+            <tr key={r.channel}>
+              <td>{r.channel}</td><td>{money(r.unitPrice, account.currency)}</td>
+              {otpPriced && <td>{r.otpUnitPrice ? money(r.otpUnitPrice, account.currency) : <span className="muted">same</span>}</td>}
+              <td>{prepaid ? 'not applied (prepaid)' : r.freeAllowance}</td>
+            </tr>
           ))}
           {account.rates.length === 0 && <tr><td colSpan={3} className="muted">No channel is priced: messages are free on this plan.</td></tr>}
         </tbody>
@@ -66,6 +71,7 @@ function AccountCard({ account }: Readonly<{ account: BillingAccount }>) {
         {prepaid
           ? 'Cost is reserved from your credit when a request is accepted; whatever is not sent is returned once the request finishes.'
           : 'Usage is invoiced monthly after the month ends. Only messages that were sent are charged.'}
+        {otpPriced && !prepaid && ' One-time passwords appear on their own invoice line; the free allowance covers your other messages first.'}
       </p>
     </div>
   );

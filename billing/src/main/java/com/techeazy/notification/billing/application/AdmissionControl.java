@@ -20,6 +20,7 @@ package com.techeazy.notification.billing.application;
 
 import com.techeazy.notification.billing.application.port.AccountLookup;
 import com.techeazy.notification.billing.application.port.CreditStore;
+import com.techeazy.notification.billing.application.port.OtpPriceLookup;
 import com.techeazy.notification.billing.application.port.PlanLookup;
 import com.techeazy.notification.billing.application.port.UsageReader;
 import com.techeazy.notification.billing.domain.AccountSuspendedException;
@@ -35,7 +36,9 @@ import com.techeazy.notification.billing.domain.InvoiceTotals;
 import com.techeazy.notification.billing.domain.LedgerEntry;
 import com.techeazy.notification.billing.domain.LedgerEntryType;
 import com.techeazy.notification.billing.domain.Money;
+import com.techeazy.notification.billing.domain.OtpPrices;
 import com.techeazy.notification.billing.domain.Plan;
+import com.techeazy.notification.billing.domain.SentCount;
 import com.techeazy.notification.billing.domain.SpendCapExceededException;
 import com.techeazy.notification.domain.Channel;
 
@@ -61,15 +64,18 @@ public class AdmissionControl {
 
     private final AccountLookup accounts;
     private final PlanLookup plans;
+    private final OtpPriceLookup otpPrices;
     private final CreditStore credits;
     private final UsageReader usage;
     private final InvoiceCalculator calculator;
     private final Clock clock;
 
-    public AdmissionControl(AccountLookup accounts, PlanLookup plans, CreditStore credits, UsageReader usage,
-                            InvoiceCalculator calculator, Clock clock) {
+    @SuppressWarnings("java:S107")
+    public AdmissionControl(AccountLookup accounts, PlanLookup plans, OtpPriceLookup otpPrices, CreditStore credits,
+                            UsageReader usage, InvoiceCalculator calculator, Clock clock) {
         this.accounts = accounts;
         this.plans = plans;
+        this.otpPrices = otpPrices;
         this.credits = credits;
         this.usage = usage;
         this.calculator = calculator;
@@ -85,15 +91,22 @@ public class AdmissionControl {
             throw new AccountSuspendedException();
         }
         Plan plan = plans.findById(account.planId()).orElseThrow(() -> new BillingNotFoundException("Plan"));
+        OtpPrices tenantOtpPrices = otpPrices.findByClientId(account.clientId());
         if (account.isPrepaid()) {
-            reserve(plan, admission);
+            reserve(plan, tenantOtpPrices, admission);
         } else {
-            enforceSpendCap(account, plan, admission);
+            enforceSpendCap(account, plan, tenantOtpPrices, admission);
         }
     }
 
-    private void reserve(Plan plan, Admission admission) {
-        Money unitPrice = plan.rateFor(admission.channel()).unitPrice();
+    /** One-time passwords are charged at the tenant's OTP price for the channel, when it has one (ADR-034). */
+    private static Money unitPrice(Plan plan, OtpPrices tenantOtpPrices, Admission admission) {
+        Money planPrice = plan.rateFor(admission.channel()).unitPrice();
+        return admission.oneTimePasswords() ? tenantOtpPrices.priceFor(admission.channel()).orElse(planPrice) : planPrice;
+    }
+
+    private void reserve(Plan plan, OtpPrices tenantOtpPrices, Admission admission) {
+        Money unitPrice = unitPrice(plan, tenantOtpPrices, admission);
         if (unitPrice.isZero()) {
             return;
         }
@@ -110,13 +123,16 @@ public class AdmissionControl {
                 hold.id().toString(), describe(admission), clock.instant()));
     }
 
-    private void enforceSpendCap(BillingAccount account, Plan plan, Admission admission) {
+    private void enforceSpendCap(BillingAccount account, Plan plan, OtpPrices tenantOtpPrices, Admission admission) {
         account.spendCap().ifPresent(cap -> {
             BillingPeriod period = BillingPeriod.current(clock);
-            Map<Channel, Long> projected = new EnumMap<>(Channel.class);
+            Map<Channel, SentCount> projected = new EnumMap<>(Channel.class);
             projected.putAll(usage.sentByChannel(account.clientId(), period.start(), clock.instant()));
-            projected.merge(admission.channel(), admission.messages(), Long::sum);
-            Money subtotal = InvoiceTotals.of(plan.currency(), calculator.linesFor(plan, projected), plan.taxRate()).subtotal();
+            SentCount requested = admission.oneTimePasswords()
+                    ? new SentCount(0, admission.messages()) : SentCount.ordinary(admission.messages());
+            projected.merge(admission.channel(), requested, SentCount::plus);
+            Money subtotal = InvoiceTotals.of(plan.currency(),
+                    calculator.linesFor(plan, tenantOtpPrices, projected), plan.taxRate()).subtotal();
             if (subtotal.compareTo(cap) > 0) {
                 throw new SpendCapExceededException(cap, subtotal);
             }
@@ -124,6 +140,7 @@ public class AdmissionControl {
     }
 
     private static String describe(Admission admission) {
-        return "Reserved for " + admission.messages() + " " + admission.channel() + " message(s)";
+        return "Reserved for " + admission.messages() + " " + admission.channel()
+                + (admission.oneTimePasswords() ? " one-time password(s)" : " message(s)");
     }
 }

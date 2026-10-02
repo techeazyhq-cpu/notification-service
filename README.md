@@ -105,7 +105,7 @@ In the client UI open **Sender addresses**, add an address and open the link tha
 
 ## Billing
 
-Admin UI: **Billing plans** (prices, free allowance, platform fee, tax), **Billing accounts** (assign a plan, postpaid or prepaid, spend cap, top up credit), **Invoices** (generate a closed month, issue, record payment, void, CSV). Client UI: **Billing** (account, usage, invoices, prepaid ledger; invoices print to PDF from the browser).
+Admin UI: **Billing plans** (prices, free allowance, platform fee, tax), **Billing accounts** (assign a plan, postpaid or prepaid, spend cap, top up credit, per-tenant OTP prices), **Invoices** (generate a closed month, issue, record payment, void, CSV). Client UI: **Billing** (account, usage, invoices, prepaid ledger; invoices print to PDF from the browser).
 
 Prepaid clients get `402 INSUFFICIENT_CREDIT` when a request cannot be reserved; postpaid clients with a cap get `402 SPEND_CAP_EXCEEDED`; suspended accounts get `403`. The dispatcher runs the settlement job (`billing.settlement.*`) and the monthly invoice generator (`billing.invoicing.*`). See ADR-004 for the rules and limits.
 
@@ -188,6 +188,10 @@ single send, or mark a template's category as OTP. OTPs travel on their own prio
 may use the rate-limit tokens ordinary traffic must leave in reserve, are swept first, and are never sent after their
 validity: an expired one fails with `OTP_EXPIRED`. Other categories are `TRANSACTIONAL` (the default) and
 `PROMOTIONAL`. See ADR-033.
+
+Each tenant may pay its own price per OTP and channel: set it on **Billing accounts → OTP prices** in the admin UI or
+with `PUT /api/admin/billing/accounts/{clientId}/otp-prices`. Channels without one charge the plan's price; invoices
+show OTPs on a line of their own, and the free allowance covers ordinary messages first. See ADR-034.
 
 ## Error codes
 

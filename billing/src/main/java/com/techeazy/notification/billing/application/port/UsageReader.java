@@ -18,6 +18,7 @@
 
 package com.techeazy.notification.billing.application.port;
 
+import com.techeazy.notification.billing.domain.SentCount;
 import com.techeazy.notification.domain.Channel;
 
 import java.time.Instant;
@@ -27,5 +28,6 @@ import java.util.UUID;
 /** Read side of metering: what was actually sent. Only messages handed to a provider successfully are billable. */
 public interface UsageReader {
 
-    Map<Channel, Long> sentByChannel(UUID clientId, Instant fromInclusive, Instant toExclusive);
+    /** Messages sent per channel, with one-time passwords counted apart from the rest (ADR-034). */
+    Map<Channel, SentCount> sentByChannel(UUID clientId, Instant fromInclusive, Instant toExclusive);
 }

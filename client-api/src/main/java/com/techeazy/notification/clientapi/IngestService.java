@@ -187,7 +187,8 @@ public class IngestService {
     }
 
     private void admit(AuthenticatedClient client, SubmitCommand cmd, NotificationRequest request) {
-        admission.admit(new Admission(client.id(), cmd.channel(), cmd.recipients().size(), HoldScope.REQUEST, request.getId()));
+        admission.admit(new Admission(client.id(), cmd.channel(), cmd.recipients().size(), HoldScope.REQUEST,
+                request.getId(), request.getCategory() == MessageCategory.OTP));
     }
 
     private SubmitResponse accepted(NotificationRequest request, List<NotificationMessage> messages) {

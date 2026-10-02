@@ -27,6 +27,7 @@ import com.techeazy.notification.billing.domain.HoldScope;
 import com.techeazy.notification.billing.domain.InvalidBillingDataException;
 import com.techeazy.notification.billing.domain.InvalidBillingStateException;
 import com.techeazy.notification.billing.domain.Money;
+import com.techeazy.notification.billing.domain.OtpPrices;
 import com.techeazy.notification.billing.domain.Plan;
 import com.techeazy.notification.domain.Channel;
 import org.junit.jupiter.api.Test;
@@ -158,5 +159,52 @@ class AccountAndPlanManagementTest {
 
         assertThat(suspended.isSuspended()).isTrue();
         assertThat(f.accountManagement.assign(assignment(plan, BillingMode.POSTPAID, null)).isSuspended()).isFalse();
+    }
+
+
+    @Test
+    void aTenantsOtpPricesAreSetInItsPlanCurrencyAndReplacedAsAWhole() {
+        Plan plan = f.planCatalog.create(draft("standard", USD, true));
+        f.accountManagement.assign(assignment(plan, BillingMode.POSTPAID, null));
+
+        f.accountManagement.setOtpPrices(client, Map.of(Channel.SMS, new BigDecimal("0.012"),
+                Channel.EMAIL, new BigDecimal("0.002")));
+        OtpPrices replaced = f.accountManagement.setOtpPrices(client, Map.of(Channel.SMS, new BigDecimal("0.015")));
+
+        assertThat(replaced).isEqualTo(new OtpPrices(Map.of(Channel.SMS, Money.of("0.015", USD))));
+        assertThat(f.accountManagement.otpPrices(client)).isEqualTo(replaced);
+
+        f.accountManagement.setOtpPrices(client, Map.of());
+
+        assertThat(f.accountManagement.otpPrices(client)).isEqualTo(OtpPrices.NONE);
+    }
+
+    @Test
+    void otpPricesNeedABillingAccountAndCannotBeNegative() {
+        Map<Channel, BigDecimal> prices = Map.of(Channel.SMS, new BigDecimal("0.01"));
+        assertThatThrownBy(() -> f.accountManagement.setOtpPrices(client, prices))
+                .isInstanceOf(BillingNotFoundException.class);
+
+        Plan plan = f.planCatalog.create(draft("standard", USD, true));
+        f.accountManagement.assign(assignment(plan, BillingMode.POSTPAID, null));
+        Map<Channel, BigDecimal> negative = Map.of(Channel.SMS, new BigDecimal("-0.01"));
+
+        assertThatThrownBy(() -> f.accountManagement.setOtpPrices(client, negative))
+                .isInstanceOf(InvalidBillingDataException.class);
+    }
+
+    @Test
+    void aTenantWithOtpPricesCannotMoveToAPlanInAnotherCurrency() {
+        Plan dollars = f.planCatalog.create(draft("standard", USD, true));
+        Plan euros = f.planCatalog.create(draft("euro", "EUR", true));
+        f.accountManagement.assign(assignment(dollars, BillingMode.POSTPAID, null));
+        f.accountManagement.setOtpPrices(client, Map.of(Channel.SMS, new BigDecimal("0.012")));
+        AccountAssignment toEuros = assignment(euros, BillingMode.POSTPAID, null);
+
+        assertThatThrownBy(() -> f.accountManagement.assign(toEuros))
+                .isInstanceOf(InvalidBillingStateException.class).hasMessageContaining("OTP prices");
+
+        f.accountManagement.setOtpPrices(client, Map.of());
+        assertThat(f.accountManagement.assign(toEuros).planId()).isEqualTo(euros.id());
     }
 }

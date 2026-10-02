@@ -19,6 +19,7 @@
 package com.techeazy.notification.billing.application;
 
 import com.techeazy.notification.billing.application.port.AccountRepository;
+import com.techeazy.notification.billing.application.port.OtpPriceLookup;
 import com.techeazy.notification.billing.application.port.PlanRepository;
 import com.techeazy.notification.billing.application.port.UsageReader;
 import com.techeazy.notification.billing.domain.BillingAccount;
@@ -41,14 +42,16 @@ public class UsageService {
 
     private final AccountRepository accounts;
     private final PlanRepository plans;
+    private final OtpPriceLookup otpPrices;
     private final UsageReader usage;
     private final InvoiceCalculator calculator;
     private final Clock clock;
 
-    public UsageService(AccountRepository accounts, PlanRepository plans, UsageReader usage, InvoiceCalculator calculator,
-                        Clock clock) {
+    public UsageService(AccountRepository accounts, PlanRepository plans, OtpPriceLookup otpPrices, UsageReader usage,
+                        InvoiceCalculator calculator, Clock clock) {
         this.accounts = accounts;
         this.plans = plans;
+        this.otpPrices = otpPrices;
         this.usage = usage;
         this.calculator = calculator;
         this.clock = clock;
@@ -58,7 +61,8 @@ public class UsageService {
         BillingAccount account = accounts.findByClientId(clientId)
                 .orElseThrow(() -> new BillingNotFoundException("Billing account"));
         Plan plan = plans.findById(account.planId()).orElseThrow(() -> new BillingNotFoundException("Plan"));
-        List<InvoiceLine> lines = calculator.linesFor(plan, usage.sentByChannel(clientId, period.start(), period.endExclusive()));
+        List<InvoiceLine> lines = calculator.linesFor(plan, otpPrices.findByClientId(clientId),
+                usage.sentByChannel(clientId, period.start(), period.endExclusive()));
         return new UsageStatement(period, plan.currency(), lines, InvoiceTotals.of(plan.currency(), lines, plan.taxRate()),
                 !period.isClosedAt(clock.instant()));
     }

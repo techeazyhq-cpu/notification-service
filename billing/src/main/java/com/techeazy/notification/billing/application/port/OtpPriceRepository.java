@@ -16,7 +16,15 @@
  * @author Vasantha Kumar <vasantha.kumar@hotmail.com>
  */
 
-package com.techeazy.notification.billing.domain;
+package com.techeazy.notification.billing.application.port;
 
-/** {@code OTP_USAGE} is one-time passwords charged at a tenant's own OTP price (ADR-034). */
-public enum InvoiceLineKind { USAGE, OTP_USAGE, PLATFORM_FEE }
+import com.techeazy.notification.billing.domain.OtpPrices;
+
+import java.util.UUID;
+
+/** Stores each tenant's OTP prices (ADR-034). */
+public interface OtpPriceRepository extends OtpPriceLookup {
+
+    /** Replaces the tenant's OTP prices with {@code prices}; {@link OtpPrices#NONE} removes them all. */
+    void replace(UUID clientId, OtpPrices prices);
+}

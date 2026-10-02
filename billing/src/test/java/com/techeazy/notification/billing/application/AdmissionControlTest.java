@@ -27,11 +27,13 @@ import com.techeazy.notification.billing.domain.InsufficientCreditException;
 import com.techeazy.notification.billing.domain.InvalidBillingStateException;
 import com.techeazy.notification.billing.domain.LedgerEntryType;
 import com.techeazy.notification.billing.domain.Money;
+import com.techeazy.notification.billing.domain.OtpPrices;
 import com.techeazy.notification.billing.domain.Plan;
 import com.techeazy.notification.billing.domain.SpendCapExceededException;
 import com.techeazy.notification.domain.Channel;
 import org.junit.jupiter.api.Test;
 
+import java.util.Map;
 import java.util.UUID;
 
 import static com.techeazy.notification.billing.application.BillingFixture.USD;
@@ -156,5 +158,59 @@ class AdmissionControlTest {
 
         Admission overCap = sms(31);
         assertThatThrownBy(() -> f.admission.admit(overCap)).isInstanceOf(SpendCapExceededException.class);
+    }
+
+
+    private Admission smsOneTimePasswords(long messages) {
+        return new Admission(client, Channel.SMS, messages, HoldScope.REQUEST, UUID.randomUUID(), true);
+    }
+
+    @Test
+    void aPrepaidOneTimePasswordIsReservedAtTheTenantsOtpPrice() {
+        prepaidWithBalance("0.05", "100");
+        f.otpPrices.replace(client, new OtpPrices(Map.of(Channel.SMS, Money.of("0.20", USD))));
+
+        f.admission.admit(smsOneTimePasswords(10));
+
+        assertThat(f.credits.holds.values()).singleElement().satisfies(hold -> {
+            assertThat(hold.unitPrice()).isEqualTo(Money.of("0.20", USD));
+            assertThat(hold.amount()).isEqualTo(Money.of("2", USD));
+        });
+        assertThat(f.credits.ledger).singleElement()
+                .satisfies(entry -> assertThat(entry.description()).contains("one-time password"));
+    }
+
+    @Test
+    void ordinaryMessagesOfATenantWithOtpPricesStillPayThePlanPrice() {
+        prepaidWithBalance("0.05", "100");
+        f.otpPrices.replace(client, new OtpPrices(Map.of(Channel.SMS, Money.of("0.20", USD))));
+
+        f.admission.admit(sms(10));
+
+        assertThat(f.credits.holds.values()).singleElement()
+                .satisfies(hold -> assertThat(hold.unitPrice()).isEqualTo(Money.of("0.05", USD)));
+    }
+
+    @Test
+    void aOneTimePasswordWithoutAnOtpPricePaysThePlanPrice() {
+        prepaidWithBalance("0.05", "100");
+
+        f.admission.admit(smsOneTimePasswords(10));
+
+        assertThat(f.credits.holds.values()).singleElement()
+                .satisfies(hold -> assertThat(hold.unitPrice()).isEqualTo(Money.of("0.05", USD)));
+    }
+
+    @Test
+    void theSpendCapPricesOneTimePasswordsAtTheTenantsOtpPrice() {
+        f.account(client, f.smsPlan("1", 0), BillingMode.POSTPAID, "100");
+        f.otpPrices.replace(client, new OtpPrices(Map.of(Channel.SMS, Money.of("2", USD))));
+        f.usage.sentOneTimePasswords(client, Channel.SMS, "2026-09-03T10:00:00Z", 40);
+
+        Admission overCap = smsOneTimePasswords(11);
+
+        assertThatThrownBy(() -> f.admission.admit(overCap))
+                .isInstanceOfSatisfying(SpendCapExceededException.class, e -> assertThat(e.getMessage()).contains("102.00 USD"));
+        f.admission.admit(smsOneTimePasswords(10));
     }
 }

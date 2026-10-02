@@ -21,8 +21,10 @@ package com.techeazy.notification.billing.infrastructure;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import com.techeazy.notification.billing.application.port.AccountLookup;
+import com.techeazy.notification.billing.application.port.OtpPriceLookup;
 import com.techeazy.notification.billing.application.port.PlanLookup;
 import com.techeazy.notification.billing.domain.BillingAccount;
+import com.techeazy.notification.billing.domain.OtpPrices;
 import com.techeazy.notification.billing.domain.Plan;
 
 import java.time.Duration;
@@ -42,6 +44,11 @@ final class CachedLookups {
 
     static AccountLookup accounts(AccountLookup source, Duration ttl) {
         Cache<UUID, Optional<BillingAccount>> cache = Caffeine.newBuilder().expireAfterWrite(ttl).maximumSize(50_000).build();
+        return clientId -> cache.get(clientId, source::findByClientId);
+    }
+
+    static OtpPriceLookup otpPrices(OtpPriceLookup source, Duration ttl) {
+        Cache<UUID, OtpPrices> cache = Caffeine.newBuilder().expireAfterWrite(ttl).maximumSize(50_000).build();
         return clientId -> cache.get(clientId, source::findByClientId);
     }
 

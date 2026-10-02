@@ -27,6 +27,7 @@ import com.techeazy.notification.billing.application.port.AccountRepository;
 import com.techeazy.notification.billing.application.port.CreditStore;
 import com.techeazy.notification.billing.application.port.CreditStore.CompletedHold;
 import com.techeazy.notification.billing.application.port.InvoiceRepository;
+import com.techeazy.notification.billing.application.port.OtpPriceRepository;
 import com.techeazy.notification.billing.application.port.PlanRepository;
 import com.techeazy.notification.billing.application.port.Transactions;
 import com.techeazy.notification.billing.application.port.UsageReader;
@@ -49,6 +50,8 @@ import com.techeazy.notification.billing.domain.InvoiceStatus;
 import com.techeazy.notification.billing.domain.LedgerEntry;
 import com.techeazy.notification.billing.domain.LedgerEntryType;
 import com.techeazy.notification.billing.domain.Money;
+import com.techeazy.notification.billing.domain.OtpPrices;
+import com.techeazy.notification.billing.domain.SentCount;
 import com.techeazy.notification.billing.domain.Payment;
 import com.techeazy.notification.billing.domain.Plan;
 import com.techeazy.notification.domain.Channel;
@@ -72,6 +75,8 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 import java.math.BigDecimal;
 import java.nio.file.Path;
 import java.sql.Connection;
+import java.sql.ResultSet;
+import java.sql.Statement;
 import java.sql.Timestamp;
 import java.time.Clock;
 import java.time.Instant;
@@ -107,6 +112,7 @@ class BillingPersistenceTest {
     private static InvoiceRepository invoices;
     private static CreditStore credits;
     private static UsageReader usage;
+    private static OtpPriceRepository otpPrices;
     private static Transactions transactions;
     private static TransactionTemplate template;
 
@@ -126,6 +132,7 @@ class BillingPersistenceTest {
         invoices = new JdbcInvoiceRepository(jdbc);
         credits = new JdbcCreditStore(jdbc);
         usage = new JdbcUsageReader(jdbc);
+        otpPrices = new JdbcOtpPriceRepository(jdbc);
         template = new TransactionTemplate(new DataSourceTransactionManager(dataSource));
         transactions = new SpringTransactions(template);
     }
@@ -325,9 +332,69 @@ class BillingPersistenceTest {
         newMessage(request, client, Channel.SMS, "FAILED", "2026-08-12T10:00:00Z");
         newMessage(newRequest(other), other, Channel.SMS, "SENT", "2026-08-10T10:00:00Z");
 
-        Map<Channel, Long> august = usage.sentByChannel(client, Instant.parse("2026-08-01T00:00:00Z"), Instant.parse("2026-09-01T00:00:00Z"));
+        Map<Channel, SentCount> august = usage.sentByChannel(client, Instant.parse("2026-08-01T00:00:00Z"), Instant.parse("2026-09-01T00:00:00Z"));
 
-        assertThat(august).containsOnly(Map.entry(Channel.SMS, 2L), Map.entry(Channel.EMAIL, 1L));
+        assertThat(august).containsOnly(Map.entry(Channel.SMS, SentCount.ordinary(2)),
+                Map.entry(Channel.EMAIL, SentCount.ordinary(1)));
+    }
+
+    @Test
+    void oneTimePasswordsAreCountedApartFromOtherMessages() {
+        UUID client = newClient();
+        UUID request = newRequest(client);
+        newMessage(request, client, Channel.SMS, "SENT", "2026-08-10T10:00:00Z");
+        UUID otp = newMessage(request, client, Channel.SMS, "SENT", "2026-08-11T10:00:00Z");
+        UUID failedOtp = newMessage(request, client, Channel.SMS, "FAILED", "2026-08-12T10:00:00Z");
+        jdbc.sql("UPDATE notification_message SET category = 'OTP' WHERE id IN (:ids)")
+                .param("ids", List.of(otp, failedOtp)).update();
+
+        Map<Channel, SentCount> august = usage.sentByChannel(client, Instant.parse("2026-08-01T00:00:00Z"),
+                Instant.parse("2026-09-01T00:00:00Z"));
+
+        assertThat(august).containsOnly(Map.entry(Channel.SMS, new SentCount(1, 1)));
+    }
+
+    /** Usage is read at every postpaid accept with a spend cap, so it must come from the index alone. */
+    @Test
+    void usageIsCountedFromTheIndexWithoutReadingTheTable() throws Exception {
+        UUID client = newClient();
+        UUID request = newRequest(client);
+        for (int i = 0; i < 200; i++) {
+            newMessage(request, client, Channel.SMS, "SENT", "2026-08-10T10:00:00Z");
+        }
+        String explain = JdbcUsageReader.SENT_BY_CHANNEL.replace(":client", "'" + client + "'")
+                .replace(":from", "'2026-08-01T00:00:00Z'").replace(":to", "'2026-09-01T00:00:00Z'");
+        List<String> plan = new ArrayList<>();
+        try (Connection connection = dataSource.getConnection();
+             Statement statement = connection.createStatement()) {
+            statement.execute("VACUUM ANALYZE notification_message");
+            statement.execute("SET enable_seqscan = off");
+            try (ResultSet rs = statement.executeQuery("EXPLAIN " + explain)) {
+                while (rs.next()) {
+                    plan.add(rs.getString(1));
+                }
+            }
+        }
+
+        assertThat(plan).anyMatch(line -> line.contains("Index Only Scan using ix_message_sent_usage_category"));
+    }
+
+    @Test
+    void aTenantsOtpPricesAreReplacedAsAWholeAndGoWithTheAccount() {
+        UUID client = newClient();
+        Plan plan = plans.save(new Plan(UUID.randomUUID(), "otp-" + client, USD, usd("0"), BigDecimal.ZERO,
+                Map.of(Channel.SMS, new ChannelRate(usd("0.008"), 0)), true));
+        accounts.save(new BillingAccount(client, plan.id(), BillingMode.POSTPAID, null, usd("0"), AccountStatus.ACTIVE, null));
+
+        otpPrices.replace(client, new OtpPrices(Map.of(Channel.SMS, usd("0.012"), Channel.EMAIL, usd("0.002"))));
+        otpPrices.replace(client, new OtpPrices(Map.of(Channel.SMS, usd("0.015"))));
+
+        assertThat(otpPrices.findByClientId(client)).isEqualTo(new OtpPrices(Map.of(Channel.SMS, usd("0.015"))));
+        assertThat(otpPrices.findByClientId(UUID.randomUUID())).isEqualTo(OtpPrices.NONE);
+
+        otpPrices.replace(client, OtpPrices.NONE);
+
+        assertThat(otpPrices.findByClientId(client).isEmpty()).isTrue();
     }
 
     @Test
@@ -368,7 +435,7 @@ class BillingPersistenceTest {
         Plan plan = newPlan("0.10", 0);
         newAccount(client, plan, BillingMode.PREPAID);
         credits.credit(client, usd("10"));
-        AdmissionControl admission = new AdmissionControl(accounts, plans, credits, usage, new InvoiceCalculator(), CLOCK);
+        AdmissionControl admission = new AdmissionControl(accounts, plans, otpPrices, credits, usage, new InvoiceCalculator(), CLOCK);
         UUID request = UUID.randomUUID();
 
         assertThatThrownBy(() -> template.executeWithoutResult(status -> {
@@ -386,7 +453,7 @@ class BillingPersistenceTest {
         UUID client = newClient();
         newAccount(client, newPlan("0.10", 0), BillingMode.PREPAID);
         CreditService creditService = new CreditService(accounts, plans, credits, transactions, CLOCK);
-        AdmissionControl admission = new AdmissionControl(accounts, plans, credits, usage, new InvoiceCalculator(), CLOCK);
+        AdmissionControl admission = new AdmissionControl(accounts, plans, otpPrices, credits, usage, new InvoiceCalculator(), CLOCK);
         HoldSettlement settlement = new HoldSettlement(credits, transactions, CLOCK);
         creditService.topUp(client, usd("10"), "pay-1", "Card payment");
         UUID request = newRequest(client);
@@ -426,7 +493,8 @@ class BillingPersistenceTest {
         }
         newMessage(request, client, Channel.SMS, "FAILED", "2026-08-20T10:00:00Z");
         Clock september = Clock.fixed(Instant.parse("2026-09-03T02:00:00Z"), ZoneOffset.UTC);
-        InvoiceService service = new InvoiceService(invoices, accounts, plans, usage, new InvoiceCalculator(), transactions, september, 30);
+        InvoiceService service = new InvoiceService(invoices, accounts, plans, otpPrices, usage, new InvoiceCalculator(), transactions,
+                september, 30);
         BillingPeriod august = BillingPeriod.parse("2026-08");
 
         Invoice first = service.generateFor(client, august);

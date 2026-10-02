@@ -88,7 +88,7 @@ public class BillingController {
     public AccountView account(@RequestAttribute(ClientAuthFilter.CLIENT_ATTRIBUTE) AuthenticatedClient client) {
         BillingAccount account = accounts.get(client.id());
         Plan plan = plans.get(account.planId());
-        return BillingViews.account(account, plan);
+        return BillingViews.account(account, plan, accounts.otpPrices(client.id()));
     }
 
     @Operation(summary = "Usage and cost of a month, month=YYYY-MM (default: the current month, which is an estimate)")

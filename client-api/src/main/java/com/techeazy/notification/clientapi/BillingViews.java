@@ -23,18 +23,21 @@ import com.techeazy.notification.billing.application.UsageStatement;
 import com.techeazy.notification.billing.domain.AccountStatus;
 import com.techeazy.notification.billing.domain.BillingAccount;
 import com.techeazy.notification.billing.domain.BillingMode;
+import com.techeazy.notification.billing.domain.ChannelRate;
+import com.techeazy.notification.billing.domain.Invoice;
 import com.techeazy.notification.billing.domain.InvoiceLine;
 import com.techeazy.notification.billing.domain.InvoiceLineKind;
 import com.techeazy.notification.billing.domain.InvoiceStatus;
-import com.techeazy.notification.billing.domain.Invoice;
 import com.techeazy.notification.billing.domain.LedgerEntry;
 import com.techeazy.notification.billing.domain.LedgerEntryType;
 import com.techeazy.notification.billing.domain.Money;
+import com.techeazy.notification.billing.domain.OtpPrices;
 import com.techeazy.notification.billing.domain.Payment;
 import com.techeazy.notification.billing.domain.Plan;
 import com.techeazy.notification.domain.Channel;
 
 import java.time.Instant;
+import java.util.Arrays;
 import java.util.List;
 import java.util.UUID;
 
@@ -47,7 +50,11 @@ final class BillingViews {
 
     private BillingViews() {}
 
-    record RateView(Channel channel, String unitPrice, long freeAllowance) {}
+    /**
+     * {@code otpUnitPrice} is what you pay per one-time password on the channel, when it differs from {@code unitPrice};
+     * the free allowance covers ordinary messages first, then one-time passwords (ADR-034).
+     */
+    record RateView(Channel channel, String unitPrice, long freeAllowance, String otpUnitPrice) {}
 
     record AccountView(String planName, String currency, BillingMode mode, AccountStatus status, String creditBalance,
                        String monthlySpendCap, String platformFee, String taxRate, List<RateView> rates) {}
@@ -70,9 +77,14 @@ final class BillingViews {
 
     record LedgerPageView(String currency, List<LedgerEntryView> items, long total, int page, int size) {}
 
-    static AccountView account(BillingAccount account, Plan plan) {
-        List<RateView> rates = plan.rates().entrySet().stream()
-                .map(e -> new RateView(e.getKey(), e.getValue().unitPrice().unitFormatted(), e.getValue().freeAllowance())).toList();
+    static AccountView account(BillingAccount account, Plan plan, OtpPrices otpPrices) {
+        List<RateView> rates = Arrays.stream(Channel.values())
+                .filter(channel -> plan.rates().containsKey(channel) || otpPrices.priceFor(channel).isPresent())
+                .map(channel -> {
+                    ChannelRate rate = plan.rateFor(channel);
+                    return new RateView(channel, rate.unitPrice().unitFormatted(), rate.freeAllowance(),
+                            otpPrices.priceFor(channel).map(Money::unitFormatted).orElse(null));
+                }).toList();
         return new AccountView(plan.name(), plan.currency(), account.mode(), account.status(),
                 account.isPrepaid() ? account.creditBalance().formatted() : null,
                 account.spendCap().map(Money::formatted).orElse(null), plan.platformFee().formatted(),

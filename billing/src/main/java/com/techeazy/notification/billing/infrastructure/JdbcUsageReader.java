@@ -19,6 +19,7 @@
 package com.techeazy.notification.billing.infrastructure;
 
 import com.techeazy.notification.billing.application.port.UsageReader;
+import com.techeazy.notification.billing.domain.SentCount;
 import com.techeazy.notification.domain.Channel;
 import org.springframework.jdbc.core.simple.JdbcClient;
 
@@ -28,8 +29,19 @@ import java.util.EnumMap;
 import java.util.Map;
 import java.util.UUID;
 
-/** Counts messages with status SENT by the time they were sent, served by a partial index on exactly that. */
+/**
+ * Counts messages with status SENT by the time they were sent, one-time passwords apart (ADR-034). A partial index on
+ * exactly that, which also carries the category, answers it without reading the table.
+ */
 class JdbcUsageReader implements UsageReader {
+
+    static final String SENT_BY_CHANNEL = """
+            SELECT channel,
+                   count(*) FILTER (WHERE category <> 'OTP') AS ordinary,
+                   count(*) FILTER (WHERE category = 'OTP') AS otp
+            FROM notification_message
+            WHERE client_id = :client AND status = 'SENT' AND sent_at >= :from AND sent_at < :to
+            GROUP BY channel""";
 
     private final JdbcClient jdbc;
 
@@ -38,14 +50,12 @@ class JdbcUsageReader implements UsageReader {
     }
 
     @Override
-    public Map<Channel, Long> sentByChannel(UUID clientId, Instant fromInclusive, Instant toExclusive) {
-        Map<Channel, Long> counts = new EnumMap<>(Channel.class);
-        jdbc.sql("""
-                SELECT channel, count(*) AS sent FROM notification_message
-                WHERE client_id = :client AND status = 'SENT' AND sent_at >= :from AND sent_at < :to
-                GROUP BY channel""")
+    public Map<Channel, SentCount> sentByChannel(UUID clientId, Instant fromInclusive, Instant toExclusive) {
+        Map<Channel, SentCount> counts = new EnumMap<>(Channel.class);
+        jdbc.sql(SENT_BY_CHANNEL)
                 .param("client", clientId).param("from", Timestamp.from(fromInclusive)).param("to", Timestamp.from(toExclusive))
-                .query((rs, n) -> Map.entry(Channel.valueOf(rs.getString("channel")), rs.getLong("sent")))
+                .query((rs, n) -> Map.entry(Channel.valueOf(rs.getString("channel")),
+                        new SentCount(rs.getLong("ordinary"), rs.getLong("otp"))))
                 .list()
                 .forEach(entry -> counts.put(entry.getKey(), entry.getValue()));
         return counts;

@@ -23,8 +23,10 @@ import com.techeazy.notification.billing.domain.BillingNotFoundException;
 import com.techeazy.notification.billing.domain.BillingPeriod;
 import com.techeazy.notification.billing.domain.InvalidBillingStateException;
 import com.techeazy.notification.billing.domain.Invoice;
+import com.techeazy.notification.billing.domain.InvoiceLineKind;
 import com.techeazy.notification.billing.domain.InvoiceStatus;
 import com.techeazy.notification.billing.domain.Money;
+import com.techeazy.notification.billing.domain.OtpPrices;
 import com.techeazy.notification.billing.domain.Plan;
 import com.techeazy.notification.domain.Channel;
 import org.junit.jupiter.api.BeforeEach;
@@ -210,5 +212,20 @@ class InvoiceServiceTest {
         UUID unknown = UUID.randomUUID();
         assertThatThrownBy(() -> f.invoiceService.get(unknown)).isInstanceOf(BillingNotFoundException.class);
         assertThat(List.of(draft.status())).containsExactly(InvoiceStatus.DRAFT);
+    }
+
+
+    @Test
+    void anInvoiceChargesOneTimePasswordsAtTheTenantsOtpPriceAfterTheSharedAllowance() {
+        f.usage.sentOneTimePasswords(client, Channel.SMS, "2026-08-11T10:00:00Z", 200);
+        f.otpPrices.replace(client, new OtpPrices(java.util.Map.of(Channel.SMS, usd("0.20"))));
+
+        Invoice invoice = f.invoiceService.generateFor(client, AUGUST);
+
+        assertThat(invoice.lines()).extracting(line -> line.kind(), line -> line.quantity(), line -> line.amount())
+                .containsExactly(
+                        org.assertj.core.groups.Tuple.tuple(InvoiceLineKind.USAGE, 500L, usd("25.00")),
+                        org.assertj.core.groups.Tuple.tuple(InvoiceLineKind.OTP_USAGE, 200L, usd("40.00")));
+        assertThat(invoice.subtotal()).isEqualTo(usd("65.00"));
     }
 }

@@ -128,12 +128,13 @@ export function variablesOf(...texts: (string | undefined)[]): string[] {
   return [...names];
 }
 
-export interface BillingRate { channel: Channel; unitPrice: string; freeAllowance: number }
+/** otpUnitPrice: what you pay per one-time password on the channel, when it differs from unitPrice. */
+export interface BillingRate { channel: Channel; unitPrice: string; freeAllowance: number; otpUnitPrice?: string }
 export interface BillingAccount {
   planName: string; currency: string; mode: 'POSTPAID' | 'PREPAID'; status: 'ACTIVE' | 'SUSPENDED';
   creditBalance?: string; monthlySpendCap?: string; platformFee: string; taxRate: string; rates: BillingRate[];
 }
-export interface BillingLine { kind: 'USAGE' | 'PLATFORM_FEE'; channel?: Channel; description: string; quantity: number; unitPrice: string; amount: string }
+export interface BillingLine { kind: 'USAGE' | 'OTP_USAGE' | 'PLATFORM_FEE'; channel?: Channel; description: string; quantity: number; unitPrice: string; amount: string }
 export interface BillingUsage { month: string; currency: string; estimate: boolean; lines: BillingLine[]; subtotal: string; tax: string; total: string }
 export type InvoiceStatus = 'DRAFT' | 'ISSUED' | 'PAID' | 'VOID';
 export interface InvoiceSummary {

@@ -17,7 +17,9 @@
  */
 package com.techeazy.notification.adminapi;
 
+import com.techeazy.notification.billing.application.Admission;
 import com.techeazy.notification.billing.application.AdmissionControl;
+import com.techeazy.notification.billing.domain.HoldScope;
 import com.techeazy.notification.domain.Channel;
 import com.techeazy.notification.domain.FailureKind;
 import com.techeazy.notification.domain.MessageCategory;
@@ -70,6 +72,22 @@ class MessageRetryTest {
         when(messages.requeueFailed(eq(exhausted.getId()), any())).thenReturn(1);
 
         assertThat(retry.requeue(exhausted.getId())).isSameAs(exhausted);
+        verify(admission).admit(new Admission(exhausted.getClientId(), Channel.SMS, 1, HoldScope.MESSAGE,
+                exhausted.getId(), false));
+    }
+
+    /** A retried one-time password is charged at the tenant's OTP price again (ADR-034). */
+    @Test
+    void aRetriedOneTimePasswordIsAdmittedAsOne() {
+        NotificationMessage otp = failed(FailureKind.EXHAUSTED);
+        otp.setCategory(MessageCategory.OTP);
+        otp.setExpiresAt(Instant.now().plusSeconds(120));
+        when(messages.findById(otp.getId())).thenReturn(Optional.of(otp));
+        when(messages.requeueFailed(eq(otp.getId()), any())).thenReturn(1);
+
+        retry.requeue(otp.getId());
+
+        verify(admission).admit(new Admission(otp.getClientId(), Channel.SMS, 1, HoldScope.MESSAGE, otp.getId(), true));
     }
 
     private static NotificationMessage failed(FailureKind kind) {

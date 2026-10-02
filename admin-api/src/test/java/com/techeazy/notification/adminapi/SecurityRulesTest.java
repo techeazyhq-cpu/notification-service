@@ -150,6 +150,16 @@ class SecurityRulesTest {
         assertThat(status(AdminRole.ADMIN, HttpMethod.GET, "/api/admin/administrators")).isEqualTo(404);
     }
 
+    /** What a tenant pays is configuration: only an admin sets it, though anyone may read it (ADR-034). */
+    @Test
+    void onlyAnAdminSetsATenantsOtpPrices() throws Exception {
+        String prices = "/api/admin/billing/accounts/1/otp-prices";
+        assertThat(status(AdminRole.VIEWER, HttpMethod.GET, prices)).isEqualTo(404);
+        assertThat(status(AdminRole.VIEWER, HttpMethod.PUT, prices)).isEqualTo(403);
+        assertThat(status(AdminRole.OPERATOR, HttpMethod.PUT, prices)).isEqualTo(403);
+        assertThat(status(AdminRole.ADMIN, HttpMethod.PUT, prices)).isEqualTo(404);
+    }
+
     private MockHttpServletResponse asSessionPendingSetup(HttpMethod method, String path) throws Exception {
         return mvc.perform(request(method, path).header("Authorization", "Bearer " + SETUP_PENDING_TOKEN))
                 .andReturn().getResponse();
