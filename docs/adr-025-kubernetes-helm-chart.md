@@ -69,6 +69,11 @@ Kubernetes, and the datastores have to be pluggable: managed services on a cloud
      ingress, and 14 connection checks confirmed the network policies, including that the dispatcher reaches a public
      host on 443 but not an internal service on 443, and that nothing outside the namespace reaches any port.
 
+10. **Development fixtures are not scanned.** The repository scan (Trivy, with misconfiguration checks) covers the chart
+    and every production manifest, and the chart passes it. `deploy/k8s/dev` is excluded: it holds single-replica,
+    non-persistent datastores and values for trying the chart on a laptop. They run with their images' default
+    security contexts, and the scan's Kubernetes hardening checks would otherwise fail the build on them.
+
 ## Options considered
 
 - **Plain manifests or Kustomize.** Fine for one environment. The chart's values (hosts, datastores, peers, sizes)

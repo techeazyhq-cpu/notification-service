@@ -1,8 +1,9 @@
 # Trying the Helm chart on a local k3s
 
-Development only. This runs the whole platform in a single-node k3s inside Docker, with throwaway datastores, to see
-the chart work: migration hook, probes, ingress, network policies. It is how the chart was verified for ADR-025.
-Production uses real datastores (managed services or operators) and images from a registry.
+Development only, and excluded from the repository's security scan for that reason (ADR-025). This runs the
+whole platform in a single-node k3s inside Docker, with throwaway datastores, to see the chart work: migration hook,
+probes, ingress, network policies. It is how the chart was verified for ADR-025. Production uses real datastores
+(managed services or operators) and images from a registry.
 
 Requirements: Docker. Helm and kubectl run from containers, so nothing else needs installing.
 
