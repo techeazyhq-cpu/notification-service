@@ -31,6 +31,9 @@ satisfy a check, not a status posted by anything else):
 | Security | `Dependency and secret scan` |
 | Security | `CodeQL (java-kotlin)`, `CodeQL (javascript-typescript)` |
 
+`Publish signed image (...)` (ADR-027) is deliberately not required: it runs only after a push to `main` or a version
+tag, never on a pull request, so requiring it would block every merge.
+
 ## Steps
 
 ### 1. Confirm you have admin rights and that `main` is green

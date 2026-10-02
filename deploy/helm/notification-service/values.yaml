@@ -18,10 +18,13 @@
 # NotificationServiceDown alert matches (docs/slo.md). Datastores are not part of this chart (ADR-025).
 
 image:
-  # Images are named <registry>/<repository prefix><component>, e.g. registry.example.com/notification-client-api.
-  registry: registry.example.com
+  # Images are named <registry>/<repository prefix><component>, e.g. ghcr.io/techeazyhq-cpu/notification-client-api.
+  # CI publishes them signed, with an SBOM attestation (ADR-027). GHCR packages start private: make them public or
+  # add a pull secret to imagePullSecrets.
+  registry: ghcr.io/techeazyhq-cpu
   repositoryPrefix: notification-
-  # Defaults to the chart's appVersion. Pin by digest in production: tag: "0.1.0@sha256:...".
+  # Defaults to the chart's appVersion, published when the v<appVersion> tag is pushed. Builds of main are tagged
+  # sha-<full commit>. Pin by digest in production: tag: "0.1.0@sha256:...".
   tag: ""
   pullPolicy: IfNotPresent
 imagePullSecrets: []
