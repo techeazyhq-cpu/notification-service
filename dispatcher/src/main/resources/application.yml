@@ -73,7 +73,15 @@ dispatcher:
     permitted-calls-in-half-open-state: ${CB_HALF_OPEN_CALLS:3}
 
 management:
+  tracing:
+    sampling:
+      probability: ${TRACING_SAMPLING_PROBABILITY:0.1}
   endpoints:
     web:
       exposure:
         include: health,info,prometheus,providerhealth
+
+logging:
+  structured:
+    format:
+      console: ${LOG_FORMAT:ecs}

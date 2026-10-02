@@ -18,6 +18,8 @@
 
 package com.techeazy.notification.dispatcher.provider;
 
+import io.micrometer.observation.Observation;
+import io.micrometer.observation.ObservationRegistry;
 import com.techeazy.notification.application.ProviderDestinationPolicy;
 import com.techeazy.notification.application.ProviderDestinationRefusedException;
 import com.github.benmanes.caffeine.cache.Caffeine;
@@ -69,12 +71,17 @@ public class ProviderRegistry {
     private final boolean breakerEnabled;
     private final Map<String, Instant> breakerVersions = new HashMap<>();
     private final ProviderDestinationPolicy destinations;
+    private final ObservationRegistry observations;
+
+    /** Timer and span name for one call to one provider; failed calls carry the error. */
+    public static final String PROVIDER_CALL_OBSERVATION = "notification.provider.send";
 
     public ProviderRegistry(List<ChannelProvider> impls, ProviderConfigRepository repo, ProviderSecrets secrets,
                             CircuitBreakerRegistry breakers, DispatcherProperties props,
-                            ProviderDestinationPolicy destinations) {
+                            ProviderDestinationPolicy destinations, ObservationRegistry observations) {
         impls.forEach(p -> providers.put(p.type(), p));
         this.destinations = destinations;
+        this.observations = observations;
         this.breakers = breakers;
         this.breakerEnabled = props.getCircuitBreaker().isEnabled();
         this.configs = Caffeine.newBuilder().expireAfterWrite(Duration.ofSeconds(10))
@@ -132,12 +139,20 @@ public class ProviderRegistry {
      * breaker and the next provider is tried, like any other transient failure (see ADR-022).
      */
     private SendResult sendWithinPolicy(ChannelProvider provider, ProviderConfig cfg, Outbound message) {
-        try {
-            destinations.check(cfg.getType(), cfg.getSettings());
-        } catch (ProviderDestinationRefusedException refused) {
-            throw new TransientSendException("Provider destination refused: " + refused.getMessage(), refused);
-        }
-        return provider.send(cfg, message);
+        return Observation.createNotStarted(PROVIDER_CALL_OBSERVATION, observations)
+                .contextualName("provider send")
+                .lowCardinalityKeyValue("provider", cfg.getName())
+                .lowCardinalityKeyValue("provider.type", cfg.getType().name())
+                .lowCardinalityKeyValue("channel", message.channel().name())
+                .observe(() -> {
+                    try {
+                        destinations.check(cfg.getType(), cfg.getSettings());
+                    } catch (ProviderDestinationRefusedException refused) {
+                        throw new TransientSendException(
+                                "Provider destination refused: " + refused.getMessage(), refused);
+                    }
+                    return provider.send(cfg, message);
+                });
     }
 
     public List<BreakerStatus> breakerStatus() {

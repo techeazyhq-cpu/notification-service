@@ -51,6 +51,14 @@ class OperationalEndpointsConfigurationTest {
         assertThat(shippedConfiguration.getProperty("management.server.port", Integer.class)).isEqualTo(9080);
     }
 
+    /** Machine-readable logs, each line carrying its trace id, unless {@code LOG_FORMAT} is set empty (see ADR-023). */
+    @Test
+    void logsAreStructuredAndTracesSampledByDefault() {
+        assertThat(shippedConfiguration.getProperty("logging.structured.format.console")).isEqualTo("ecs");
+        assertThat(shippedConfiguration.getProperty("management.tracing.sampling.probability", Double.class))
+                .isEqualTo(0.1);
+    }
+
     @Test
     void onlyHealthInformationAndMetricsAreExposed() {
         assertThat(shippedConfiguration.getProperty("management.endpoints.web.exposure.include"))

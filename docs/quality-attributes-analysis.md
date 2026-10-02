@@ -18,7 +18,7 @@ single-machine result: it shows shape and relative cost, not production capacity
 | Reliability | Strong | Provider outage: 0 messages failed, breaker held 300 in the queue, all delivered 17 s after recovery |
 | Fault tolerance | Good, two known weaknesses | Crash of the delivery worker recovers fully but takes up to ~7 min; ingest slows to ~5 s per request while the broker is down |
 | Scalability | Adequate for a first deployment | Ingest sustains 750 req/s (p99 273 ms) on one instance; delivery is capped near 300 msg/s per dispatcher at 2 consumers per channel |
-| Traceability | Adequate | Every message has a persisted state machine and error text; no distributed tracing or correlation id |
+| Traceability | Good | Persisted state machine per message, plus one OpenTelemetry trace per request across services and JSON logs carrying its id (ADR-023) |
 | Security in transit / at rest | Good | Edge TLS, TLS on every datastore hop, encrypted variables and credentials; recipient column relies on storage encryption |
 | Static quality | Clean | SonarQube: 0 bugs, 0 vulnerabilities, 0 code smells, 0 security hotspots across Java and the front ends |
 
@@ -109,8 +109,10 @@ is single-node.
   derived from its messages; dead letters are recorded with a reason; Prometheus counters per channel and outcome
   (`notification.dispatch`, `notification.dead_letter`, ingest stages); billing is a ledger; every state-changing
   admin API call, including refused attempts and sign-ins, is in an append-only audit log (ADR-019).
-- **Missing:** no correlation id from the HTTP request through Pulsar to the provider call, no OpenTelemetry traces, logs
-  are not structured. When a message misbehaves you can read its row, but you cannot follow one request across services.
+- **Since ADR-023:** one OpenTelemetry trace per request, carried through Pulsar to the dispatcher and each provider
+  call, its id returned in `X-Trace-Id` and present in every (JSON) log line.
+- **Still missing:** service level objectives and alerts; spans for database and Redis calls; republished messages
+  start a new trace.
 
 ## Scalability
 
@@ -124,7 +126,7 @@ is single-node.
 
 ## Enhancements, in priority order
 
-1. **Traceability:** correlation id and OpenTelemetry across client-api → Pulsar → dispatcher.
+1. **Traceability:** done in ADR-023; SLOs and alerts next.
 2. **Resilience:** circuit breaker on the publisher so ingest stays fast during a broker outage; shorter, configurable
    stuck-processing timeout with a heartbeat instead of a fixed 5 minutes; provider idempotency keys.
 3. **Scale:** partitioned topics and per-channel consumer tuning; time-partitioned `notification_message` with retention by
