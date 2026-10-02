@@ -45,9 +45,11 @@ services:
 
   pulsar:
     image: apachepulsar/pulsar:3.3.3
-    command: bin/pulsar standalone -nfw -nss
+    command: sh -c "bin/apply-config-from-env.py conf/standalone.conf && exec bin/pulsar standalone -nfw -nss"
     environment:
       PULSAR_MEM: "-Xms512m -Xmx768m -XX:MaxDirectMemorySize=512m"
+      defaultRetentionTimeInMinutes: "60"
+      defaultRetentionSizeInMB: "1024"
     ports: ["6650:6650", "8088:8080"]
     volumes: [pulsardata:/pulsar/data]
     healthcheck:

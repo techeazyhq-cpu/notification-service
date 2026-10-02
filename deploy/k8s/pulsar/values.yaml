@@ -102,6 +102,11 @@ broker:
         matchLabels:
           component: broker
   configData:
+    # Keeps messages for an hour even when no subscription exists yet, so messages published to a new topic before
+    # the dispatcher subscribes (an upgrade that adds a topic, e.g. the OTP priority topics of ADR-033) are delivered
+    # when it does, instead of being trimmed. The envelopes are about 100 bytes each.
+    defaultRetentionTimeInMinutes: "60"
+    defaultRetentionSizeInMB: "1024"
     managedLedgerDefaultEnsembleSize: "2"
     managedLedgerDefaultWriteQuorum: "2"
     managedLedgerDefaultAckQuorum: "2"

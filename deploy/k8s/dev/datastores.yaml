@@ -90,9 +90,11 @@ spec:
       containers:
         - name: pulsar
           image: apachepulsar/pulsar:3.3.3
-          command: [bin/pulsar, standalone, -nfw, -nss]
+          command: [sh, -c, "bin/apply-config-from-env.py conf/standalone.conf && exec bin/pulsar standalone -nfw -nss"]
           env:
             - {name: PULSAR_MEM, value: "-Xms512m -Xmx768m -XX:MaxDirectMemorySize=512m"}
+            - {name: defaultRetentionTimeInMinutes, value: "60"}
+            - {name: defaultRetentionSizeInMB, value: "1024"}
           ports: [{containerPort: 6650}]
           readinessProbe:
             tcpSocket: {port: 6650}

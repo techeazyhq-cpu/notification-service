@@ -22,8 +22,8 @@ import java.time.Duration;
 /**
  * What a message is for, which decides how it is delivered (ADR-033). A one-time password is the only priority
  * category: it travels on its own broker topic with its own consumers, may use the rate-limit tokens kept in reserve,
- * is swept first, and is never sent after its validity runs out. The priority follows from the category, so a
- * client cannot jump the queue with ordinary traffic.
+ * is swept first, and is never sent after its validity runs out. The priority follows from what the message is,
+ * as the client declares it; the service does not verify that an OTP really is one (ADR-033).
  */
 public enum MessageCategory {
     OTP(true),

@@ -85,9 +85,21 @@ public class RateLimitService {
      */
     private Decision acquire(String key, RateLimitPolicy policy, MessageCategory category) {
         int burst = policy.getBurst();
-        int reserve = category.isPriority() ? 0
-                : Math.min(burst - 1, (int) Math.floor(burst * props.getRateLimit().getPriorityReserveFraction()));
-        return limiter.tryAcquire(key, policy.getRatePerSecond().doubleValue(), burst, Math.max(0, reserve));
+        int reserve = category.isPriority() ? 0 : reserveOf(burst, props.getRateLimit().getPriorityReserveFraction());
+        return limiter.tryAcquire(key, policy.getRatePerSecond().doubleValue(), burst, reserve);
+    }
+
+    /**
+     * The tokens ordinary messages must leave: the configured share of the burst, at least one whenever the share is
+     * above zero (so a small bucket, where the share rounds down to nothing, still keeps one for a one-time password),
+     * and never the whole bucket.
+     */
+    static int reserveOf(int burst, double fraction) {
+        if (fraction <= 0 || burst < 2) {
+            return 0;
+        }
+        int share = (int) Math.floor(burst * fraction);
+        return Math.min(burst - 1, Math.max(1, share));
     }
 
     private static Decision merge(Decision a, Decision b) {
