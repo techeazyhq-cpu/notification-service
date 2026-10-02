@@ -211,6 +211,7 @@ class DeadLetterPersistenceTest {
         UUID permanent = message(client, MessageStatus.FAILED, FailureKind.PERMANENT, "+12", 4);
         UUID legacy = message(client, MessageStatus.FAILED, null, "+13", 1);
         UUID erased = message(client, MessageStatus.FAILED, FailureKind.EXHAUSTED, PersonalData.ERASED, 5);
+        UUID expired = message(client, MessageStatus.FAILED, FailureKind.EXPIRED, "+16", 1);
         message(client, MessageStatus.SENT, null, "+14", 1);
         message(client, MessageStatus.QUEUED, null, "+15", 1);
         em.flush();
@@ -220,7 +221,11 @@ class DeadLetterPersistenceTest {
         DeadLetterFilter safe = new DeadLetterFilter(client, null, null, null, true);
         DeadLetterFilter includePermanent = new DeadLetterFilter(client, null, null, null, false);
 
-        assertThat(ids(messages.findAll(view.viewSpecification()))).containsExactlyInAnyOrder(exhausted, deadLettered, permanent, legacy, erased);
+        DeadLetterFilter onlyExpired = new DeadLetterFilter(client, null, FailureKind.EXPIRED, null, false);
+
+        assertThat(ids(messages.findAll(view.viewSpecification()))).containsExactlyInAnyOrder(exhausted, deadLettered, permanent, legacy, erased, expired);
+        assertThat(ids(messages.findAll(onlyExpired.viewSpecification()))).containsExactly(expired);
+        assertThat(ids(messages.findAll(onlyExpired.reprocessSpecification()))).isEmpty();
         assertThat(ids(messages.findAll(safe.reprocessSpecification()))).containsExactlyInAnyOrder(exhausted, deadLettered, legacy);
         assertThat(ids(messages.findAll(includePermanent.reprocessSpecification()))).containsExactlyInAnyOrder(exhausted, deadLettered, permanent, legacy);
     }

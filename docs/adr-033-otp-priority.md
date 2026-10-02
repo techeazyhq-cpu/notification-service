@@ -19,7 +19,8 @@ already asked for another.
 The owner chose:
 
 - a message category on requests, rather than a free priority flag, so the priority follows from what the message
-  is and cannot be claimed by ordinary traffic;
+  is. The client declares the category, so this states intent rather than enforcing it: see "Category is declared,
+  not verified" under Consequences;
 - dropping OTPs that cannot be delivered in time, rather than sending them late.
 
 ## Decision
@@ -40,11 +41,14 @@ The owner chose:
    (default 20 %) of a client's or a channel's bucket; OTPs may. Provider throughput limits still hold: OTPs share
    the bucket, they don't get a second one. A bulk send can no longer use up the tokens an OTP needs. The reserve is
    enforced atomically in the Redis script, which a test runs against a real Redis.
+   - The reserve is at least one token whenever the fraction is above zero and the burst is two or more. Otherwise a
+     bucket with a burst under 5 would round its 20 % down to nothing and keep no token for an OTP.
 4. **Expiry.** An OTP's `expiresAt` is set when it is accepted.
    - The dispatcher checks it before anything else, even during a provider outage, and ends an expired OTP as
      `FAILED` / `EXPIRED` with `OTP_EXPIRED` (NS-6007). It claims the message first, so a worker sending it at that
      moment is never overruled.
-   - An expired OTP cannot be requeued from the dead-letter screen.
+   - An expired OTP cannot be requeued. The dead-letter screen lists `EXPIRED` as a kind of its own, does not let
+     it be selected, and leaves it out of every bulk reprocess, including "reprocess everything".
    - `FailureKind.retryable()` now lists the retryable kinds explicitly, so a new kind is not retryable by accident.
 5. **Swept first, and in time.** The outbox sweeper recovers stuck OTPs before anything else, with thresholds of
    their own under `notification.sweeper.otp.*`.
@@ -81,6 +85,17 @@ Negative / accepted:
 
 - **Each channel has twice the topics,** consumers and subscriptions. Topics are auto-created; deployments that
   pre-create topics must add the `-priority` ones.
+- **A new topic can receive messages before anyone subscribes.** In an upgrade, the client API may publish OTPs to
+  a `-priority` topic before the new dispatcher has subscribed to it. Without retention, Pulsar trims such messages:
+  a forced trim left a late subscriber 0 of 3 messages. The brokers therefore retain messages for 60 minutes (1 GB)
+  even without a subscription (`deploy/k8s/pulsar/values.yaml`, and the standalone brokers of `docker-compose.yml`
+  and `deploy/k8s/dev`). The dispatcher subscribes from the earliest message, so it then receives all of them, and
+  the deployment order does not matter. Messages already handled are skipped by the atomic claim.
+- **Category is declared, not verified.** Any client may send single messages as `OTP`. Such messages jump the
+  queue, use the reserved tokens and expire. The owner accepted this rather than adding a per-client OTP
+  entitlement or an OTP cap: clients are onboarded by the operator, OTPs are single sends only, and per-category
+  pricing (a follow-up) would remove the incentive. If misuse appears, an admin-granted entitlement with a
+  per-client OTP rate cap is the intended control.
 - **Ordinary traffic gives up 20 % of each bucket's burst** while OTPs are not using it, which lowers peak bulk
   throughput a little. The fraction is configurable, and 0 turns the reserve off.
 - **The API grew** by three request fields and four view fields. All are optional and additive.

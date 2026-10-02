@@ -20,7 +20,7 @@ import { useState } from 'react';
 import { api, Channel, CHANNELS, Client } from '../api';
 import { useLoad } from '../hooks';
 
-type Kind = 'PERMANENT' | 'EXHAUSTED' | 'DEAD_LETTERED';
+type Kind = 'PERMANENT' | 'EXHAUSTED' | 'DEAD_LETTERED' | 'EXPIRED';
 interface Count { key: string; count: number }
 interface Summary { total: number; byKind: Count[]; byChannel: Count[]; byClient: Count[]; topErrors: Count[]; oldest?: string }
 interface Row {
@@ -31,11 +31,12 @@ interface Page { items: Row[]; page: number; size: number; totalItems: number }
 interface Refusal { id: string; reason: string }
 interface Result { selected: number; requeued: number; published: number; refusedCount: number; refused: Refusal[]; remaining: number }
 
-const KINDS: Kind[] = ['EXHAUSTED', 'DEAD_LETTERED', 'PERMANENT'];
+const KINDS: Kind[] = ['EXHAUSTED', 'DEAD_LETTERED', 'PERMANENT', 'EXPIRED'];
 const KIND_HELP: Record<string, string> = {
   EXHAUSTED: 'Every attempt failed for a temporary reason (provider outage, timeouts). Worth reprocessing.',
   DEAD_LETTERED: 'The broker gave up delivering it to a worker. Worth reprocessing.',
   PERMANENT: 'The provider or the content rejected it (bad recipient, missing variable). Fix the cause first.',
+  EXPIRED: 'A one-time password whose validity ran out before it could be sent. It cannot be reprocessed; the user asks for a new code.',
 };
 const time = (iso: string) => new Date(iso).toLocaleString();
 
@@ -87,8 +88,8 @@ export default function DeadLetters() {
     <>
       <h1>Dead letters</h1>
       <p className="muted">
-        Messages that ended <b>FAILED</b>: rejected for good, out of attempts, or given up on by the broker. Reprocessing puts them back on the send path with a fresh set of attempts
-        (prepaid clients are charged again for the new attempt). Messages whose data was erased cannot be reprocessed.
+        Messages that ended <b>FAILED</b>: rejected for good, out of attempts, given up on by the broker, or one-time passwords that expired before they could be sent. Reprocessing puts them back on the send path with a fresh set of attempts
+        (prepaid clients are charged again for the new attempt). Messages whose data was erased, and expired one-time passwords, cannot be reprocessed.
       </p>
 
       {summary.data && (
@@ -161,9 +162,9 @@ export default function DeadLetters() {
           <tbody>
             {list.data?.items.map((r) => (
               <tr key={r.id}>
-                <td><input type="checkbox" checked={selected.has(r.id)} disabled={r.erased} onChange={() => toggle(r.id)} aria-label={`Select ${r.id}`} /></td>
+                <td><input type="checkbox" checked={selected.has(r.id)} disabled={r.erased || r.kind === 'EXPIRED'} onChange={() => toggle(r.id)} aria-label={`Select ${r.id}`} /></td>
                 <td>{time(r.failedAt)}</td><td>{r.clientName}</td><td>{r.channel}</td><td className="mono">{r.recipient}</td>
-                <td title={r.kind ? KIND_HELP[r.kind] : ''}>{r.kind ?? '-'}{!r.retryable && !r.erased ? ' (fix first)' : ''}</td>
+                <td title={r.kind ? KIND_HELP[r.kind] : ''}>{r.kind ?? '-'}{!r.retryable && !r.erased && r.kind !== 'EXPIRED' ? ' (fix first)' : ''}</td>
                 <td>{r.attempts}</td><td>{r.reprocessCount}</td><td>{r.lastError}</td>
               </tr>
             ))}

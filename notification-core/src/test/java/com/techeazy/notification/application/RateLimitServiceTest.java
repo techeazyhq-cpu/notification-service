@@ -27,6 +27,8 @@ import com.techeazy.notification.port.RateLimiter;
 import com.techeazy.notification.port.RateLimiter.Decision;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 
 import java.math.BigDecimal;
 import java.util.List;
@@ -82,6 +84,21 @@ class RateLimitServiceTest {
         smallBuckets.checkDelivery(clientId, Channel.SMS, MessageCategory.PROMOTIONAL);
 
         verify(limiter).tryAcquire(eq("global:SMS"), eq(1.0), eq(1), eq(0));
+    }
+
+    @ParameterizedTest(name = "burst {0} at {1} keeps {2}")
+    @CsvSource({
+            "1, 0.2, 0",
+            "2, 0.2, 1",
+            "4, 0.2, 1",
+            "5, 0.2, 1",
+            "10, 0.2, 2",
+            "100, 0.2, 20",
+            "3, 0.9, 2",
+            "100, 0, 0"
+    })
+    void smallBucketsStillKeepATokenForOneTimePasswords(int burst, double fraction, int reserve) {
+        assertThat(RateLimitService.reserveOf(burst, fraction)).isEqualTo(reserve);
     }
 
     @Test

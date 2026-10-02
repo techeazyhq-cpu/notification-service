@@ -28,17 +28,20 @@ import jakarta.persistence.criteria.Predicate;
 import org.springframework.data.jpa.domain.Specification;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.UUID;
 
 /**
  * Which failed messages a dead-letter view or a bulk reprocess is about. Reprocessing leaves out messages whose
- * personal data was erased (there is nobody left to send to) and, unless asked, messages that failed for a reason
- * that resending cannot fix.
+ * personal data was erased (there is nobody left to send to), expired one-time passwords (useless to their recipient
+ * whatever is fixed, ADR-033) and, unless asked, messages that failed for a reason that resending cannot fix.
  */
 record DeadLetterFilter(UUID clientId, Channel channel, FailureKind kind, String errorContains, boolean retryableOnly) {
 
     private static final String FAILURE_KIND = "failureKind";
+    private static final List<FailureKind> RETRYABLE_KINDS =
+            Arrays.stream(FailureKind.values()).filter(FailureKind::retryable).toList();
 
     Specification<NotificationMessage> viewSpecification() {
         return (root, query, cb) -> {
@@ -54,10 +57,11 @@ record DeadLetterFilter(UUID clientId, Channel channel, FailureKind kind, String
         return (root, query, cb) -> {
             List<Predicate> where = base(root, cb);
             where.add(cb.notEqual(root.get("recipient"), PersonalData.ERASED));
+            where.add(cb.or(cb.isNull(root.get(FAILURE_KIND)), cb.notEqual(root.get(FAILURE_KIND), FailureKind.EXPIRED)));
             if (kind != null) {
                 where.add(cb.equal(root.get(FAILURE_KIND), kind));
             } else if (retryableOnly) {
-                where.add(cb.or(cb.isNull(root.get(FAILURE_KIND)), cb.notEqual(root.get(FAILURE_KIND), FailureKind.PERMANENT)));
+                where.add(cb.or(cb.isNull(root.get(FAILURE_KIND)), root.get(FAILURE_KIND).in(RETRYABLE_KINDS)));
             }
             return cb.and(where.toArray(new Predicate[0]));
         };
