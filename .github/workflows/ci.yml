@@ -26,6 +26,11 @@ jobs:
           cache: maven
       - name: Build and test (includes the PostgreSQL integration tests, which need Docker)
         run: mvn -B -ntp verify
+      - name: Check the backup scripts and run the backup and restore drill self-test
+        run: |
+          docker run --rm -v "$PWD/deploy/backup:/mnt:ro" koalaman/shellcheck:v0.11.0 \
+            /mnt/postgres-backup.sh /mnt/restore-drill.sh /mnt/self-test.sh
+          bash deploy/backup/self-test.sh
       - name: Check and unit-test the Prometheus SLO rules and alerts
         run: >-
           docker run --rm -v "$PWD/deploy/observability/prometheus:/rules:ro" -w /rules --entrypoint promtool
