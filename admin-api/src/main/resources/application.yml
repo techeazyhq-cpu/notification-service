@@ -63,6 +63,8 @@ admin:
   session-max-hours: ${ADMIN_SESSION_MAX_HOURS:12}
   max-failed-attempts: ${ADMIN_MAX_FAILED_ATTEMPTS:5}
   lockout-minutes: ${ADMIN_LOCKOUT_MINUTES:15}
+  require-password-change: ${ADMIN_REQUIRE_PASSWORD_CHANGE:true}
+  require-two-factor: ${ADMIN_REQUIRE_TWO_FACTOR:true}
   cors-origins: ${ADMIN_CORS_ORIGINS:http://localhost:5173}
 
 management:

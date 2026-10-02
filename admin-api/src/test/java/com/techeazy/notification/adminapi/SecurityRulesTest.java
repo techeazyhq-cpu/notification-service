@@ -21,6 +21,7 @@ package com.techeazy.notification.adminapi;
 import com.techeazy.notification.adminapi.audit.AuditEvent;
 import com.techeazy.notification.adminapi.audit.AuditOutcome;
 import com.techeazy.notification.adminapi.audit.RecordingAuditLog;
+import com.techeazy.notification.adminapi.auth.AccountSetupStep;
 import com.techeazy.notification.adminapi.auth.AdminAuthService;
 import com.techeazy.notification.adminapi.auth.AdminRole;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -34,6 +35,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.HttpMethod;
+import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.test.context.ContextConfiguration;
 import org.springframework.test.context.junit.jupiter.SpringExtension;
 import org.springframework.test.context.web.WebAppConfiguration;
@@ -43,6 +45,7 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.context.WebApplicationContext;
 import org.springframework.web.servlet.config.annotation.EnableWebMvc;
 
+import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -85,13 +88,18 @@ class SecurityRulesTest {
 
     private MockMvc mvc;
 
+    private static final String SETUP_PENDING_TOKEN = "setup-pending";
+
     @BeforeEach
     void setUp() {
         auditLog.clear();
         mvc = MockMvcBuilders.webAppContextSetup(context).addFilters(context.getBean("springSecurityFilterChain", Filter.class)).build();
         for (AdminRole role : AdminRole.values()) {
-            when(auth.authenticate(role.name())).thenReturn(Optional.of(new AdminAuthService.AuthenticatedSession("user", "hash", role)));
+            when(auth.authenticate(role.name())).thenReturn(Optional.of(
+                    new AdminAuthService.AuthenticatedSession("user", "hash", role, List.of())));
         }
+        when(auth.authenticate(SETUP_PENDING_TOKEN)).thenReturn(Optional.of(new AdminAuthService.AuthenticatedSession(
+                "newcomer", "hash", AdminRole.ADMIN, List.of(AccountSetupStep.CHANGE_PASSWORD))));
     }
 
     private int status(AdminRole role, HttpMethod method, String path) throws Exception {
@@ -134,6 +142,40 @@ class SecurityRulesTest {
         assertThat(status(AdminRole.ADMIN, HttpMethod.POST, "/api/admin/clients")).isEqualTo(404);
         assertThat(status(AdminRole.ADMIN, HttpMethod.DELETE, "/api/admin/providers/1")).isEqualTo(404);
         assertThat(status(AdminRole.ADMIN, HttpMethod.GET, "/api/admin/administrators")).isEqualTo(404);
+    }
+
+    private MockHttpServletResponse asSessionPendingSetup(HttpMethod method, String path) throws Exception {
+        return mvc.perform(request(method, path).header("Authorization", "Bearer " + SETUP_PENDING_TOKEN))
+                .andReturn().getResponse();
+    }
+
+    @Test
+    void aSessionWithAccountSetupPendingMayStillManageItsOwnAccount() throws Exception {
+        assertThat(asSessionPendingSetup(HttpMethod.GET, "/api/admin/auth/me").getStatus()).isEqualTo(404);
+        assertThat(asSessionPendingSetup(HttpMethod.POST, "/api/admin/auth/password").getStatus()).isEqualTo(404);
+        assertThat(asSessionPendingSetup(HttpMethod.POST, "/api/admin/auth/2fa/setup").getStatus()).isEqualTo(404);
+        assertThat(asSessionPendingSetup(HttpMethod.POST, "/api/admin/auth/logout").getStatus()).isEqualTo(404);
+    }
+
+    @Test
+    void aSessionWithAccountSetupPendingIsRefusedEverythingElseWithAReasonEvenForAnAdmin() throws Exception {
+        for (MockHttpServletResponse response : List.of(
+                asSessionPendingSetup(HttpMethod.GET, "/api/admin/clients"),
+                asSessionPendingSetup(HttpMethod.POST, "/api/admin/clients"),
+                asSessionPendingSetup(HttpMethod.GET, "/api/admin/audit-events"))) {
+            assertThat(response.getStatus()).isEqualTo(403);
+            assertThat(response.getContentType()).startsWith("application/json");
+            assertThat(response.getContentAsString()).contains("\"code\":\"ACCOUNT_SETUP_REQUIRED\"");
+        }
+    }
+
+    @Test
+    void anOrdinaryRefusalDoesNotClaimAccountSetupIsTheReason() throws Exception {
+        MockHttpServletResponse response = mvc.perform(request(HttpMethod.POST, "/api/admin/clients")
+                .header("Authorization", "Bearer " + AdminRole.VIEWER.name())).andReturn().getResponse();
+
+        assertThat(response.getStatus()).isEqualTo(403);
+        assertThat(response.getContentAsString()).doesNotContain("ACCOUNT_SETUP_REQUIRED");
     }
 
     @Test

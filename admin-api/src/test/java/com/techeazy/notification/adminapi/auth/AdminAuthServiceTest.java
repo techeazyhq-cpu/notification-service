@@ -50,10 +50,101 @@ class AdminAuthServiceTest {
         users = new InMemoryStores.Users();
         sessions = new InMemoryStores.Sessions(users);
         clock = new MutableClock(Instant.parse("2026-09-20T10:00:00Z"));
-        AuthSettings settings = new AuthSettings("Notification Admin", Duration.ofMinutes(30), Duration.ofHours(12), 3, Duration.ofMinutes(15));
-        auth = new AdminAuthService(users, sessions, PasswordEncoderFactories.createDelegatingPasswordEncoder(),
-                new SecretCipher("test-key", new SecureRandom()), totp, clock, settings, new SecureRandom());
+        auth = serviceRequiring(false, false);
         auth.bootstrap("admin", PASSWORD, () -> { });
+    }
+
+    private static AuthSettings settings(boolean requirePasswordChange, boolean requireTwoFactor) {
+        return new AuthSettings("Notification Admin", Duration.ofMinutes(30), Duration.ofHours(12), 3,
+                Duration.ofMinutes(15), requirePasswordChange, requireTwoFactor);
+    }
+
+    private AdminAuthService serviceRequiring(boolean requirePasswordChange, boolean requireTwoFactor) {
+        return new AdminAuthService(users, sessions, PasswordEncoderFactories.createDelegatingPasswordEncoder(),
+                new SecretCipher("test-key", new SecureRandom()), totp, clock,
+                settings(requirePasswordChange, requireTwoFactor), new SecureRandom());
+    }
+
+    @Test
+    void whenBothAreRequiredANewAdministratorMustChangeThePasswordAndTurnOnTwoFactorFirst() {
+        auth = serviceRequiring(true, true);
+
+        AdminAuthService.Login login = auth.login("admin", PASSWORD, null);
+
+        assertThat(login.pendingSetup())
+                .containsExactly(AccountSetupStep.CHANGE_PASSWORD, AccountSetupStep.ENABLE_TWO_FACTOR);
+        assertThat(auth.authenticate(login.token())).get().satisfies(session -> {
+            assertThat(session.pendingSetup())
+                    .containsExactly(AccountSetupStep.CHANGE_PASSWORD, AccountSetupStep.ENABLE_TWO_FACTOR);
+            assertThat(session.setupComplete()).isFalse();
+        });
+        assertThat(auth.account("admin").pendingSetup())
+                .containsExactly(AccountSetupStep.CHANGE_PASSWORD, AccountSetupStep.ENABLE_TWO_FACTOR);
+        assertThat(auth.account("admin").twoFactorRequired()).isTrue();
+    }
+
+    @Test
+    void eachCompletedStepIsDroppedAndTheSameSessionIsFullyUsableOnceBothAreDone() {
+        auth = serviceRequiring(true, true);
+        AdminAuthService.Login login = auth.login("admin", PASSWORD, null);
+        String tokenHash = AdminAuthService.hashToken(login.token());
+
+        auth.changePassword("admin", PASSWORD, NEW_PASSWORD, tokenHash);
+
+        assertThat(auth.authenticate(login.token()).orElseThrow().pendingSetup())
+                .containsExactly(AccountSetupStep.ENABLE_TWO_FACTOR);
+
+        AdminAuthService.TwoFactorSetup setup = auth.beginTwoFactor("admin");
+        auth.enableTwoFactor("admin", currentCode(setup.secret()));
+
+        assertThat(auth.authenticate(login.token())).get().satisfies(session -> {
+            assertThat(session.pendingSetup()).isEmpty();
+            assertThat(session.setupComplete()).isTrue();
+        });
+    }
+
+    @Test
+    void anAdministratorCreatedByAnotherMustReplaceTheTemporaryPasswordTheyWereGiven() {
+        auth = serviceRequiring(true, false);
+        auth.createAdmin("operator-1", "a temporary password", AdminRole.OPERATOR);
+
+        assertThat(auth.login("operator-1", "a temporary password", null).pendingSetup())
+                .containsExactly(AccountSetupStep.CHANGE_PASSWORD);
+    }
+
+    @Test
+    void withoutTheRequirementsNothingIsPending() {
+        AdminAuthService.Login login = auth.login("admin", PASSWORD, null);
+
+        assertThat(login.pendingSetup()).isEmpty();
+        assertThat(auth.authenticate(login.token()).orElseThrow().setupComplete()).isTrue();
+        assertThat(auth.account("admin").pendingSetup()).isEmpty();
+        assertThat(auth.account("admin").twoFactorRequired()).isFalse();
+    }
+
+    @Test
+    void twoFactorCannotBeTurnedOffWhileItIsRequired() {
+        auth = serviceRequiring(false, true);
+        AdminAuthService.TwoFactorSetup setup = enableTwoFactor();
+        clock.advance(Duration.ofSeconds(30));
+
+        AuthException refused = catchAuth(() -> auth.disableTwoFactor("admin", PASSWORD, currentCode(setup.secret())));
+
+        assertThat(refused.code()).isEqualTo("INVALID_STATE");
+        assertThat(auth.account("admin").twoFactorEnabled()).isTrue();
+    }
+
+    @Test
+    void askingToTurnOffRequiredTwoFactorIsRefusedBeforeAnyCredentialIsCheckedOrCountedAsAFailure() {
+        auth = serviceRequiring(false, true);
+        enableTwoFactor();
+
+        for (int attempt = 0; attempt < 5; attempt++) {
+            assertThat(catchAuth(() -> auth.disableTwoFactor("admin", "wrong", "000000")).code())
+                    .isEqualTo("INVALID_STATE");
+        }
+
+        assertThat(catchAuth(() -> auth.login("admin", PASSWORD, null)).code()).isEqualTo("OTP_REQUIRED");
     }
 
     @Test
@@ -69,7 +160,7 @@ class AdminAuthServiceTest {
         InMemoryStores.Users emptyUsers = new InMemoryStores.Users();
         AdminAuthService fresh = new AdminAuthService(emptyUsers, new InMemoryStores.Sessions(emptyUsers),
                 PasswordEncoderFactories.createDelegatingPasswordEncoder(), new SecretCipher("test-key", new SecureRandom()),
-                totp, clock, new AuthSettings("Notification Admin", Duration.ofMinutes(30), Duration.ofHours(12), 3, Duration.ofMinutes(15)),
+                totp, clock, settings(false, false),
                 new SecureRandom());
 
         assertThatThrownBy(() -> fresh.bootstrap("admin", "admin", () -> { throw new IllegalStateException("rejected"); }))
