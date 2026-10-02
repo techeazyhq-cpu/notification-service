@@ -81,7 +81,8 @@ class QueuedMarkerTest {
         OutboxPublisher outbox = new OutboxPublisher(publisher, messages, marker, new com.techeazy.notification.config.NotificationProperties());
         NotificationMessage ok = message();
         NotificationMessage failed = message();
-        when(publisher.publish(any(), any(), any())).thenAnswer(invocation -> invocation.getArgument(1).equals(ok.getId())
+        when(publisher.publish(any(), any(), any(),
+                any())).thenAnswer(invocation -> invocation.getArgument(2).equals(ok.getId())
                 ? CompletableFuture.<Void>completedFuture(null)
                 : CompletableFuture.<Void>failedFuture(new IllegalStateException("broker down")));
 

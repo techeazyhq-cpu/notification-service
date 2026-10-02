@@ -145,14 +145,15 @@ public class StatusQueryService {
         long inFlight = c.pending() + c.queued() + c.processing() + c.retrying();
         RequestStatus status = RequestStatus.derive(r.getTotal(), inFlight, c.sent(), c.failed());
         return new RequestView(r.getId(), r.getKind(), r.getChannel(), status, r.getTotal(), c,
-                r.getClientReference(), r.getCreatedAt());
+                r.getClientReference(), r.getCreatedAt(), r.getCategory(), r.getExpiresAt());
     }
 
     private static MessageView toView(NotificationMessage m) {
         ErrorCode errorCode = m.getErrorCode();
         return new MessageView(m.getId(), m.getRecipient(), m.getStatus(), m.getAttempts(), m.getLastError(),
                 m.getProviderMessageId(), m.getSentAt(), m.getUpdatedAt(),
-                errorCode == null ? null : errorCode.code(), errorCode == null ? null : errorCode.errorId());
+                errorCode == null ? null : errorCode.code(), errorCode == null ? null : errorCode.errorId(),
+                m.getCategory(), m.getExpiresAt());
     }
 
     private static PageRequest pageRequest(int page, int size, Sort sort) {

@@ -64,6 +64,7 @@ billing:
 
 dispatcher:
   consumers-per-channel: ${CONSUMERS_PER_CHANNEL:2}
+  priority-consumers-per-channel: ${PRIORITY_CONSUMERS_PER_CHANNEL:2}
   max-attempts: ${MAX_ATTEMPTS:5}
   base-backoff-seconds: ${BASE_BACKOFF_SECONDS:5}
   circuit-breaker:

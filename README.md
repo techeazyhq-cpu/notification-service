@@ -181,6 +181,14 @@ encrypted, including the storage-level encryption the recipient column needs in 
 database while messages are in flight) write to `docs/benchmarks`. Results and analysis:
 [docs/quality-attributes-analysis.md](docs/quality-attributes-analysis.md).
 
+## One-time passwords
+
+Send a one-time password with `"category": "OTP"` (and optionally `"validitySeconds"`, 60–900, default 300) on a
+single send, or mark a template's category as OTP. OTPs travel on their own priority topic with their own consumers,
+may use the rate-limit tokens ordinary traffic must leave in reserve, are swept first, and are never sent after their
+validity: an expired one fails with `OTP_EXPIRED`. Other categories are `TRANSACTIONAL` (the default) and
+`PROMOTIONAL`. See ADR-033.
+
 ## Error codes
 
 Every error from the client and admin APIs carries a stable `code` (what programs branch on), a numbered `errorId`

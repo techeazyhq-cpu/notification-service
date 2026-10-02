@@ -15,17 +15,16 @@
  *
  * @author Vasantha Kumar <vasantha.kumar@hotmail.com>
  */
-
 package com.techeazy.notification.port;
 
-import com.techeazy.notification.domain.MessageCategory;
-import com.techeazy.notification.domain.Channel;
+/**
+ * A publish that was not attempted because the broker's circuit is open (ADR-032): it failed recently, so the message
+ * stays PENDING and the outbox sweeper publishes it once the broker answers again.
+ */
+public class BrokerUnavailableException extends RuntimeException {
 
-import java.util.UUID;
-import java.util.concurrent.CompletableFuture;
-
-/** Outbound port to the message broker. Only the message id travels; no recipient data. */
-public interface MessagePublisher {
-    /** One-time passwords go to the channel's priority topic, everything else to its standard topic (ADR-033). */
-    CompletableFuture<Void> publish(Channel channel, MessageCategory category, UUID messageId, UUID clientId);
+    public BrokerUnavailableException() {
+        super("The message broker is unavailable; the message stays PENDING and the outbox sweeper publishes it",
+                null, false, false);
+    }
 }

@@ -18,6 +18,7 @@
 
 package com.techeazy.notification.clientapi;
 
+import com.techeazy.notification.domain.MessageCategory;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import com.techeazy.notification.domain.Channel;
@@ -43,7 +44,7 @@ import java.util.UUID;
 public class TemplateCache {
 
     /** The part of a template a request needs, detached from persistence. */
-    public record TemplateContent(UUID id, Channel channel, String subject, String body) {}
+    public record TemplateContent(UUID id, Channel channel, String subject, String body, MessageCategory category) {}
 
     private record Key(UUID clientId, String name) {}
 
@@ -97,6 +98,6 @@ public class TemplateCache {
     }
 
     private static TemplateContent content(Template t) {
-        return new TemplateContent(t.getId(), t.getChannel(), t.getSubject(), t.getBody());
+        return new TemplateContent(t.getId(), t.getChannel(), t.getSubject(), t.getBody(), t.getCategory());
     }
 }

@@ -26,5 +26,13 @@ public interface RateLimiter {
         public static final Decision GRANTED = new Decision(true, 0);
     }
 
-    Decision tryAcquire(String key, double ratePerSecond, int burst);
+    default Decision tryAcquire(String key, double ratePerSecond, int burst) {
+        return tryAcquire(key, ratePerSecond, burst, 0);
+    }
+
+    /**
+     * Takes a token only if at least {@code reserve} tokens stay in the bucket afterwards, so the last tokens are
+     * kept for callers that pass a reserve of 0 (priority traffic, ADR-033).
+     */
+    Decision tryAcquire(String key, double ratePerSecond, int burst, int reserve);
 }

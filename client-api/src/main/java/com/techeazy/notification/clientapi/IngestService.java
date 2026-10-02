@@ -18,6 +18,8 @@
 
 package com.techeazy.notification.clientapi;
 
+import java.time.Duration;
+import com.techeazy.notification.domain.MessageCategory;
 import com.techeazy.notification.error.ErrorCode;
 import com.techeazy.notification.application.OutboxPublisher;
 import com.techeazy.notification.application.TemplateRenderer;
@@ -87,8 +89,19 @@ public class IngestService {
     }
 
     /** Everything a caller supplies for one submission; {@code idempotencyKey}, {@code from} and content fields may be null. */
+    /**
+     * {@code category} null means the template's category, or TRANSACTIONAL; {@code validity} applies to one-time
+     * passwords only and defaults to {@link MessageCategory#DEFAULT_OTP_VALIDITY} (ADR-033).
+     */
     public record SubmitCommand(RequestKind kind, Channel channel, String templateName, String subject, String body,
-                                List<Recipient> recipients, String clientReference, String idempotencyKey, String from) {
+                                List<Recipient> recipients, String clientReference, String idempotencyKey, String from,
+                                MessageCategory category, Duration validity) {
+
+        public SubmitCommand(RequestKind kind, Channel channel, String templateName, String subject, String body,
+                             List<Recipient> recipients, String clientReference, String idempotencyKey, String from) {
+            this(kind, channel, templateName, subject, body, recipients, clientReference, idempotencyKey, from, null,
+                    null);
+        }
 
         public SubmitCommand(RequestKind kind, Channel channel, String templateName, String subject, String body,
                              List<Recipient> recipients, String clientReference, String idempotencyKey) {
@@ -100,6 +113,7 @@ public class IngestService {
         requireChannelAllowed(client, cmd.channel());
         requireWithinBulkLimit(cmd.recipients());
         Content content = timed("content", () -> resolveContent(client, cmd.channel(), cmd.templateName(), cmd.subject(), cmd.body()));
+        MessageCategory category = resolveCategory(cmd, content);
         validateRecipients(cmd.channel(), cmd.recipients());
         validateVariables(content, cmd.recipients());
         Optional<SenderAddress> sender = timed("sender", () -> senders.resolve(client, cmd.channel(), cmd.from()));
@@ -110,6 +124,9 @@ public class IngestService {
         }
 
         NotificationRequest request = newRequest(client, cmd, content);
+        request.setCategory(category);
+        Duration validity = cmd.validity() == null ? MessageCategory.DEFAULT_OTP_VALIDITY : cmd.validity();
+        request.setExpiresAt(category == MessageCategory.OTP ? request.getCreatedAt().plus(validity) : null);
         sender.ifPresent(s -> {
             request.setSenderEmail(s.email());
             request.setSenderName(s.displayName());
@@ -185,7 +202,30 @@ public class IngestService {
     }
 
     /** The content a request will be sent with, and the template it came from (null for inline content). */
-    record Content(UUID templateId, String subject, String body) {}
+    record Content(UUID templateId, String subject, String body, MessageCategory templateCategory) {}
+
+    /**
+     * An explicit category wins, then the template's, then TRANSACTIONAL. One-time passwords are single sends with a
+     * validity of one to fifteen minutes; no other category has a validity (ADR-033).
+     */
+    private static MessageCategory resolveCategory(SubmitCommand cmd, Content content) {
+        MessageCategory category = cmd.category() != null ? cmd.category()
+                : content.templateCategory() != null ? content.templateCategory() : MessageCategory.DEFAULT;
+        if (category == MessageCategory.OTP && cmd.kind() == RequestKind.BULK) {
+            throw new ApiException(ErrorCode.CATEGORY_NOT_ALLOWED,
+                    "One-time passwords are sent one at a time; send each as a single request");
+        }
+        if (cmd.validity() != null && category != MessageCategory.OTP) {
+            throw ApiException.badRequest("validitySeconds applies to the OTP category only");
+        }
+        if (cmd.validity() != null && (cmd.validity().compareTo(MessageCategory.MINIMUM_OTP_VALIDITY) < 0
+                || cmd.validity().compareTo(MessageCategory.MAXIMUM_OTP_VALIDITY) > 0)) {
+            throw ApiException.badRequest("validitySeconds must be between "
+                    + MessageCategory.MINIMUM_OTP_VALIDITY.toSeconds() + " and "
+                    + MessageCategory.MAXIMUM_OTP_VALIDITY.toSeconds());
+        }
+        return category;
+    }
 
     /** The client's own template wins over a shared one of the same name. */
     private Content resolveContent(AuthenticatedClient client, Channel channel, String templateName, String subject, String body) {
@@ -195,13 +235,13 @@ public class IngestService {
             if (t.channel() != channel) {
                 throw ApiException.badRequest("Template '" + templateName + "' is for channel " + t.channel() + ", not " + channel);
             }
-            return new Content(t.id(), t.subject(), t.body());
+            return new Content(t.id(), t.subject(), t.body(), t.category());
         }
         if (body == null || body.isBlank()) throw ApiException.badRequest("Provide either templateName or body");
         if (channel == Channel.EMAIL && (subject == null || subject.isBlank())) {
             throw ApiException.badRequest("subject is required for inline EMAIL content");
         }
-        return new Content(null, subject, body);
+        return new Content(null, subject, body, null);
     }
 
     /**

@@ -49,7 +49,7 @@ class RedisRateLimiterTest {
 
     @SuppressWarnings("unchecked")
     private void redisAnswers(Object... results) {
-        var stubbing = when(redis.execute(any(RedisScript.class), anyList(), any(), any()));
+        var stubbing = when(redis.execute(any(RedisScript.class), anyList(), any(), any(), any()));
         for (Object result : results) {
             stubbing = result instanceof RuntimeException failure
                     ? stubbing.thenThrow(failure)
@@ -85,11 +85,11 @@ class RedisRateLimiterTest {
         limiter.tryAcquire("api:client", 10, 20);
         clock.advance(RedisRateLimiter.SKIP_AFTER_ERROR.minusMillis(1));
         assertThat(limiter.tryAcquire("api:client", 10, 20)).isEqualTo(Decision.GRANTED);
-        verify(redis, times(1)).execute(any(RedisScript.class), anyList(), any(), any());
+        verify(redis, times(1)).execute(any(RedisScript.class), anyList(), any(), any(), any());
 
         clock.advance(Duration.ofMillis(1));
         assertThat(limiter.tryAcquire("api:client", 10, 20)).isEqualTo(new Decision(false, 100));
-        verify(redis, times(2)).execute(any(RedisScript.class), anyList(), any(), any());
+        verify(redis, times(2)).execute(any(RedisScript.class), anyList(), any(), any(), any());
     }
 
     @Test

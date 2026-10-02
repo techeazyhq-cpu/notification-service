@@ -39,6 +39,26 @@ public class NotificationProperties {
         private String tlsTrustCertsFile = "";
         /** How long an accept waits for the broker to confirm a publish; on timeout the row stays PENDING and the sweeper publishes it. */
         private int publishTimeoutSeconds = 5;
+        private CircuitBreaker circuitBreaker = new CircuitBreaker();
+
+        /**
+         * Guards publishing (ADR-032): once enough publishes fail, further ones fail at once instead of each waiting
+         * out the publish timeout; the messages stay PENDING and the sweeper publishes them when the broker is back.
+         */
+        @Getter @Setter
+        public static class CircuitBreaker {
+            private boolean enabled = true;
+            /** Publishes in the window the failure rate is computed over. */
+            private int slidingWindowSize = 20;
+            /** Publishes needed before the failure rate counts. */
+            private int minimumNumberOfCalls = 10;
+            /** Percentage of failed publishes that opens the circuit. */
+            private float failureRateThreshold = 50;
+            /** How long the circuit stays open before probe publishes are let through. */
+            private long waitDurationInOpenStateMs = 10_000;
+            /** Probe publishes while half-open; enough of them must succeed to close the circuit. */
+            private int permittedCallsInHalfOpenState = 3;
+        }
     }
 
     @Getter @Setter
@@ -47,6 +67,8 @@ public class NotificationProperties {
         private double defaultClientApiRate = 50;
         private int defaultClientApiBurst = 100;
         private long policyCacheSeconds = 10;
+        /** Share of each delivery bucket that only priority messages (one-time passwords) may use (ADR-033). */
+        private double priorityReserveFraction = 0.2;
     }
 
     @Getter @Setter

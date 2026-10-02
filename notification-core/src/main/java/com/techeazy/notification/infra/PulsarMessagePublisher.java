@@ -18,6 +18,7 @@
 
 package com.techeazy.notification.infra;
 
+import com.techeazy.notification.domain.MessageCategory;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.techeazy.notification.config.NotificationProperties;
 import com.techeazy.notification.domain.Channel;
@@ -47,6 +48,7 @@ import java.util.concurrent.TimeUnit;
 public class PulsarMessagePublisher implements MessagePublisher {
 
     public static final String PUBLISH_OBSERVATION = "notification.publish";
+    public static final String PRIORITY_TOPIC_SUFFIX = "-priority";
 
     public record Envelope(int v, UUID messageId, Channel channel) {
         public static final int CURRENT_VERSION = 1;
@@ -56,7 +58,7 @@ public class PulsarMessagePublisher implements MessagePublisher {
     private final NotificationProperties props;
     private final ObjectMapper mapper;
     private final ObservationRegistry observations;
-    private final Map<Channel, CompletableFuture<Producer<byte[]>>> producers = new ConcurrentHashMap<>();
+    private final Map<String, CompletableFuture<Producer<byte[]>>> producers = new ConcurrentHashMap<>();
 
     public PulsarMessagePublisher(PulsarClient client, NotificationProperties props, ObjectMapper mapper,
                                   ObservationRegistry observations) {
@@ -70,13 +72,18 @@ public class PulsarMessagePublisher implements MessagePublisher {
         return props.getPulsar().getTopicPrefix() + channel.topicSuffix();
     }
 
+    /** The topic a message travels on: one-time passwords have their own per channel, so no backlog delays them. */
+    public static String topicFor(NotificationProperties props, Channel channel, boolean priority) {
+        return priority ? topicFor(props, channel) + PRIORITY_TOPIC_SUFFIX : topicFor(props, channel);
+    }
+
     @Override
-    public CompletableFuture<Void> publish(Channel channel, UUID messageId, UUID clientId) {
+    public CompletableFuture<Void> publish(Channel channel, MessageCategory category, UUID messageId, UUID clientId) {
         Map<String, String> traceProperties = new HashMap<>();
         Observation publishing = publishing(channel, messageId, traceProperties).start();
         try {
             byte[] payload = mapper.writeValueAsBytes(new Envelope(Envelope.CURRENT_VERSION, messageId, channel));
-            return producerFor(channel)
+            return producerFor(topicFor(props, channel, category.isPriority()))
                     .thenCompose(producer -> producer.newMessage().key(clientId.toString()).value(payload)
                             .properties(traceProperties).sendAsync())
                     .<Void>thenApply(id -> null)
@@ -109,21 +116,22 @@ public class PulsarMessagePublisher implements MessagePublisher {
         publishing.stop();
     }
 
-    /** Creates a channel's producer without blocking; a failed creation is forgotten so the next publish tries again. */
-    private CompletableFuture<Producer<byte[]>> producerFor(Channel channel) {
-        CompletableFuture<Producer<byte[]>> future = producers.computeIfAbsent(channel, this::createProducer);
+    /** Creates a topic's producer without blocking; a failed creation is forgotten so the next publish tries again. */
+    private CompletableFuture<Producer<byte[]>> producerFor(String topic) {
+        CompletableFuture<Producer<byte[]>> future = producers.computeIfAbsent(topic, this::createProducer);
         future.whenComplete((producer, error) -> {
             if (error != null) {
-                producers.remove(channel, future);
+                producers.remove(topic, future);
             }
         });
         return future;
     }
 
-    private CompletableFuture<Producer<byte[]>> createProducer(Channel channel) {
+    private CompletableFuture<Producer<byte[]>> createProducer(String topic) {
         return client.newProducer()
-                .topic(topicFor(props, channel))
-                .producerName("notification-producer-" + channel.topicSuffix() + "-" + UUID.randomUUID())
+                .topic(topic)
+                .producerName("notification-producer-" + topic.substring(topic.lastIndexOf('/') + 1) + "-"
+                        + UUID.randomUUID())
                 .compressionType(CompressionType.LZ4)
                 .enableBatching(true)
                 .blockIfQueueFull(true)

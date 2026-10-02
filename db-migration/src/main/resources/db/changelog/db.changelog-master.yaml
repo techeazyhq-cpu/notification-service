@@ -38,3 +38,5 @@ databaseChangeLog:
       file: db/changelog/changes/010-admin-audit-log.sql
   - include:
       file: db/changelog/changes/011-message-error-code.sql
+  - include:
+      file: db/changelog/changes/012-message-category.sql

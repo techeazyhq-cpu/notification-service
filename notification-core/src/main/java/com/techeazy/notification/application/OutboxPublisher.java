@@ -21,6 +21,7 @@ package com.techeazy.notification.application;
 import com.techeazy.notification.config.NotificationProperties;
 import com.techeazy.notification.domain.NotificationMessage;
 import com.techeazy.notification.persistence.NotificationMessageRepository;
+import com.techeazy.notification.port.BrokerUnavailableException;
 import com.techeazy.notification.port.MessagePublisher;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -92,9 +93,10 @@ public class OutboxPublisher {
     private List<UUID> publishChunk(List<NotificationMessage> chunk) {
         List<CompletableFuture<Void>> futures = new ArrayList<>(chunk.size());
         for (NotificationMessage m : chunk) {
-            futures.add(publisher.publish(m.getChannel(), m.getId(), m.getClientId()));
+            futures.add(publisher.publish(m.getChannel(), m.getCategory(), m.getId(), m.getClientId()));
         }
         List<UUID> ok = new ArrayList<>(chunk.size());
+        int brokerUnavailable = 0;
         for (int i = 0; i < chunk.size(); i++) {
             try {
                 futures.get(i).get(publishTimeoutSeconds, TimeUnit.SECONDS);
@@ -103,9 +105,18 @@ public class OutboxPublisher {
                 Thread.currentThread().interrupt();
                 log.warn("Interrupted while publishing; {} message(s) left for the sweeper", chunk.size() - i);
                 break;
-            } catch (ExecutionException | TimeoutException e) {
-                log.warn("Publish failed for message {}, left for sweeper: {}", chunk.get(i).getId(), e.toString());
+            } catch (ExecutionException e) {
+                if (e.getCause() instanceof BrokerUnavailableException) {
+                    brokerUnavailable++;
+                } else {
+                    log.warn("Publish failed for message {}, left for sweeper: {}", chunk.get(i).getId(), e.toString());
+                }
+            } catch (TimeoutException e) {
+                log.warn("Publish timed out for message {}, left for sweeper", chunk.get(i).getId());
             }
+        }
+        if (brokerUnavailable > 0) {
+            log.warn("Broker circuit open; {} message(s) left PENDING for the sweeper", brokerUnavailable);
         }
         return ok;
     }

@@ -43,6 +43,10 @@ public class NotificationMessage {
     private String recipient;
     @Convert(converter = EncryptedVariablesConverter.class) @JdbcTypeCode(SqlTypes.JSON) private Map<String, String> variables = new HashMap<>();
     @Enumerated(EnumType.STRING) private MessageStatus status;
+    /** What the message is for; one-time passwords are delivered with priority (ADR-033). */
+    @Enumerated(EnumType.STRING) private MessageCategory category = MessageCategory.DEFAULT;
+    /** One-time passwords only: after this moment the message is never sent (ADR-033). */
+    private Instant expiresAt;
     private int attempts;
     private String lastError;
     @Enumerated(EnumType.STRING) private FailureKind failureKind;

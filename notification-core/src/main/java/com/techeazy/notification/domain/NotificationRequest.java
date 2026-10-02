@@ -35,6 +35,9 @@ public class NotificationRequest {
     private UUID clientId;
     @Enumerated(EnumType.STRING) private RequestKind kind;
     @Enumerated(EnumType.STRING) private Channel channel;
+    @Enumerated(EnumType.STRING) private MessageCategory category = MessageCategory.DEFAULT;
+    /** One-time passwords only: when the request's messages stop being worth sending (ADR-033). */
+    private Instant expiresAt;
     private UUID templateId;
     private String subject;
     private String body;

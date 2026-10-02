@@ -22,6 +22,7 @@ import com.github.benmanes.caffeine.cache.Caffeine;
 import com.github.benmanes.caffeine.cache.LoadingCache;
 import com.techeazy.notification.config.NotificationProperties;
 import com.techeazy.notification.domain.Channel;
+import com.techeazy.notification.domain.MessageCategory;
 import com.techeazy.notification.domain.RateLimitPolicy;
 import com.techeazy.notification.domain.RateLimitScope;
 import com.techeazy.notification.persistence.RateLimitPolicyRepository;
@@ -64,20 +65,29 @@ public class RateLimitService {
     }
 
     /** One token per message delivery: the client's own quota first, then the platform-wide channel cap. */
-    public Decision checkDelivery(UUID clientId, Channel channel) {
+    public Decision checkDelivery(UUID clientId, Channel channel, MessageCategory category) {
         Decision worst = Decision.GRANTED;
         Optional<RateLimitPolicy> client = find(RateLimitScope.CLIENT_CHANNEL, clientId, channel);
         if (client.isPresent()) {
-            worst = merge(worst, limiter.tryAcquire("client:" + clientId + ":" + channel,
-                    client.get().getRatePerSecond().doubleValue(), client.get().getBurst()));
+            worst = merge(worst, acquire("client:" + clientId + ":" + channel, client.get(), category));
         }
         if (!worst.allowed()) return worst; // do not spend a global token for a message we will not send now
         Optional<RateLimitPolicy> global = find(RateLimitScope.GLOBAL_CHANNEL, null, channel);
         if (global.isPresent()) {
-            worst = merge(worst, limiter.tryAcquire("global:" + channel,
-                    global.get().getRatePerSecond().doubleValue(), global.get().getBurst()));
+            worst = merge(worst, acquire("global:" + channel, global.get(), category));
         }
         return worst;
+    }
+
+    /**
+     * Ordinary messages leave {@code priorityReserveFraction} of every bucket untouched; priority messages
+     * (one-time passwords) may take it, so a large bulk send cannot hold them back (ADR-033).
+     */
+    private Decision acquire(String key, RateLimitPolicy policy, MessageCategory category) {
+        int burst = policy.getBurst();
+        int reserve = category.isPriority() ? 0
+                : Math.min(burst - 1, (int) Math.floor(burst * props.getRateLimit().getPriorityReserveFraction()));
+        return limiter.tryAcquire(key, policy.getRatePerSecond().doubleValue(), burst, Math.max(0, reserve));
     }
 
     private static Decision merge(Decision a, Decision b) {

@@ -201,3 +201,30 @@ tests:
             exp_annotations:
               summary: Administrator actions are happening without an audit record
               runbook: docs/slo.md#audit-write-failures
+
+  - name: an open broker circuit raises its own alert, not a provider's
+    interval: 1m
+    input_series:
+      - series: 'resilience4j_circuitbreaker_state{name="broker",state="open",job="notification-client-api"}'
+        values: '1x10'
+    alert_rule_test:
+      - eval_time: 6m
+        alertname: NotificationBrokerCircuitOpen
+        exp_alerts:
+          - exp_labels: {severity: critical, job: notification-client-api}
+            exp_annotations:
+              summary: notification-client-api cannot publish to the message broker; its circuit is open
+              runbook: docs/slo.md#broker-circuit-open
+      - eval_time: 6m
+        alertname: NotificationProviderCircuitOpen
+        exp_alerts: []
+
+  - name: a briefly open broker circuit that closes again is not an alert
+    interval: 1m
+    input_series:
+      - series: 'resilience4j_circuitbreaker_state{name="broker",state="open",job="notification-client-api"}'
+        values: '0 1 0 0 0 0 0'
+    alert_rule_test:
+      - eval_time: 6m
+        alertname: NotificationBrokerCircuitOpen
+        exp_alerts: []
