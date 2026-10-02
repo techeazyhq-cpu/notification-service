@@ -18,6 +18,8 @@
 
 package com.techeazy.notification.dispatcher.provider;
 
+import com.techeazy.notification.application.ProviderDestinationPolicy;
+import com.techeazy.notification.application.ProviderDestinationRefusedException;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import com.github.benmanes.caffeine.cache.LoadingCache;
 import com.techeazy.notification.dispatcher.DispatcherProperties;
@@ -66,10 +68,13 @@ public class ProviderRegistry {
     private final CircuitBreakerRegistry breakers;
     private final boolean breakerEnabled;
     private final Map<String, Instant> breakerVersions = new HashMap<>();
+    private final ProviderDestinationPolicy destinations;
 
     public ProviderRegistry(List<ChannelProvider> impls, ProviderConfigRepository repo, ProviderSecrets secrets,
-                            CircuitBreakerRegistry breakers, DispatcherProperties props) {
+                            CircuitBreakerRegistry breakers, DispatcherProperties props,
+                            ProviderDestinationPolicy destinations) {
         impls.forEach(p -> providers.put(p.type(), p));
+        this.destinations = destinations;
         this.breakers = breakers;
         this.breakerEnabled = props.getCircuitBreaker().isEnabled();
         this.configs = Caffeine.newBuilder().expireAfterWrite(Duration.ofSeconds(10))
@@ -107,8 +112,8 @@ public class ProviderRegistry {
                 continue;
             }
             try {
-                if (!breakerEnabled) return provider.send(cfg, message);
-                return breakerFor(cfg).executeSupplier(() -> provider.send(cfg, message));
+                if (!breakerEnabled) return sendWithinPolicy(provider, cfg, message);
+                return breakerFor(cfg).executeSupplier(() -> sendWithinPolicy(provider, cfg, message));
             } catch (CallNotPermittedException e) {
                 skipped++;
             } catch (TransientSendException e) {
@@ -119,6 +124,20 @@ public class ProviderRegistry {
         if (last != null) throw last;
         if (skipped > 0) throw new ProvidersUnavailableException(message.channel());
         throw new TransientSendException("No usable provider for channel " + message.channel());
+    }
+
+    /**
+     * The destination was checked when the provider was saved, but DNS can change since, so it is checked again before
+     * every call. A refusal is a configuration problem, not the message's fault: it counts against the provider's
+     * breaker and the next provider is tried, like any other transient failure (see ADR-022).
+     */
+    private SendResult sendWithinPolicy(ChannelProvider provider, ProviderConfig cfg, Outbound message) {
+        try {
+            destinations.check(cfg.getType(), cfg.getSettings());
+        } catch (ProviderDestinationRefusedException refused) {
+            throw new TransientSendException("Provider destination refused: " + refused.getMessage(), refused);
+        }
+        return provider.send(cfg, message);
     }
 
     public List<BreakerStatus> breakerStatus() {

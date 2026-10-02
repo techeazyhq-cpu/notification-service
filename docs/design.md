@@ -130,7 +130,7 @@ Delivery limits apply in the dispatcher, so a bulk request is *accepted* fast an
 
 ### 3.3 Providers
 
-`ChannelProvider` SPI with two implementations: `SmtpProvider` and `HttpJsonProvider` (generic JSON gateway). Configs live in the DB and are edited in the admin UI. Locally, Mailpit captures email and `tools/catcher` captures SMS/WhatsApp/Push. Real vendors (Twilio, Meta WhatsApp Cloud API, FCM/APNs, SES) are added as new `ChannelProvider` beans or through `HttpJsonProvider` when the gateway accepts our JSON.
+`ChannelProvider` SPI with two implementations: `SmtpProvider` and `HttpJsonProvider` (generic JSON gateway). Configs live in the DB and are edited in the admin UI. Locally, Mailpit captures email and `tools/catcher` captures SMS/WhatsApp/Push. Real vendors (Twilio, Meta WhatsApp Cloud API, FCM/APNs, SES) are added as new `ChannelProvider` beans or through `HttpJsonProvider` when the gateway accepts our JSON. Where a provider may connect is checked on save and before every send: trusted hosts as configured, otherwise HTTPS to public addresses only, no redirects (ADR-022).
 
 ### 3.4 Circuit breaker (provider failures)
 
