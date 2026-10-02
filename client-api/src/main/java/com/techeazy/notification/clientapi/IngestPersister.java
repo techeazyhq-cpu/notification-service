@@ -64,6 +64,8 @@ public class IngestPersister {
             m.setRecipient(r.address());
             m.setVariables(r.variables() == null ? new HashMap<>() : new HashMap<>(r.variables()));
             m.setStatus(MessageStatus.PENDING);
+            m.setCategory(request.getCategory());
+            m.setExpiresAt(request.getExpiresAt());
             m.setCreatedAt(now);
             m.setUpdatedAt(now);
             em.persist(m);

@@ -67,6 +67,8 @@ public class NotificationProperties {
         private double defaultClientApiRate = 50;
         private int defaultClientApiBurst = 100;
         private long policyCacheSeconds = 10;
+        /** Share of each delivery bucket that only priority messages (one-time passwords) may use (ADR-033). */
+        private double priorityReserveFraction = 0.2;
     }
 
     @Getter @Setter

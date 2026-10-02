@@ -18,6 +18,8 @@
 
 package com.techeazy.notification.clientapi;
 
+import java.time.Duration;
+import com.techeazy.notification.domain.MessageCategory;
 import com.techeazy.notification.error.ErrorCode;
 import com.techeazy.notification.application.OutboxPublisher;
 import com.techeazy.notification.billing.application.Admission;
@@ -89,6 +91,88 @@ class IngestServiceTest {
         ArgumentCaptor<NotificationRequest> captor = ArgumentCaptor.forClass(NotificationRequest.class);
         verify(persister).persist(captor.capture(), any(), any());
         return captor.getValue();
+    }
+
+    SubmitCommand single(MessageCategory category, Duration validity) {
+        return new SubmitCommand(RequestKind.SINGLE, Channel.SMS, null, null, "Your code is 123456",
+                List.of(to("+14155550101", Map.of())), null, null, null, category, validity);
+    }
+
+    @Test
+    void aOneTimePasswordIsStoredAsSuchAndExpiresAfterTheDefaultValidity() {
+        service.submit(me, single(MessageCategory.OTP, null));
+
+        NotificationRequest r = persistedRequest();
+        assertThat(r.getCategory()).isEqualTo(MessageCategory.OTP);
+        assertThat(Duration.between(r.getCreatedAt(), r.getExpiresAt())).isEqualTo(Duration.ofMinutes(5));
+    }
+
+    @Test
+    void aOneTimePasswordMayCarryItsOwnValidity() {
+        service.submit(me, single(MessageCategory.OTP, Duration.ofMinutes(2)));
+
+        NotificationRequest r = persistedRequest();
+        assertThat(Duration.between(r.getCreatedAt(), r.getExpiresAt())).isEqualTo(Duration.ofMinutes(2));
+    }
+
+    @Test
+    void aValidityOutsideOneToFifteenMinutesIsRefused() {
+        assertThatThrownBy(() -> service.submit(me, single(MessageCategory.OTP, Duration.ofSeconds(30))))
+                .isInstanceOfSatisfying(ApiException.class,
+                        refused -> assertThat(refused.errorCode()).isEqualTo(ErrorCode.INVALID_REQUEST));
+        assertThatThrownBy(() -> service.submit(me, single(MessageCategory.OTP, Duration.ofMinutes(16))))
+                .isInstanceOf(ApiException.class);
+    }
+
+    @Test
+    void onlyOneTimePasswordsHaveAValidity() {
+        assertThatThrownBy(() -> service.submit(me, single(MessageCategory.TRANSACTIONAL, Duration.ofMinutes(2))))
+                .isInstanceOfSatisfying(ApiException.class,
+                        refused -> assertThat(refused.errorCode()).isEqualTo(ErrorCode.INVALID_REQUEST));
+    }
+
+    @Test
+    void aBulkRequestCannotBeOneTimePasswords() {
+        SubmitCommand bulk = new SubmitCommand(RequestKind.BULK, Channel.SMS, null, null, "code",
+                List.of(to("+14155550101", Map.of())), null, null, null, MessageCategory.OTP, null);
+
+        assertThatThrownBy(() -> service.submit(me, bulk)).isInstanceOfSatisfying(ApiException.class,
+                refused -> assertThat(refused.errorCode()).isEqualTo(ErrorCode.CATEGORY_NOT_ALLOWED));
+        verify(persister, never()).persist(any(), any(), any());
+    }
+
+    @Test
+    void withoutACategoryAMessageIsTransactionalAndNeverExpires() {
+        service.submit(me, single(null, null));
+
+        NotificationRequest r = persistedRequest();
+        assertThat(r.getCategory()).isEqualTo(MessageCategory.TRANSACTIONAL);
+        assertThat(r.getExpiresAt()).isNull();
+    }
+
+    @Test
+    void aTemplateMarkedOtpMakesItsSendsOneTimePasswords() {
+        Template otp = template(me.id(), "login-code", "Your code is {{code}}");
+        otp.setCategory(MessageCategory.OTP);
+        when(templates.findByClientIdAndName(me.id(), "login-code")).thenReturn(Optional.of(otp));
+
+        service.submit(me, new SubmitCommand(RequestKind.SINGLE, Channel.SMS, "login-code", null, null,
+                List.of(to("+14155550101", Map.of("code", "1"))), null, null));
+
+        assertThat(persistedRequest().getCategory()).isEqualTo(MessageCategory.OTP);
+    }
+
+    @Test
+    void anExplicitCategoryOverridesTheTemplates() {
+        Template otp = template(me.id(), "login-code", "Your code is {{code}}");
+        otp.setCategory(MessageCategory.OTP);
+        when(templates.findByClientIdAndName(me.id(), "login-code")).thenReturn(Optional.of(otp));
+
+        service.submit(me, new SubmitCommand(RequestKind.SINGLE, Channel.SMS, "login-code", null, null,
+                List.of(to("+14155550101", Map.of("code", "1"))), null, null, null, MessageCategory.TRANSACTIONAL,
+                null));
+
+        assertThat(persistedRequest().getCategory()).isEqualTo(MessageCategory.TRANSACTIONAL);
     }
 
     @Test
@@ -224,7 +308,8 @@ class IngestServiceTest {
         original.setCreatedAt(java.time.Instant.now());
         when(requests.findByClientIdAndIdempotencyKey(me.id(), "key-1")).thenReturn(Optional.of(original));
         when(status.view(original)).thenReturn(new Dtos.RequestView(original.getId(), RequestKind.SINGLE, Channel.SMS,
-                com.techeazy.notification.domain.RequestStatus.PROCESSING, 1, null, null, original.getCreatedAt()));
+                com.techeazy.notification.domain.RequestStatus.PROCESSING, 1, null, null, original.getCreatedAt(), null,
+                        null));
         SubmitCommand command = new SubmitCommand(RequestKind.SINGLE, Channel.SMS, null, null, "hi",
                 List.of(to("+14155550101", Map.of())), null, "key-1");
 

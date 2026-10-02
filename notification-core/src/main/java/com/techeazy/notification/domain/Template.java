@@ -39,6 +39,8 @@ public class Template {
     private UUID clientId;
     private String name;
     @Enumerated(EnumType.STRING) private Channel channel;
+    /** The category sends from this template default to; null means TRANSACTIONAL (ADR-033). */
+    @Enumerated(EnumType.STRING) private MessageCategory category;
     private String subject;
     private String body;
     private Instant createdAt;

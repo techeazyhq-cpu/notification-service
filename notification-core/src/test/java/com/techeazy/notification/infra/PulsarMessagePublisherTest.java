@@ -18,6 +18,7 @@
 
 package com.techeazy.notification.infra;
 
+import com.techeazy.notification.domain.MessageCategory;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.techeazy.notification.config.NotificationProperties;
 import com.techeazy.notification.domain.Channel;
@@ -87,11 +88,23 @@ class PulsarMessagePublisherTest {
     void publishesTheMessageIdAndReusesTheProducer() {
         brokerAvailable();
 
-        publisher.publish(Channel.SMS, UUID.randomUUID(), UUID.randomUUID()).join();
-        publisher.publish(Channel.SMS, UUID.randomUUID(), UUID.randomUUID()).join();
+        publisher.publish(Channel.SMS, MessageCategory.TRANSACTIONAL, UUID.randomUUID(), UUID.randomUUID()).join();
+        publisher.publish(Channel.SMS, MessageCategory.TRANSACTIONAL, UUID.randomUUID(), UUID.randomUUID()).join();
 
         verify(builder, times(1)).createAsync();
         verify(message, times(2)).sendAsync();
+    }
+
+    @Test
+    void oneTimePasswordsGoToTheChannelsPriorityTopicAndEverythingElseToItsStandardTopic() {
+        brokerAvailable();
+
+        publisher.publish(Channel.SMS, MessageCategory.OTP, UUID.randomUUID(), UUID.randomUUID()).join();
+        publisher.publish(Channel.SMS, MessageCategory.PROMOTIONAL, UUID.randomUUID(), UUID.randomUUID()).join();
+
+        verify(builder).topic("persistent://public/default/notification-sms-priority");
+        verify(builder).topic("persistent://public/default/notification-sms");
+        verify(builder, times(2)).createAsync();
     }
 
     @Test
@@ -105,10 +118,10 @@ class PulsarMessagePublisherTest {
         UUID id = UUID.randomUUID();
         UUID client = UUID.randomUUID();
 
-        CompletableFuture<Void> first = publisher.publish(Channel.SMS, id, client);
+        CompletableFuture<Void> first = publisher.publish(Channel.SMS, MessageCategory.TRANSACTIONAL, id, client);
 
         assertThatThrownBy(first::get).isInstanceOf(ExecutionException.class).hasRootCauseMessage("broker down");
-        assertThat(publisher.publish(Channel.SMS, id, client).join()).isNull();
+        assertThat(publisher.publish(Channel.SMS, MessageCategory.TRANSACTIONAL, id, client).join()).isNull();
         verify(builder, times(2)).createAsync();
     }
 
@@ -120,7 +133,7 @@ class PulsarMessagePublisherTest {
         Observation request = Observation.start("http.server.requests", observations);
 
         try (Observation.Scope scope = request.openScope()) {
-            publisher.publish(Channel.SMS, UUID.randomUUID(), UUID.randomUUID()).join();
+            publisher.publish(Channel.SMS, MessageCategory.TRANSACTIONAL, UUID.randomUUID(), UUID.randomUUID()).join();
         } finally {
             request.stop();
         }
@@ -142,7 +155,8 @@ class PulsarMessagePublisherTest {
         when(builder.createAsync())
                 .thenReturn(CompletableFuture.failedFuture(new IllegalStateException("broker down")));
 
-        CompletableFuture<Void> publish = publisher.publish(Channel.SMS, UUID.randomUUID(), UUID.randomUUID());
+        CompletableFuture<Void> publish = publisher.publish(Channel.SMS, MessageCategory.TRANSACTIONAL,
+                UUID.randomUUID(), UUID.randomUUID());
 
         assertThatThrownBy(publish::join).hasRootCauseMessage("broker down");
         TestObservationRegistryAssert.assertThat(observations)
@@ -153,7 +167,7 @@ class PulsarMessagePublisherTest {
     @Test
     void closesEveryProducerOnShutdown() {
         brokerAvailable();
-        publisher.publish(Channel.EMAIL, UUID.randomUUID(), UUID.randomUUID()).join();
+        publisher.publish(Channel.EMAIL, MessageCategory.TRANSACTIONAL, UUID.randomUUID(), UUID.randomUUID()).join();
 
         publisher.close();
 

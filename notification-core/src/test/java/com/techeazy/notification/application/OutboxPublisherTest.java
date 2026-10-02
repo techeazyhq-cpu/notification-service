@@ -44,7 +44,7 @@ class OutboxPublisherTest {
 
     @Test
     void whileTheBrokerCircuitIsOpenAWholeBatchIsLeftForTheSweeperWithoutWaiting() {
-        when(publisher.publish(any(), any(), any()))
+        when(publisher.publish(any(), any(), any(), any()))
                 .thenReturn(CompletableFuture.failedFuture(new BrokerUnavailableException()));
         List<NotificationMessage> batch = IntStream.range(0, 200).mapToObj(index -> message()).toList();
 
@@ -57,7 +57,7 @@ class OutboxPublisherTest {
 
     @Test
     void confirmedPublishesAreReported() {
-        when(publisher.publish(any(), any(), any())).thenReturn(CompletableFuture.completedFuture(null));
+        when(publisher.publish(any(), any(), any(), any())).thenReturn(CompletableFuture.completedFuture(null));
         NotificationMessage message = message();
 
         assertThat(outbox.publishOnly(List.of(message))).containsExactly(message.getId());

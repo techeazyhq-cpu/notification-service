@@ -17,6 +17,7 @@
  */
 package com.techeazy.notification.infra;
 
+import com.techeazy.notification.domain.MessageCategory;
 import com.techeazy.notification.config.NotificationProperties;
 import com.techeazy.notification.domain.Channel;
 import com.techeazy.notification.port.BrokerUnavailableException;
@@ -83,14 +84,14 @@ public class CircuitBreakingMessagePublisher implements MessagePublisher {
     }
 
     @Override
-    public CompletableFuture<Void> publish(Channel channel, UUID messageId, UUID clientId) {
+    public CompletableFuture<Void> publish(Channel channel, MessageCategory category, UUID messageId, UUID clientId) {
         if (!circuitBreaker.tryAcquirePermission()) {
             return CompletableFuture.failedFuture(new BrokerUnavailableException());
         }
         long started = circuitBreaker.getCurrentTimestamp();
         CompletableFuture<Void> published;
         try {
-            published = broker.publish(channel, messageId, clientId);
+            published = broker.publish(channel, category, messageId, clientId);
         } catch (RuntimeException e) {
             circuitBreaker.onError(elapsedSince(started), circuitBreaker.getTimestampUnit(), e);
             return CompletableFuture.failedFuture(e);

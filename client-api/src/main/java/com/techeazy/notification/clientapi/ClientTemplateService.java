@@ -153,6 +153,7 @@ public class ClientTemplateService {
         t.setChannel(in.channel());
         t.setSubject(in.subject() == null || in.subject().isBlank() ? null : in.subject());
         t.setBody(in.body());
+        t.setCategory(in.category());
         t.setUpdatedAt(Instant.now());
     }
 
@@ -176,6 +177,7 @@ public class ClientTemplateService {
         boolean owned = client.id().equals(t.getClientId());
         return new TemplateView(t.getId(), t.getName(), t.getChannel(), t.getSubject(), t.getBody(),
                 List.copyOf(TemplateRenderer.requiredVariables(t.getSubject(), t.getBody())),
-                owned ? TemplateScope.OWNED : TemplateScope.SHARED, !owned, t.getCreatedAt(), t.getUpdatedAt());
+                owned ? TemplateScope.OWNED : TemplateScope.SHARED, !owned, t.getCreatedAt(), t.getUpdatedAt(),
+                t.getCategory());
     }
 }

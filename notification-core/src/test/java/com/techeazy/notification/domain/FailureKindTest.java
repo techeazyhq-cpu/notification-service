@@ -15,17 +15,23 @@
  *
  * @author Vasantha Kumar <vasantha.kumar@hotmail.com>
  */
+package com.techeazy.notification.domain;
 
-package com.techeazy.notification.port;
+import org.junit.jupiter.api.Test;
 
-import com.techeazy.notification.domain.MessageCategory;
-import com.techeazy.notification.domain.Channel;
+import static org.assertj.core.api.Assertions.assertThat;
 
-import java.util.UUID;
-import java.util.concurrent.CompletableFuture;
+class FailureKindTest {
 
-/** Outbound port to the message broker. Only the message id travels; no recipient data. */
-public interface MessagePublisher {
-    /** One-time passwords go to the channel's priority topic, everything else to its standard topic (ADR-033). */
-    CompletableFuture<Void> publish(Channel channel, MessageCategory category, UUID messageId, UUID clientId);
+    @Test
+    void onlyTemporaryFailuresAreWorthReprocessingUnchanged() {
+        assertThat(FailureKind.EXHAUSTED.retryable()).isTrue();
+        assertThat(FailureKind.DEAD_LETTERED.retryable()).isTrue();
+        assertThat(FailureKind.PERMANENT.retryable()).isFalse();
+    }
+
+    @Test
+    void anExpiredOneTimePasswordIsNeverSentAgain() {
+        assertThat(FailureKind.EXPIRED.retryable()).isFalse();
+    }
 }

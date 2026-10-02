@@ -49,6 +49,7 @@ public class RedisRateLimiter implements RateLimiter {
     private static final String LUA = """
             local rate = tonumber(ARGV[1])
             local burst = tonumber(ARGV[2])
+            local reserve = tonumber(ARGV[3])
             local t = redis.call('TIME')
             local now = t[1] * 1000 + math.floor(t[2] / 1000)
             local d = redis.call('HMGET', KEYS[1], 'tokens', 'ts')
@@ -58,11 +59,11 @@ public class RedisRateLimiter implements RateLimiter {
             tokens = math.min(burst, tokens + (math.max(0, now - ts) / 1000.0) * rate)
             local allowed = 0
             local wait = 0
-            if tokens >= 1 then
+            if tokens - reserve >= 1 then
               tokens = tokens - 1
               allowed = 1
             else
-              wait = math.ceil((1 - tokens) / rate * 1000)
+              wait = math.ceil((1 + reserve - tokens) / rate * 1000)
             end
             redis.call('HSET', KEYS[1], 'tokens', tostring(tokens), 'ts', tostring(now))
             redis.call('PEXPIRE', KEYS[1], math.ceil(burst / rate * 1000) * 2 + 1000)
@@ -95,13 +96,13 @@ public class RedisRateLimiter implements RateLimiter {
      * call. Limits are not enforced meanwhile, which is why the counter has an alert (see ADR-024).
      */
     @Override
-    public Decision tryAcquire(String key, double ratePerSecond, int burst) {
+    public Decision tryAcquire(String key, double ratePerSecond, int burst, int reserve) {
         if (clock.instant().isBefore(skipRedisUntil.get())) {
             return Decision.GRANTED;
         }
         try {
             List<?> reply = redis.execute(script, List.of("rl:" + key), Double.toString(ratePerSecond),
-                    Integer.toString(burst));
+                    Integer.toString(burst), Integer.toString(reserve));
             if (reply == null || reply.size() < 2) {
                 return failOpen("an unexpected reply from the rate-limit script", null);
             }

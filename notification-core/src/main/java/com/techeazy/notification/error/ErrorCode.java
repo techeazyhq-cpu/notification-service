@@ -53,6 +53,10 @@ public enum ErrorCode {
             "The requested response format is not available",
             "The Accept header asks for a format this endpoint cannot produce.",
             "Accept application/json, or text/csv for exports."),
+    CATEGORY_NOT_ALLOWED("NS-1005", ErrorCategory.REQUEST, 400, false,
+            "The message category is not allowed here",
+            "One-time passwords are sent one at a time, so a bulk request cannot have the OTP category.",
+            "Send each one-time password as a single request with category OTP."),
 
     UNAUTHORIZED("NS-2001", ErrorCategory.ACCESS, 401, false,
             "The API key is missing or not valid",
@@ -170,6 +174,10 @@ public enum ErrorCode {
             "The provider is failing; delivery will be retried",
             "The last attempt failed for a temporary reason; the message is RETRYING with back-off.",
             "No action needed; the message is retried automatically until it is sent or attempts run out."),
+    OTP_EXPIRED("NS-6007", ErrorCategory.DELIVERY, null, false,
+            "The one-time password expired before it could be sent",
+            "The OTP could not reach a provider within its validity, so it was dropped rather than sent late.",
+            "Ask the user to request a new code; check the provider and backlog alerts if this happens often."),
 
     EMAIL_NOT_AVAILABLE("NS-8001", ErrorCategory.DEPENDENCY, 503, true,
             "E-mail is not available",

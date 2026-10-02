@@ -18,6 +18,8 @@
 
 package com.techeazy.notification.clientapi;
 
+import java.time.Duration;
+import com.techeazy.notification.domain.MessageCategory;
 import com.techeazy.notification.clientapi.Dtos.*;
 import com.techeazy.notification.clientapi.IngestPersister.Recipient;
 import com.techeazy.notification.clientapi.IngestService.SubmitCommand;
@@ -67,8 +69,10 @@ public class NotificationController {
             @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
             @Valid @RequestBody SendRequest req) {
         var recipients = List.of(new Recipient(req.recipient(), req.variables()));
+        Duration validity = req.validitySeconds() == null ? null : Duration.ofSeconds(req.validitySeconds());
         return respond(ingest.submit(client, new SubmitCommand(RequestKind.SINGLE, req.channel(), req.templateName(),
-                req.subject(), req.body(), recipients, req.clientReference(), idempotencyKey, req.from())));
+                req.subject(), req.body(), recipients, req.clientReference(), idempotencyKey, req.from(),
+                req.category(), validity)));
     }
 
     @Operation(summary = "Send to many recipients (JSON body)",
@@ -81,7 +85,8 @@ public class NotificationController {
         List<Recipient> recipients = new ArrayList<>(req.recipients().size());
         req.recipients().forEach(r -> recipients.add(new Recipient(r.recipient(), r.variables())));
         return respond(ingest.submit(client, new SubmitCommand(RequestKind.BULK, req.channel(), req.templateName(),
-                req.subject(), req.body(), recipients, req.clientReference(), idempotencyKey, req.from())));
+                req.subject(), req.body(), recipients, req.clientReference(), idempotencyKey, req.from(),
+                req.category(), null)));
     }
 
     @Operation(summary = "Send to many recipients (CSV upload)",
@@ -96,13 +101,17 @@ public class NotificationController {
             @RequestParam(required = false) String subject,
             @RequestParam(required = false) String body,
             @RequestParam(required = false) String clientReference,
-            @Parameter(description = "EMAIL only: a confirmed sender address; default sender if omitted") @RequestParam(required = false) String from) throws IOException {
+            @Parameter(description = "EMAIL only: a confirmed sender address; default sender if omitted")
+            @RequestParam(required = false) String from,
+            @Parameter(description = "TRANSACTIONAL or PROMOTIONAL")
+            @RequestParam(required = false) MessageCategory category)
+            throws IOException {
         if (file.isEmpty()) throw ApiException.badRequest("file is empty");
         List<Recipient> recipients = CsvRecipientParser.parse(file.getInputStream(), ingest.maxBulkRecipients()).stream()
                 .map(r -> new Recipient(r.recipient(), r.variables())).toList();
         if (recipients.isEmpty()) throw ApiException.badRequest("CSV contains no recipients");
         return respond(ingest.submit(client, new SubmitCommand(RequestKind.BULK, channel, templateName, subject, body,
-                recipients, clientReference, idempotencyKey, from)));
+                recipients, clientReference, idempotencyKey, from, category, null)));
     }
 
     @Operation(summary = "Get request status with per-status message counts")

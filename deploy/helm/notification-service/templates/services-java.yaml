@@ -91,6 +91,8 @@ spec:
             {{- if eq $component "dispatcher" }}
             - name: CONSUMERS_PER_CHANNEL
               value: {{ $settings.consumersPerChannel | quote }}
+            - name: PRIORITY_CONSUMERS_PER_CHANNEL
+              value: {{ $settings.priorityConsumersPerChannel | quote }}
             {{- end }}
           {{- include "notification.javaProbes" . | nindent 10 }}
           lifecycle:

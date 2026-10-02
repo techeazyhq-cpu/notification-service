@@ -96,6 +96,8 @@ dispatcher:
   port: 8082
   managementPort: 8082
   consumersPerChannel: 2
+  # Consumers per channel on its priority topic, for one-time passwords only (ADR-033).
+  priorityConsumersPerChannel: 2
   resources:
     requests: {cpu: 500m, memory: 640Mi}
     limits: {memory: 896Mi}

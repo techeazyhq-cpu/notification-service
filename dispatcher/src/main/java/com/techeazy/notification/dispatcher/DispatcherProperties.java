@@ -27,6 +27,11 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 public class DispatcherProperties {
     /** Parallel Pulsar consumers per channel (Shared subscription spreads messages across them). */
     private int consumersPerChannel = 2;
+    /**
+     * Consumers per channel on its priority topic, for one-time passwords only (ADR-033). They never wait behind the
+     * standard topic's backlog.
+     */
+    private int priorityConsumersPerChannel = 2;
     /** Total send attempts before a message is marked FAILED. */
     private int maxAttempts = 5;
     /** Retry delay = base * 2^(attempt-1), capped at maxBackoffSeconds. */

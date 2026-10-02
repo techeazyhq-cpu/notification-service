@@ -79,34 +79,45 @@ public class DispatchConsumers {
         this.mapper = mapper;
     }
 
+    /**
+     * Subscribes to each channel's standard topic and, with consumers of its own, to its priority topic for one-time
+     * passwords (ADR-033). Both lanes of a channel are paused and resumed together with its providers.
+     */
     @EventListener(ApplicationReadyEvent.class)
     public void start() throws PulsarClientException {
         for (Channel channel : Channel.values()) {
-            String topic = PulsarMessagePublisher.topicFor(notificationProps, channel);
             List<Consumer<byte[]>> forChannel = new CopyOnWriteArrayList<>();
-            for (int i = 0; i < props.getConsumersPerChannel(); i++) {
-                Consumer<byte[]> created = client.newConsumer(Schema.BYTES)
-                        .topic(topic)
-                        .subscriptionName("dispatcher-" + channel.topicSuffix())
-                        .subscriptionType(SubscriptionType.Shared)
-                        .subscriptionInitialPosition(SubscriptionInitialPosition.Earliest)
-                        .consumerName("dispatcher-" + channel.topicSuffix() + "-" + i)
-                        .receiverQueueSize(100)
-                        .negativeAckRedeliveryDelay(5, TimeUnit.SECONDS)
-                        .enableRetry(true)
-                        .deadLetterPolicy(DeadLetterPolicy.builder()
-                                .maxRedeliverCount(props.getMaxAttempts() + 2)
-                                .retryLetterTopic(topic + "-retry")
-                                .deadLetterTopic(topic + "-dlq")
-                                .build())
-                        .messageListener((consumer, msg) -> handle(consumer, msg, channel))
-                        .subscribe();
-                consumers.add(created);
-                forChannel.add(created);
-            }
+            subscribe(channel, false, props.getConsumersPerChannel(), forChannel);
+            subscribe(channel, true, props.getPriorityConsumersPerChannel(), forChannel);
             byChannel.put(channel, forChannel);
-            log.info("Started {} consumer(s) on {}", props.getConsumersPerChannel(), topic);
         }
+    }
+
+    private void subscribe(Channel channel, boolean priority, int count, List<Consumer<byte[]>> forChannel)
+            throws PulsarClientException {
+        String topic = PulsarMessagePublisher.topicFor(notificationProps, channel, priority);
+        String lane = channel.topicSuffix() + (priority ? PulsarMessagePublisher.PRIORITY_TOPIC_SUFFIX : "");
+        for (int i = 0; i < count; i++) {
+            Consumer<byte[]> created = client.newConsumer(Schema.BYTES)
+                    .topic(topic)
+                    .subscriptionName("dispatcher-" + lane)
+                    .subscriptionType(SubscriptionType.Shared)
+                    .subscriptionInitialPosition(SubscriptionInitialPosition.Earliest)
+                    .consumerName("dispatcher-" + lane + "-" + i)
+                    .receiverQueueSize(100)
+                    .negativeAckRedeliveryDelay(5, TimeUnit.SECONDS)
+                    .enableRetry(true)
+                    .deadLetterPolicy(DeadLetterPolicy.builder()
+                            .maxRedeliverCount(props.getMaxAttempts() + 2)
+                            .retryLetterTopic(topic + "-retry")
+                            .deadLetterTopic(topic + "-dlq")
+                            .build())
+                    .messageListener((consumer, msg) -> handle(consumer, msg, channel))
+                    .subscribe();
+            consumers.add(created);
+            forChannel.add(created);
+        }
+        log.info("Started {} consumer(s) on {}", count, topic);
     }
 
     private void handle(Consumer<byte[]> consumer, Message<byte[]> msg, Channel channel) {

@@ -18,6 +18,10 @@
 
 package com.techeazy.notification.clientapi;
 
+import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.Max;
+import io.swagger.v3.oas.annotations.media.Schema;
+import com.techeazy.notification.domain.MessageCategory;
 import com.techeazy.notification.domain.Channel;
 import com.techeazy.notification.domain.MessageStatus;
 import com.techeazy.notification.domain.RequestKind;
@@ -46,7 +50,11 @@ public final class Dtos {
             String body,
             Map<String, String> variables,
             @Size(max = 120) String clientReference,
-            @Size(max = 254) String from) {}
+            @Size(max = 254) String from,
+            @Schema(description = "OTP, TRANSACTIONAL or PROMOTIONAL; defaults to the template's, else TRANSACTIONAL. "
+                    + "OTP is delivered with priority and never after its validity.") MessageCategory category,
+            @Schema(description = "OTP only: seconds the code stays worth sending, 60-900 (default 300)")
+            @Min(60) @Max(900) Integer validitySeconds) {}
 
     public record BulkRecipient(@NotNull @Size(min = 1, max = 320) String recipient, Map<String, String> variables) {}
 
@@ -57,7 +65,8 @@ public final class Dtos {
             String body,
             @NotEmpty List<@Valid BulkRecipient> recipients,
             @Size(max = 120) String clientReference,
-            @Size(max = 254) String from) {}
+            @Size(max = 254) String from,
+            @Schema(description = "TRANSACTIONAL or PROMOTIONAL; OTP is single sends only") MessageCategory category) {}
 
     public record SubmitResponse(UUID requestId, RequestKind kind, RequestStatus status, int total,
                                  List<UUID> messageIds, boolean idempotentReplay, Instant createdAt) {}
@@ -65,12 +74,13 @@ public final class Dtos {
     public record StatusCounts(long pending, long queued, long processing, long retrying, long sent, long failed) {}
 
     public record RequestView(UUID requestId, RequestKind kind, Channel channel, RequestStatus status, int total,
-                              StatusCounts counts, String clientReference, Instant createdAt) {}
+                              StatusCounts counts, String clientReference, Instant createdAt,
+                              MessageCategory category, Instant expiresAt) {}
 
     /** {@code errorCode} and {@code errorId} name why the message failed or is retrying (docs/error-codes.md). */
     public record MessageView(UUID messageId, String recipient, MessageStatus status, int attempts, String lastError,
                               String providerMessageId, Instant sentAt, Instant updatedAt, String errorCode,
-                              String errorId) {}
+                              String errorId, MessageCategory category, Instant expiresAt) {}
 
     public record PageView<T>(List<T> items, int page, int size, long totalItems, int totalPages) {}
 
@@ -81,13 +91,21 @@ public final class Dtos {
             @NotNull @Size(min = 2, max = 64) String name,
             @NotNull Channel channel,
             @Size(max = 500) String subject,
-            @NotBlank @Size(max = 10000) String body) {}
+            @NotBlank @Size(max = 10000) String body,
+            @Schema(description = "Default category of sends from this template; OTP makes them one-time passwords")
+            MessageCategory category) {
+
+        public TemplateInput(String name, Channel channel, String subject, String body) {
+            this(name, channel, subject, body, null);
+        }
+    }
 
     public enum TemplateScope { OWNED, SHARED }
 
     /** {@code variables} are what a sender must supply per recipient ({{recipient}} is built in and not listed). */
     public record TemplateView(UUID id, String name, Channel channel, String subject, String body, List<String> variables,
-                               TemplateScope scope, boolean readOnly, Instant createdAt, Instant updatedAt) {}
+                               TemplateScope scope, boolean readOnly, Instant createdAt, Instant updatedAt,
+                               MessageCategory category) {}
 
     public record PreviewRequest(@Size(max = 500) String subject, @NotBlank @Size(max = 10000) String body,
                                  Map<String, String> variables) {}

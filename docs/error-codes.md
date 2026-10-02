@@ -47,6 +47,7 @@ message (`GET /v1/messages/{id}`), next to the provider's own wording in `lastEr
 | [NS-1002](#ns-1002-method-not-allowed) | `METHOD_NOT_ALLOWED` | 405 | no | The HTTP method is not supported here |
 | [NS-1003](#ns-1003-unsupported-media-type) | `UNSUPPORTED_MEDIA_TYPE` | 415 | no | The content type is not supported |
 | [NS-1004](#ns-1004-not-acceptable) | `NOT_ACCEPTABLE` | 406 | no | The requested response format is not available |
+| [NS-1005](#ns-1005-category-not-allowed) | `CATEGORY_NOT_ALLOWED` | 400 | no | The message category is not allowed here |
 | [NS-2001](#ns-2001-unauthorized) | `UNAUTHORIZED` | 401 | no | The API key is missing or not valid |
 | [NS-2002](#ns-2002-invalid-credentials) | `INVALID_CREDENTIALS` | 401 | no | The username or password is wrong |
 | [NS-2003](#ns-2003-otp-required) | `OTP_REQUIRED` | 401 | no | A verification code is required |
@@ -75,6 +76,7 @@ message (`GET /v1/messages/{id}`), next to the provider's own wording in `lastEr
 | [NS-6004](#ns-6004-delivery-attempts-exhausted) | `DELIVERY_ATTEMPTS_EXHAUSTED` | n/a (on the message) | yes | Every delivery attempt failed |
 | [NS-6005](#ns-6005-delivery-dead-lettered) | `DELIVERY_DEAD_LETTERED` | n/a (on the message) | yes | The message could not be handed to a worker |
 | [NS-6006](#ns-6006-provider-temporarily-failing) | `PROVIDER_TEMPORARILY_FAILING` | n/a (on the message) | yes | The provider is failing; delivery will be retried |
+| [NS-6007](#ns-6007-otp-expired) | `OTP_EXPIRED` | n/a (on the message) | no | The one-time password expired before it could be sent |
 | [NS-8001](#ns-8001-email-not-available) | `EMAIL_NOT_AVAILABLE` | 503 | yes | E-mail is not available |
 | [NS-9001](#ns-9001-internal-error) | `INTERNAL_ERROR` | 500 | yes | Something went wrong on our side |
 
@@ -114,6 +116,13 @@ message (`GET /v1/messages/{id}`), next to the provider's own wording in `lastEr
 
 - **Cause:** The Accept header asks for a format this endpoint cannot produce.
 - **Resolution:** Accept application/json, or text/csv for exports.
+
+### NS-1005 CATEGORY_NOT_ALLOWED
+
+**The message category is not allowed here** · HTTP 400 · not retryable
+
+- **Cause:** One-time passwords are sent one at a time, so a bulk request cannot have the OTP category.
+- **Resolution:** Send each one-time password as a single request with category OTP.
 
 ## Access (NS-2xxx)
 
@@ -320,6 +329,13 @@ message (`GET /v1/messages/{id}`), next to the provider's own wording in `lastEr
 
 - **Cause:** The last attempt failed for a temporary reason; the message is RETRYING with back-off.
 - **Resolution:** No action needed; the message is retried automatically until it is sent or attempts run out.
+
+### NS-6007 OTP_EXPIRED
+
+**The one-time password expired before it could be sent** · HTTP n/a (on the message) · not retryable
+
+- **Cause:** The OTP could not reach a provider within its validity, so it was dropped rather than sent late.
+- **Resolution:** Ask the user to request a new code; check the provider and backlog alerts if this happens often.
 
 ## Dependency (NS-8xxx)
 

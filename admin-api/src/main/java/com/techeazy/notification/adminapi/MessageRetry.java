@@ -22,6 +22,7 @@ import com.techeazy.notification.application.PersonalData;
 import com.techeazy.notification.billing.application.Admission;
 import com.techeazy.notification.billing.application.AdmissionControl;
 import com.techeazy.notification.billing.domain.HoldScope;
+import com.techeazy.notification.domain.FailureKind;
 import com.techeazy.notification.domain.MessageStatus;
 import com.techeazy.notification.domain.NotificationMessage;
 import com.techeazy.notification.persistence.NotificationMessageRepository;
@@ -55,6 +56,10 @@ class MessageRetry {
         if (message.getStatus() != MessageStatus.FAILED) {
             throw new ResponseStatusException(HttpStatus.CONFLICT,
                     "Only FAILED messages can be retried (status is " + message.getStatus() + ")");
+        }
+        if (message.getFailureKind() == FailureKind.EXPIRED) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "This one-time password expired, so its code is no longer valid; the user must request a new one");
         }
         if (PersonalData.isErased(message.getRecipient())) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "The personal data of this message was erased, so it cannot be sent again");

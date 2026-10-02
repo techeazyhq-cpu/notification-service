@@ -131,6 +131,20 @@ class DeadLetterPersistenceTest {
         return id;
     }
 
+    @Test
+    void theSweeperTakesStuckOneTimePasswordsBeforeOlderOrdinaryMessages() {
+        UUID client = client();
+        UUID oldOrdinary = message(client, MessageStatus.PENDING, null, "+10", 50);
+        UUID newerOtp = message(client, MessageStatus.PENDING, null, "+11", 5);
+        jdbc.sql("UPDATE notification_message SET category = 'OTP' WHERE id = :id").param("id", newerOtp).update();
+
+        List<NotificationMessage> swept = messages.lockStale("PENDING", NOW, 1);
+
+        assertThat(swept).extracting(NotificationMessage::getId).containsExactly(newerOtp);
+        assertThat(messages.lockStale("PENDING", NOW, 2)).extracting(NotificationMessage::getId)
+                .containsExactly(newerOtp, oldOrdinary);
+    }
+
     private NotificationMessage reload(UUID id) {
         em.flush();
         em.clear();

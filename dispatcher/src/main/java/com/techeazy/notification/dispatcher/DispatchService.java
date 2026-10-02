@@ -96,13 +96,18 @@ public class DispatchService {
             return new Outcome.Done(); // duplicate delivery, or another worker owns it
         }
 
+        // A one-time password past its validity is useless to its recipient: drop it, even during an outage.
+        if (expired(m)) {
+            return expire(m);
+        }
+
         // Checked before the rate limit and the claim so an outage costs neither a token nor an attempt.
         if (!providers.isAvailable(m.getChannel())) {
             count(m.getChannel(), "circuit_open");
             return new Outcome.Unavailable(UNAVAILABLE_POLL_MS);
         }
 
-        Decision d = rateLimits.checkDelivery(m.getClientId(), m.getChannel());
+        Decision d = rateLimits.checkDelivery(m.getClientId(), m.getChannel(), m.getCategory());
         if (!d.allowed()) {
             count(m.getChannel(), "rate_limited");
             return new Outcome.RateLimited(d.waitMillis());
@@ -161,6 +166,21 @@ public class DispatchService {
                 req.getSenderEmail(), req.getSenderName());
     }
 
+    private static boolean expired(NotificationMessage m) {
+        return m.getExpiresAt() != null && !Instant.now().isBefore(m.getExpiresAt());
+    }
+
+    /** Claims the message first, so a worker sending it right now is never overruled. */
+    private Outcome expire(NotificationMessage m) {
+        if (messages.claim(m.getId(), MessageStatus.CLAIMABLE, Instant.now()) == 0) {
+            return new Outcome.Done();
+        }
+        messages.markFailed(m.getId(), FailureKind.EXPIRED, ErrorCode.OTP_EXPIRED,
+                "The one-time password expired at " + m.getExpiresAt() + " before it could be sent", Instant.now());
+        count(m.getChannel(), "failed_expired");
+        return new Outcome.Done();
+    }
+
     private Outcome failPermanently(NotificationMessage m, ErrorCode errorCode, RuntimeException cause) {
         messages.markFailed(m.getId(), FailureKind.PERMANENT, errorCode, truncate(cause.getMessage()), Instant.now());
         count(m.getChannel(), "failed_permanent");
@@ -190,6 +210,7 @@ public class DispatchService {
         Timer.builder(DELIVERY_LATENCY)
                 .description("Time from accepting a message to its provider confirming the send")
                 .tag("channel", m.getChannel().name())
+                .tag("category", m.getCategory().name())
                 .serviceLevelObjectives(DELIVERY_LATENCY_THRESHOLDS)
                 .register(metrics)
                 .record(Duration.between(m.getCreatedAt(), sentAt));

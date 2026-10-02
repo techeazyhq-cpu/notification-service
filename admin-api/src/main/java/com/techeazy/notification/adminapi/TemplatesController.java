@@ -18,6 +18,7 @@
 
 package com.techeazy.notification.adminapi;
 
+import com.techeazy.notification.domain.MessageCategory;
 import com.techeazy.notification.application.TemplateRenderer;
 import com.techeazy.notification.domain.Channel;
 import com.techeazy.notification.domain.Client;
@@ -50,11 +51,11 @@ import java.util.stream.Collectors;
 class TemplatesController {
 
     record TemplateInput(@NotBlank @Size(max = 120) String name, @NotNull Channel channel,
-                         @Size(max = 500) String subject, @NotBlank String body) {}
+                         @Size(max = 500) String subject, @NotBlank String body, MessageCategory category) {}
 
     /** {@code ownerClientId} is null for shared templates. */
     record TemplateView(UUID id, UUID ownerClientId, String ownerName, String name, Channel channel, String subject,
-                        String body, Instant createdAt, Instant updatedAt) {}
+                        String body, Instant createdAt, Instant updatedAt, MessageCategory category) {}
 
     private final TemplateRepository repo;
     private final ClientRepository clients;
@@ -121,11 +122,13 @@ class TemplatesController {
         t.setChannel(in.channel());
         t.setSubject(in.subject());
         t.setBody(in.body());
+        t.setCategory(in.category());
         t.setUpdatedAt(Instant.now());
     }
 
     private static TemplateView view(Template t, Map<UUID, String> owners) {
         return new TemplateView(t.getId(), t.getClientId(), t.getClientId() == null ? null : owners.get(t.getClientId()),
-                t.getName(), t.getChannel(), t.getSubject(), t.getBody(), t.getCreatedAt(), t.getUpdatedAt());
+                t.getName(), t.getChannel(), t.getSubject(), t.getBody(), t.getCreatedAt(), t.getUpdatedAt(),
+                t.getCategory());
     }
 }
