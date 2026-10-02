@@ -102,7 +102,7 @@ Negative / accepted:
 - **`networkPolicy.datastoreEgress` must be filled in** for each environment, and nothing works until it is. That is
   the price of default deny, and the install notes warn when it is empty.
 - **Images are not yet published by CI.** The chart expects them in a registry (`image.registry`). Publishing signed
-  images with an SBOM is a pipeline follow-up.
+  images with an SBOM is a pipeline follow-up (done in ADR-027).
 - **Autoscaling uses CPU.** Scaling the dispatcher on backlog (the `notification_backlog_*` gauges, ADR-024) needs
   KEDA or a custom-metrics adapter.
 

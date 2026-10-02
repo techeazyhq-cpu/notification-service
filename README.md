@@ -185,7 +185,7 @@ database while messages are in flight) write to `docs/benchmarks`. Results and a
 
 GitHub Actions run on every pull request and on `main` (`.github/workflows`):
 
-- **CI:** `mvn verify` (unit tests and the PostgreSQL integration tests), UI build and tests plus `npm audit`, and a build and vulnerability scan (Trivy, critical) of all six Docker images.
+- **CI:** `mvn verify` (unit tests and the PostgreSQL integration tests), UI build and tests plus `npm audit`, and a build and vulnerability scan (Trivy, critical) of all six Docker images. On `main` and on `v*` tags, once every check is green, the six images are published to GHCR, signed keylessly with cosign and given a signed SPDX SBOM attestation ([ADR-027](docs/adr-027-signed-images-and-sbom.md)).
 - **Security:** repository scan for vulnerable dependencies, committed secrets and misconfiguration (high and critical), CodeQL for Java and TypeScript, and a weekly re-run.
 - **Dependabot** opens weekly update pull requests for Maven, npm, Docker and the workflows themselves.
 
