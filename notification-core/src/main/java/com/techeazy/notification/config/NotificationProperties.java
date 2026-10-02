@@ -88,5 +88,26 @@ public class NotificationProperties {
          */
         private long retryingTimeoutSeconds = 900;
         private int batchSize = 500;
+        private Otp otp = new Otp();
+
+        /**
+         * Thresholds for one-time passwords, which are worthless after a validity of five minutes by default, so a
+         * stuck one is recovered within a minute or two rather than after the general thresholds above (ADR-033).
+         * Republishing early is safe: workers claim atomically, and an expired one is dropped by the dispatcher.
+         */
+        @Getter @Setter
+        public static class Otp {
+            /** PENDING one-time passwords older than this were never confirmed as published. */
+            private long pendingAgeSeconds = 10;
+            /** PROCESSING one-time passwords older than this belong to a crashed worker; a send takes at most 15 s. */
+            private long processingTimeoutSeconds = 60;
+            /** QUEUED one-time passwords older than this were lost; the priority lane has no backlog to wait in. */
+            private long queuedTimeoutSeconds = 60;
+            /**
+             * RETRYING one-time passwords older than this lost their delayed redelivery. Past the longest backoff a
+             * one-time password meets within the default attempts (40 s).
+             */
+            private long retryingTimeoutSeconds = 90;
+        }
     }
 }

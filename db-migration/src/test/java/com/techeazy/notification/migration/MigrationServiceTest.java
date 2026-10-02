@@ -59,7 +59,7 @@ class MigrationServiceTest {
             List.of("001-baseline", "002-client-tracking-indexes", "003-client-owned-templates", "004-billing",
                     "005-admin-accounts", "006-client-senders", "007-personal-data-retention", "008-dead-letters",
                     "009-admin-roles", "010-admin-audit-log", "011-message-error-code",
-            "012-message-category");
+                    "012-message-category", "013-otp-sweep-index");
     private static final String NOT_COMPARED = "('databasechangelog','databasechangeloglock','flyway_schema_history',"
             + "'billing_plan','billing_plan_rate','billing_account','credit_ledger_entry','credit_hold','invoice','invoice_line','invoice_payment','admin_user','admin_recovery_code','admin_session','client_sender','admin_audit_event')";
     private static final List<String> BILLING_TABLES =
@@ -262,6 +262,46 @@ class MigrationServiceTest {
                 + "where id = '00000000-0000-0000-0000-0000000000d1'")).containsExactly("PERMANENT");
         assertThat(query(db, "select column_name from information_schema.columns where column_name = 'category' "
                 + "and table_name in ('notification_message', 'notification_request', 'template')")).isEmpty();
+    }
+
+    @Test
+    void theOtpSweepIndexReplacesThePendingOnlyIndexAndRollsBackCleanly() throws Exception {
+        String db = newDatabase();
+        MigrationService service = service(db, true);
+        service.update();
+
+        assertThat(query(db, "select indexname from pg_indexes where indexname in "
+                + "('ix_message_pending_otp', 'ix_message_inflight_otp')")).containsExactly("ix_message_inflight_otp");
+        assertThat(query(db, "select indisvalid::text from pg_index where indexrelid = "
+                + "'ix_message_inflight_otp'::regclass")).containsExactly("true");
+
+        undoFrom(service, "013-otp-sweep-index");
+
+        assertThat(query(db, "select indexname from pg_indexes where indexname in "
+                + "('ix_message_pending_otp', 'ix_message_inflight_otp')")).containsExactly("ix_message_pending_otp");
+
+        service.update();
+
+        assertThat(service.history()).extracting(HistoryEntry::id).containsExactlyElementsOf(EXPECTED_IDS);
+    }
+
+    /** A concurrent build that failed leaves an invalid index behind; the changeset rebuilds it instead of adopting it. */
+    @Test
+    void theOtpSweepIndexChangesetRebuildsAnIndexLeftInvalid() throws Exception {
+        String db = newDatabase();
+        MigrationService service = service(db, true);
+        service.update();
+        undoFrom(service, "013-otp-sweep-index");
+        execute(db, "create index ix_message_inflight_otp on notification_message (status, updated_at)");
+        execute(db, "update pg_index set indisvalid = false where indexrelid = 'ix_message_inflight_otp'::regclass");
+
+        service.update();
+
+        assertThat(service.history()).extracting(HistoryEntry::type).last().isEqualTo("EXECUTED");
+        assertThat(query(db, "select indisvalid::text from pg_index where indexrelid = "
+                + "'ix_message_inflight_otp'::regclass")).containsExactly("true");
+        assertThat(query(db, "select pg_get_indexdef('ix_message_inflight_otp'::regclass)").getFirst())
+                .contains("WHERE");
     }
 
     @Test
@@ -512,7 +552,7 @@ class MigrationServiceTest {
         lines.addAll(query(database, "select 'idx ' || tablename || ' ' || indexdef from pg_indexes "
                 + "where schemaname='public' and indexname not in ('ix_message_sent_usage','ix_message_erase_due',"
                 + "'ix_request_erase_due','ix_request_idempotency_due','ix_message_dead_letters',"
-                + "'ix_message_pending_otp') and tablename not in " + NOT_COMPARED));
+                + "'ix_message_pending_otp','ix_message_inflight_otp') and tablename not in " + NOT_COMPARED));
         lines.addAll(query(database, "select 'con ' || conrelid::regclass || ' ' || conname || ' ' || pg_get_constraintdef(oid) "
                 + "from pg_constraint where connamespace = 'public'::regnamespace and conrelid::regclass::text not in "
                         + NOT_COMPARED + " and conname not in ('ck_message_failure_kind', 'ck_request_category',"

@@ -132,17 +132,19 @@ class DeadLetterPersistenceTest {
     }
 
     @Test
-    void theSweeperTakesStuckOneTimePasswordsBeforeOlderOrdinaryMessages() {
+    void theSweeperFindsStuckOneTimePasswordsOnTheirOwnAndEverythingElseOldestFirst() {
         UUID client = client();
-        UUID oldOrdinary = message(client, MessageStatus.PENDING, null, "+10", 50);
-        UUID newerOtp = message(client, MessageStatus.PENDING, null, "+11", 5);
-        jdbc.sql("UPDATE notification_message SET category = 'OTP' WHERE id = :id").param("id", newerOtp).update();
+        UUID oldOrdinary = message(client, MessageStatus.QUEUED, null, "+10", 50);
+        UUID newerOtp = message(client, MessageStatus.QUEUED, null, "+11", 5);
+        UUID sentOtp = message(client, MessageStatus.SENT, null, "+12", 5);
+        jdbc.sql("UPDATE notification_message SET category = 'OTP' WHERE id IN (:ids)")
+                .param("ids", List.of(newerOtp, sentOtp)).update();
 
-        List<NotificationMessage> swept = messages.lockStale("PENDING", NOW, 1);
-
-        assertThat(swept).extracting(NotificationMessage::getId).containsExactly(newerOtp);
-        assertThat(messages.lockStale("PENDING", NOW, 2)).extracting(NotificationMessage::getId)
-                .containsExactly(newerOtp, oldOrdinary);
+        assertThat(messages.lockStaleOtp("QUEUED", NOW, 10)).extracting(NotificationMessage::getId)
+                .containsExactly(newerOtp);
+        assertThat(messages.lockStaleOtp("SENT", NOW, 10)).isEmpty();
+        assertThat(messages.lockStale("QUEUED", NOW, 2)).extracting(NotificationMessage::getId)
+                .containsExactly(oldOrdinary, newerOtp);
     }
 
     private NotificationMessage reload(UUID id) {
