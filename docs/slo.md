@@ -96,6 +96,14 @@ if one exists. If none does, that channel's messages wait without spending retri
 recovers. Check the provider's status page and its credentials in the admin UI. Saving the provider resets its
 circuit.
 
+### <a id="broker-circuit-open"></a>`NotificationBrokerCircuitOpen`
+
+A service has stopped publishing to Pulsar because publishes kept failing (ADR-032). Accepts still succeed and answer
+at once: the messages are stored as `PENDING`, and the outbox sweeper publishes them when the broker answers again,
+so nothing is lost, but nothing is delivered meanwhile and `NotificationBacklogStale` follows. Check the Pulsar
+brokers and the service's connectivity and TLS trust to them. The circuit probes the broker every 10 seconds and
+closes on its own once publishes succeed.
+
 ### <a id="dead-letters"></a>`NotificationDeadLetters`
 
 The broker gave up on messages after repeated redelivery. They are recorded as `FAILED` (`DEAD_LETTERED`) and listed

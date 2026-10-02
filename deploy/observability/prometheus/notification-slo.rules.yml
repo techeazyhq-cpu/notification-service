@@ -276,13 +276,21 @@ groups:
           summary: "{{ $labels.job }} on {{ $labels.instance }} cannot be scraped"
           runbook: docs/slo.md#service-down
       - alert: NotificationProviderCircuitOpen
-        expr: max by (name) (resilience4j_circuitbreaker_state{state="open"}) == 1
+        expr: max by (name) (resilience4j_circuitbreaker_state{state="open", name!="broker"}) == 1
         for: 5m
         labels:
           severity: warning
         annotations:
           summary: "Provider {{ $labels.name }} has been failing for 5 minutes and its circuit is open"
           runbook: docs/slo.md#provider-circuit-open
+      - alert: NotificationBrokerCircuitOpen
+        expr: max by (job) (resilience4j_circuitbreaker_state{state="open", name="broker"}) == 1
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "{{ $labels.job }} cannot publish to the message broker; its circuit is open"
+          runbook: docs/slo.md#broker-circuit-open
       - alert: NotificationDeadLetters
         expr: sum(increase(notification_dead_letter_total[15m])) > 0
         labels:

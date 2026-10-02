@@ -99,4 +99,4 @@ Negative / accepted:
 ## Follow-ups
 
 - Count failures by `error_code` in metrics and dashboards, so a rise in `DELIVERY_REJECTED` is visible per channel.
-- OTP validity (ADR-032) adds `OTP_EXPIRED` to the delivery range.
+- OTP validity (ADR-033) adds `OTP_EXPIRED` to the delivery range.
