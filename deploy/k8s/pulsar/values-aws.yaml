@@ -1,0 +1,106 @@
+# Copyright 2026 Vasantha Kumar
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+# @author Vasantha Kumar <vasantha.kumar@hotmail.com>
+#
+# Values for the Apache Pulsar Helm chart (apache/pulsar 4.7.x) on the EKS cluster of deploy/terraform/aws (ADR-028).
+# AWS has no managed Pulsar, and the broker holds nothing that cannot be rebuilt from PostgreSQL (ADR-026), so it runs
+# in the cluster: three ZooKeeper, bookie and broker pods, one per availability zone, on encrypted gp3 volumes, with
+# TLS on the broker port the services use. Needs cert-manager and storage-class.yaml. See docs/aws-deployment.md.
+#   helm install pulsar apache/pulsar --version 4.7.0 -n pulsar --create-namespace -f values-aws.yaml
+#     --set initialize=true
+
+volumes:
+  persistence: true
+  local_storage: false
+
+affinity:
+  anti_affinity: true
+  type: requiredDuringSchedulingIgnoredDuringExecution
+
+components:
+  zookeeper: true
+  bookkeeper: true
+  autorecovery: true
+  broker: true
+  functions: false
+  function_worker: false
+  proxy: false
+  toolset: true
+  pulsar_manager: false
+  dekaf: false
+
+victoria-metrics-k8s-stack:
+  enabled: false
+
+tls:
+  enabled: true
+  broker:
+    enabled: true
+
+certs:
+  internal_issuer:
+    enabled: true
+    type: selfsigning
+
+zookeeper:
+  replicaCount: 3
+  topologySpreadConstraints:
+    - maxSkew: 1
+      topologyKey: topology.kubernetes.io/zone
+      whenUnsatisfiable: DoNotSchedule
+      labelSelector:
+        matchLabels:
+          component: zookeeper
+  volumes:
+    data:
+      size: 20Gi
+      local_storage: false
+      storageClassName: gp3-encrypted
+
+bookkeeper:
+  replicaCount: 3
+  topologySpreadConstraints:
+    - maxSkew: 1
+      topologyKey: topology.kubernetes.io/zone
+      whenUnsatisfiable: DoNotSchedule
+      labelSelector:
+        matchLabels:
+          component: bookie
+  volumes:
+    journal:
+      size: 20Gi
+      local_storage: false
+      storageClassName: gp3-encrypted
+    ledgers:
+      size: 100Gi
+      local_storage: false
+      storageClassName: gp3-encrypted
+
+autorecovery:
+  replicaCount: 1
+
+broker:
+  replicaCount: 3
+  topologySpreadConstraints:
+    - maxSkew: 1
+      topologyKey: topology.kubernetes.io/zone
+      whenUnsatisfiable: DoNotSchedule
+      labelSelector:
+        matchLabels:
+          component: broker
+  configData:
+    managedLedgerDefaultEnsembleSize: "2"
+    managedLedgerDefaultWriteQuorum: "2"
+    managedLedgerDefaultAckQuorum: "2"

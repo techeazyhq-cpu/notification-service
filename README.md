@@ -207,6 +207,14 @@ PostgreSQL, Redis and Pulsar are external. Before installing:
 The chart's `values.yaml` documents every setting. To try it locally on k3s in Docker, follow
 [deploy/k8s/dev/README.md](deploy/k8s/dev/README.md). See ADR-025.
 
+### On AWS
+
+`deploy/terraform/aws` builds an environment: a three-zone VPC, EKS with network-policy enforcement, RDS PostgreSQL
+Multi-AZ with point-in-time recovery and backups replicated to a second region, ElastiCache with TLS, and a backup
+bucket in the recovery region. Pulsar runs on EKS from the Apache chart (`deploy/k8s/pulsar/values-aws.yaml`), and
+External Secrets feeds the chart's Secret from Secrets Manager. The datastores module is unit-tested at plan time in
+CI. Step by step: [docs/aws-deployment.md](docs/aws-deployment.md). See ADR-028.
+
 ## Backups and disaster recovery
 
 Only PostgreSQL holds state that needs backing up; Pulsar and Redis are rebuilt from it or refill by themselves. PostgreSQL runs with a synchronous standby and automatic failover, continuous WAL archiving for point-in-time recovery (reference manifests for CloudNativePG in `deploy/k8s/postgres`), and logical dumps with a restore drill that proves a backup is complete (`deploy/backup`). [docs/disaster-recovery.md](docs/disaster-recovery.md) has the objectives (no data lost on a primary crash, at most 5 minutes otherwise), measured results and the procedures. See ADR-026.
