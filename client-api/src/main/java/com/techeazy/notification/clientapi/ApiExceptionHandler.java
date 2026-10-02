@@ -30,6 +30,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.web.ErrorResponse;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -103,9 +104,21 @@ public class ApiExceptionHandler {
         return ResponseEntity.status(HttpStatus.PAYLOAD_TOO_LARGE).body(new ErrorBody("PAYLOAD_TOO_LARGE", "Upload too large"));
     }
 
+    /**
+     * Spring's own refusals (unknown path, unsupported method or media type, missing parameter) carry their status.
+     * They are the caller's mistake, so they keep it and are not logged as errors. Anything else is an opaque 500.
+     */
     @ExceptionHandler(Exception.class)
     ResponseEntity<ErrorBody> unexpected(Exception e) {
+        if (e instanceof ErrorResponse refusal && refusal.getStatusCode().is4xxClientError()) {
+            return refused(refusal);
+        }
         log.error("Unhandled error", e);
         return ResponseEntity.internalServerError().body(new ErrorBody("INTERNAL_ERROR", "Unexpected error"));
+    }
+
+    private static ResponseEntity<ErrorBody> refused(ErrorResponse refusal) {
+        HttpStatus status = HttpStatus.valueOf(refusal.getStatusCode().value());
+        return ResponseEntity.status(status).body(new ErrorBody(status.name(), refusal.getBody().getDetail()));
     }
 }

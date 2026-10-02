@@ -68,10 +68,15 @@ client-api:
   cors-origins: ${CLIENT_API_CORS_ORIGINS:http://localhost:5174}
 
 management:
+  server:
+    port: ${MANAGEMENT_PORT:9080}
   endpoints:
     web:
       exposure:
         include: health,info,prometheus
 springdoc:
+  api-docs:
+    enabled: ${API_DOCS_ENABLED:true}
   swagger-ui:
+    enabled: ${API_DOCS_ENABLED:true}
     path: /swagger-ui.html

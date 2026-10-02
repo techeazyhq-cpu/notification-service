@@ -6,6 +6,8 @@ Generic multi-channel notification platform: **Email, SMS, WhatsApp, App Push**,
 - **Client UI** (`:5174`): sign in with a client API key to follow your requests: summary, per-request progress with live updates, per-recipient outcomes, search, CSV export of failed recipients, and your own message templates (create, edit, preview).
 - **Admin API** (`:8081`) + **Admin UI** (`:5173`): clients and API keys, templates, providers, rate limits, dashboard, failed-message retry.
 - **Dispatcher** (`:8082`): Pulsar consumers that rate-limit, render, send, retry and fail over between providers.
+
+Health checks and Prometheus metrics (`/actuator/health`, `/actuator/prometheus`) are not on the public ports: client-api serves them on `:9080` and admin-api on `:9081` (the dispatcher, which has no public surface, on `:8082`). `docker compose` publishes those ports on `127.0.0.1` only, and the TLS overlay not at all; point Prometheus and orchestrator probes at them from inside the network. The admin API's OpenAPI and Swagger UI are off unless `API_DOCS_ENABLED=true` (`docker compose` turns them on); the Client API's stay on as its published contract. See ADR-021.
 - Local catchers: **Mailpit** (email, UI `:8025`) and a small **catcher** for SMS/WhatsApp/Push (UI `:9000`).
 
 Design: [docs/design.md](docs/design.md) · Decisions: [ADR-001](docs/adr-001-modular-monolith-pulsar-outbox.md), [ADR-002](docs/adr-002-client-owned-templates-content-snapshot.md), [ADR-003](docs/adr-003-liquibase-migration-job.md)
