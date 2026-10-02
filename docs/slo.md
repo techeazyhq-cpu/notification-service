@@ -22,6 +22,7 @@ that a brief spike does not page anyone and a fixed problem stops alerting quick
 | <a id="accept-latency"></a>**Accept latency** | 99% | A single send (`POST /v1/notifications`) answered within 250 ms | `http_server_requests_seconds_bucket{le="0.25"}` |
 | <a id="delivery-freshness"></a>**Delivery freshness** | 99% | A sent message whose provider confirmed it within 5 minutes of acceptance | `notification_delivery_latency_seconds_bucket{le="300.0"}` (dispatcher) |
 | <a id="delivery-success"></a>**Delivery success** | 99.5% | A message that did not fail for a reason on our side | `notification_dispatch_total`, `notification_dead_letter_total` |
+| <a id="otp-delivery"></a>**OTP delivery** | 99% | A one-time password whose provider confirmed it within 30 seconds of acceptance | `notification_delivery_latency_seconds_bucket{category="OTP",le="30.0"}`, `notification_dispatch_total{outcome="failed_expired"}` |
 
 Notes on what counts:
 
@@ -33,6 +34,10 @@ Notes on what counts:
   failure, and spends no budget. Retries exhausted (`failed_exhausted`) and broker dead letters do.
 - **Freshness counts only messages that were sent.** A backlog that sends nothing produces no events at all, which
   is why [`NotificationBacklogStale`](#backlog-stale) exists alongside it.
+- **OTP delivery counts expired OTPs as bad events,** as well as OTPs sent after 30 seconds. An OTP that expires is
+  never sent, so it never reaches the latency histogram. Counting only sent OTPs would make the objective look
+  healthiest exactly when OTPs are being dropped. OTPs are also inside delivery freshness, whose 5-minute threshold is
+  far too loose for them (ADR-033). Expired OTPs do not spend the delivery-success budget; they are this objective's.
 
 ## Runbook
 
@@ -73,6 +78,18 @@ Messages are being sent, but late. Check `notification_backlog_messages` per sta
 Messages are failing after all retries, or being dead-lettered. The admin UI's **Dead letters** page groups them by
 error. Fix the cause (usually a provider), then reprocess them there; reprocessing is safe and audited (ADR-010,
 ADR-019).
+
+### OTP delivery burning
+
+One-time passwords are reaching providers late, or expiring before they are sent. Users are waiting for codes. Check:
+
+- **`notification_dispatch_total{outcome="failed_expired"}` rising:** OTPs are expiring unsent. Check whether the
+  channel's providers are down (`NotificationProviderCircuitOpen`) or the broker is (`NotificationBrokerCircuitOpen`).
+  An outage longer than an OTP's validity expires every OTP caught in it, by design (ADR-033).
+- **Sent, but late:** check `notification_backlog_messages` for the channel. The priority lane has consumers of its
+  own (`PRIORITY_CONSUMERS_PER_CHANNEL`); raise it if OTPs queue. Check `outcome="rate_limited"` too: OTPs may use the
+  reserve, but a bucket that is empty is empty.
+- **Provider latency:** `notification_provider_send_seconds` for the channel. A slow provider delays every OTP.
 
 ### <a id="backlog-stale"></a>`NotificationBacklogStale`
 
@@ -120,3 +137,17 @@ Redis again every 5 seconds and recovers on its own (ADR-024).
 Administrator actions are succeeding without an audit record (ADR-019). The admin-api logs name each action whose
 record was lost. Usually PostgreSQL is struggling, which other alerts will show too. Treat any administrator change
 made during the window as unaudited and review it.
+
+### <a id="delivery-rejections-rising"></a>`NotificationDeliveryRejectionsRising`
+
+Over 5% of a channel's messages have been rejected by its providers (`DELIVERY_REJECTED`, NS-6001) for 15 minutes,
+with at least 20 rejections. Rejections are permanent failures and spend no delivery-success budget, because they are
+usually the caller's data. A sudden rise on one channel is more often a provider-side change: a new filtering rule,
+a sender id or template that lost its registration, an account suspended, a changed API. Check:
+
+- the **Dead letters** page filtered to the channel and `PERMANENT`: the provider's own words are in the error text;
+- whether it is one client (bad data, a client issue) or every client (a provider issue);
+- the provider's status page and account.
+
+Failures by every error code are counted in `notification_delivery_errors_total{channel, code, error_id}`, with codes
+from the [error code dictionary](error-codes.md).

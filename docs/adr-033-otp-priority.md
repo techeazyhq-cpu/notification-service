@@ -102,7 +102,8 @@ Negative / accepted:
 
 ## Follow-ups
 
-- An SLO for OTP time-to-send (for example 99 % within 30 seconds) with burn-rate alerts, using the new tag.
+- ~~An SLO for OTP time-to-send with burn-rate alerts.~~ Done: **OTP delivery**, 99% within 30 seconds, with expired
+  OTPs counted as bad events ([slo.md](slo.md#otp-delivery)).
 - Per-category pricing in billing, if the business wants OTPs priced differently.
 
 ## Amendment (2026-10-02): lane isolation and template edits

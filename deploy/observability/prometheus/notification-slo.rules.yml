@@ -148,6 +148,54 @@ groups:
             sum(rate(notification_dispatch_total{outcome=~"sent|failed_exhausted"}[6h]))
             + (sum(rate(notification_dead_letter_total[6h])) or vector(0))
           )
+      - record: notification:otp_late:ratio_rate5m
+        expr: |
+          (
+            (sum(rate(notification_delivery_latency_seconds_count{category="OTP"}[5m])) or vector(0))
+            - (sum(rate(notification_delivery_latency_seconds_bucket{category="OTP",le="30.0"}[5m])) or vector(0))
+            + (sum(rate(notification_dispatch_total{outcome="failed_expired"}[5m])) or vector(0))
+          )
+          /
+          (
+            (sum(rate(notification_delivery_latency_seconds_count{category="OTP"}[5m])) or vector(0))
+            + (sum(rate(notification_dispatch_total{outcome="failed_expired"}[5m])) or vector(0))
+          )
+      - record: notification:otp_late:ratio_rate30m
+        expr: |
+          (
+            (sum(rate(notification_delivery_latency_seconds_count{category="OTP"}[30m])) or vector(0))
+            - (sum(rate(notification_delivery_latency_seconds_bucket{category="OTP",le="30.0"}[30m])) or vector(0))
+            + (sum(rate(notification_dispatch_total{outcome="failed_expired"}[30m])) or vector(0))
+          )
+          /
+          (
+            (sum(rate(notification_delivery_latency_seconds_count{category="OTP"}[30m])) or vector(0))
+            + (sum(rate(notification_dispatch_total{outcome="failed_expired"}[30m])) or vector(0))
+          )
+      - record: notification:otp_late:ratio_rate1h
+        expr: |
+          (
+            (sum(rate(notification_delivery_latency_seconds_count{category="OTP"}[1h])) or vector(0))
+            - (sum(rate(notification_delivery_latency_seconds_bucket{category="OTP",le="30.0"}[1h])) or vector(0))
+            + (sum(rate(notification_dispatch_total{outcome="failed_expired"}[1h])) or vector(0))
+          )
+          /
+          (
+            (sum(rate(notification_delivery_latency_seconds_count{category="OTP"}[1h])) or vector(0))
+            + (sum(rate(notification_dispatch_total{outcome="failed_expired"}[1h])) or vector(0))
+          )
+      - record: notification:otp_late:ratio_rate6h
+        expr: |
+          (
+            (sum(rate(notification_delivery_latency_seconds_count{category="OTP"}[6h])) or vector(0))
+            - (sum(rate(notification_delivery_latency_seconds_bucket{category="OTP",le="30.0"}[6h])) or vector(0))
+            + (sum(rate(notification_dispatch_total{outcome="failed_expired"}[6h])) or vector(0))
+          )
+          /
+          (
+            (sum(rate(notification_delivery_latency_seconds_count{category="OTP"}[6h])) or vector(0))
+            + (sum(rate(notification_dispatch_total{outcome="failed_expired"}[6h])) or vector(0))
+          )
 
   - name: notification-slo-burn
     rules:
@@ -255,6 +303,32 @@ groups:
           summary: "Delivery success: error budget burning 6x faster than it can last 30 days"
           description: "Bad-event ratio over 6h is {{ $value | humanizePercentage }}; the budget is 0.5%."
           runbook: docs/slo.md#delivery-success
+      - alert: NotificationOtpDeliveryBudgetBurnFast
+        expr: |
+          notification:otp_late:ratio_rate1h > 0.144
+          and
+          notification:otp_late:ratio_rate5m > 0.144
+        for: 2m
+        labels:
+          severity: critical
+          slo: otp-delivery
+        annotations:
+          summary: "OTP delivery: error budget burning 14.4x faster than it can last 30 days"
+          description: "Bad-event ratio over 1h is {{ $value | humanizePercentage }}; the budget is 1%."
+          runbook: docs/slo.md#otp-delivery
+      - alert: NotificationOtpDeliveryBudgetBurnSlow
+        expr: |
+          notification:otp_late:ratio_rate6h > 0.06
+          and
+          notification:otp_late:ratio_rate30m > 0.06
+        for: 15m
+        labels:
+          severity: warning
+          slo: otp-delivery
+        annotations:
+          summary: "OTP delivery: error budget burning 6x faster than it can last 30 days"
+          description: "Bad-event ratio over 6h is {{ $value | humanizePercentage }}; the budget is 1%."
+          runbook: docs/slo.md#otp-delivery
 
   - name: notification-symptoms
     rules:
@@ -312,3 +386,18 @@ groups:
         annotations:
           summary: "Administrator actions are happening without an audit record"
           runbook: docs/slo.md#audit-write-failures
+      - alert: NotificationDeliveryRejectionsRising
+        expr: |
+          (
+            sum by (channel) (rate(notification_delivery_errors_total{code="DELIVERY_REJECTED"}[15m]))
+            /
+            sum by (channel) (rate(notification_dispatch_total{outcome=~"sent|failed_permanent"}[15m]))
+          ) > 0.05
+          and
+          sum by (channel) (increase(notification_delivery_errors_total{code="DELIVERY_REJECTED"}[15m])) >= 20
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Providers are rejecting {{ $value | humanizePercentage }} of {{ $labels.channel }} messages"
+          runbook: docs/slo.md#delivery-rejections-rising

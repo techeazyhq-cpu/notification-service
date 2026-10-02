@@ -228,3 +228,98 @@ tests:
       - eval_time: 6m
         alertname: NotificationBrokerCircuitOpen
         exp_alerts: []
+
+  - name: one-time passwords sent late or expired burn the OTP budget fast
+    interval: 1m
+    input_series:
+      - series: 'notification_delivery_latency_seconds_bucket{channel="SMS",category="OTP",le="30.0"}'
+        values: '0+80x90'
+      - series: 'notification_delivery_latency_seconds_count{channel="SMS",category="OTP"}'
+        values: '0+90x90'
+      - series: 'notification_dispatch_total{channel="SMS",outcome="failed_expired"}'
+        values: '0+10x90'
+      - series: 'notification_delivery_latency_seconds_bucket{channel="SMS",category="PROMOTIONAL",le="30.0"}'
+        values: '0+0x90'
+      - series: 'notification_delivery_latency_seconds_count{channel="SMS",category="PROMOTIONAL"}'
+        values: '0+1000x90'
+    alert_rule_test:
+      - eval_time: 70m
+        alertname: NotificationOtpDeliveryBudgetBurnFast
+        exp_alerts:
+          - exp_labels: {severity: critical, slo: otp-delivery}
+            exp_annotations:
+              summary: "OTP delivery: error budget burning 14.4x faster than it can last 30 days"
+              description: "Bad-event ratio over 1h is 20%; the budget is 1%."
+              runbook: docs/slo.md#otp-delivery
+
+  - name: expired one-time passwords alone burn the OTP budget even when none are sent
+    interval: 1m
+    input_series:
+      - series: 'notification_dispatch_total{channel="SMS",outcome="failed_expired"}'
+        values: '0+5x90'
+    alert_rule_test:
+      - eval_time: 70m
+        alertname: NotificationOtpDeliveryBudgetBurnFast
+        exp_alerts:
+          - exp_labels: {severity: critical, slo: otp-delivery}
+            exp_annotations:
+              summary: "OTP delivery: error budget burning 14.4x faster than it can last 30 days"
+              description: "Bad-event ratio over 1h is 100%; the budget is 1%."
+              runbook: docs/slo.md#otp-delivery
+
+  - name: one-time passwords sent within thirty seconds raise nothing, however late other traffic is
+    interval: 1m
+    input_series:
+      - series: 'notification_delivery_latency_seconds_bucket{channel="SMS",category="OTP",le="30.0"}'
+        values: '0+100x400'
+      - series: 'notification_delivery_latency_seconds_count{channel="SMS",category="OTP"}'
+        values: '0+100x400'
+      - series: 'notification_delivery_latency_seconds_bucket{channel="SMS",category="PROMOTIONAL",le="30.0"}'
+        values: '0+0x400'
+      - series: 'notification_delivery_latency_seconds_count{channel="SMS",category="PROMOTIONAL"}'
+        values: '0+1000x400'
+    alert_rule_test:
+      - eval_time: 6h30m
+        alertname: NotificationOtpDeliveryBudgetBurnFast
+        exp_alerts: []
+      - eval_time: 6h30m
+        alertname: NotificationOtpDeliveryBudgetBurnSlow
+        exp_alerts: []
+
+  - name: a channel whose provider rejects a tenth of its messages is flagged on that channel only
+    interval: 1m
+    input_series:
+      - series: 'notification_dispatch_total{channel="SMS",outcome="sent"}'
+        values: '0+90x60'
+      - series: 'notification_dispatch_total{channel="SMS",outcome="failed_permanent"}'
+        values: '0+10x60'
+      - series: 'notification_delivery_errors_total{channel="SMS",code="DELIVERY_REJECTED",error_id="NS-6001"}'
+        values: '0+10x60'
+      - series: 'notification_dispatch_total{channel="EMAIL",outcome="sent"}'
+        values: '0+1000x60'
+      - series: 'notification_dispatch_total{channel="EMAIL",outcome="failed_permanent"}'
+        values: '0+1x60'
+      - series: 'notification_delivery_errors_total{channel="EMAIL",code="DELIVERY_REJECTED",error_id="NS-6001"}'
+        values: '0+1x60'
+    alert_rule_test:
+      - eval_time: 45m
+        alertname: NotificationDeliveryRejectionsRising
+        exp_alerts:
+          - exp_labels: {severity: warning, channel: SMS}
+            exp_annotations:
+              summary: "Providers are rejecting 10% of SMS messages"
+              runbook: docs/slo.md#delivery-rejections-rising
+
+  - name: a handful of rejections on a quiet channel is not flagged
+    interval: 1m
+    input_series:
+      - series: 'notification_dispatch_total{channel="PUSH",outcome="sent"}'
+        values: '0+0x60'
+      - series: 'notification_dispatch_total{channel="PUSH",outcome="failed_permanent"}'
+        values: '0+0.5x60'
+      - series: 'notification_delivery_errors_total{channel="PUSH",code="DELIVERY_REJECTED",error_id="NS-6001"}'
+        values: '0+0.5x60'
+    alert_rule_test:
+      - eval_time: 45m
+        alertname: NotificationDeliveryRejectionsRising
+        exp_alerts: []
