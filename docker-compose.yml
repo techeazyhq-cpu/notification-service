@@ -86,7 +86,7 @@ services:
   client-api:
     profiles: [app]
     build: { context: ., args: { MODULE: client-api } }
-    ports: ["8080:8080"]
+    ports: ["8080:8080", "127.0.0.1:9080:9080"]
     environment: &svc-env
       DB_URL: jdbc:postgresql://postgres:5432/notification
       # DML-only role: these three services never run DDL, so they don't get the schema-owning
@@ -113,7 +113,7 @@ services:
   admin-api:
     profiles: [app]
     build: { context: ., args: { MODULE: admin-api } }
-    ports: ["8081:8081"]
+    ports: ["8081:8081", "127.0.0.1:9081:9081"]
     environment:
       <<: *svc-env
       ADMIN_USERNAME: admin
@@ -121,12 +121,13 @@ services:
       ADMIN_TWO_FACTOR_KEY: ${ADMIN_TWO_FACTOR_KEY:-development-only-change-me}
       ADMIN_REQUIRE_PASSWORD_CHANGE: ${ADMIN_REQUIRE_PASSWORD_CHANGE:-false}
       ADMIN_REQUIRE_TWO_FACTOR: ${ADMIN_REQUIRE_TWO_FACTOR:-false}
+      API_DOCS_ENABLED: ${ADMIN_API_DOCS_ENABLED:-true}
     depends_on: *svc-deps
 
   dispatcher:
     profiles: [app]
     build: { context: ., args: { MODULE: dispatcher } }
-    ports: ["8082:8082"]
+    ports: ["127.0.0.1:8082:8082"]
     environment: *svc-env
     depends_on: *svc-deps
 
