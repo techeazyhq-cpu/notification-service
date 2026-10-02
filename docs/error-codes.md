@@ -1,7 +1,9 @@
 # Error code dictionary
 
 Generated from `ErrorCode` in notification-core by `ErrorCatalogueDocumentTest`; do not edit by hand.
-The same catalogue is served at `GET /v1/errors` and `GET /v1/errors/{errorId}`. See ADR-031.
+The same catalogue is served without credentials at `GET /v1/errors` and `GET /v1/errors/{errorId}` on the
+client API, and at `GET /api/admin/errors` and `GET /api/admin/errors/{errorId}` on the admin API. The
+`docs` link in an error body points at the entry on the API that answered. See ADR-031.
 
 Every error response carries the same fields:
 

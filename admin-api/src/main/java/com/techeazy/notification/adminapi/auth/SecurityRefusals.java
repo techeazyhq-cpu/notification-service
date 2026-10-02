@@ -18,6 +18,7 @@
 package com.techeazy.notification.adminapi.auth;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.techeazy.notification.adminapi.ErrorCatalogueController;
 import com.techeazy.notification.error.ErrorBody;
 import com.techeazy.notification.error.ErrorCode;
 import com.techeazy.notification.error.TraceIdSource;
@@ -72,7 +73,8 @@ public class SecurityRefusals implements AuthenticationEntryPoint, AccessDeniedH
         response.setStatus(errorCode.httpStatus().orElseThrow());
         response.setContentType(MediaType.APPLICATION_JSON_VALUE);
         json.writeValue(response.getOutputStream(),
-                ErrorBody.of(errorCode, message, traceIds.currentTraceId().orElse(null)));
+                ErrorBody.of(errorCode, message, traceIds.currentTraceId().orElse(null),
+                        ErrorCatalogueController.PATH));
     }
 
     private static boolean setupPending(Authentication authentication) {

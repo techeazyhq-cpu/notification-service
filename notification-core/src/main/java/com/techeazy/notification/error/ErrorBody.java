@@ -28,13 +28,17 @@ import com.fasterxml.jackson.annotation.JsonInclude;
 public record ErrorBody(String code, String message, String errorId, ErrorCategory category, boolean retryable,
                         String traceId, String docs) {
 
-    public static ErrorBody of(ErrorCode errorCode, String message, String traceId) {
+    /**
+     * @param cataloguePath where the API answering serves the dictionary, so the {@code docs} link resolves against
+     *                      the host the caller just called
+     */
+    public static ErrorBody of(ErrorCode errorCode, String message, String traceId, String cataloguePath) {
         return new ErrorBody(errorCode.code(), message, errorCode.errorId(), errorCode.category(),
-                errorCode.retryable(), traceId, documentationPath(errorCode));
+                errorCode.retryable(), traceId, documentationPath(cataloguePath, errorCode));
     }
 
-    /** Where the code's cause and resolution are served, relative to the client API. */
-    public static String documentationPath(ErrorCode errorCode) {
-        return "/v1/errors/" + errorCode.errorId();
+    /** Where the code's cause and resolution are served, under the answering API's {@code cataloguePath}. */
+    public static String documentationPath(String cataloguePath, ErrorCode errorCode) {
+        return cataloguePath + "/" + errorCode.errorId();
     }
 }

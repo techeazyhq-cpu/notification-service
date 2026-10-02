@@ -62,6 +62,7 @@ class ApiExceptionHandlerTest {
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.PAYMENT_REQUIRED);
         assertThat(response.getBody()).extracting(ErrorBody::code, ErrorBody::errorId, ErrorBody::retryable)
                 .containsExactly("SPEND_CAP_EXCEEDED", "NS-4002", false);
+        assertThat(response.getBody().docs()).isEqualTo("/v1/errors/NS-4002");
     }
 
     @Test

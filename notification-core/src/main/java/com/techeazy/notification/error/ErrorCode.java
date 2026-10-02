@@ -269,4 +269,9 @@ public enum ErrorCode {
     public static Optional<ErrorCode> findByCode(String code) {
         return Arrays.stream(values()).filter(candidate -> candidate.name().equals(code)).findFirst();
     }
+
+    /** Looks a code up by its numbered error id ({@code NS-5001}, any case) or by its symbolic code. */
+    public static Optional<ErrorCode> findByErrorIdOrCode(String errorIdOrCode) {
+        return findByErrorId(errorIdOrCode).or(() -> findByCode(errorIdOrCode));
+    }
 }

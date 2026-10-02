@@ -96,6 +96,8 @@ class SecurityConfig {
                         .requestMatchers("/actuator/health", "/actuator/health/**", "/actuator/prometheus").permitAll()
                         .requestMatchers("/swagger-ui/**", "/swagger-ui.html", "/v3/api-docs/**").permitAll()
                         .requestMatchers("/api/admin/auth/login").permitAll()
+                        .requestMatchers(HttpMethod.GET, ErrorCatalogueController.PATH, ErrorCatalogueController.PATH + "/*")
+                        .permitAll()
                         .requestMatchers("/api/admin/auth/**").hasAnyRole(VIEWER, BearerTokenFilter.ACCOUNT_SETUP_ROLE)
                         // Managing other administrators is always an ADMIN action, GET included.
                         .requestMatchers("/api/admin/administrators/**").hasRole(ADMIN)
