@@ -35,6 +35,8 @@ spring:
     redis:
       host: ${REDIS_HOST:localhost}
       port: ${REDIS_PORT:6379}
+      timeout: ${REDIS_TIMEOUT:500ms}
+      connect-timeout: ${REDIS_CONNECT_TIMEOUT:500ms}
 
 notification:
   secrets-key: ${SECRETS_ENCRYPTION_KEY:development-only-change-me}

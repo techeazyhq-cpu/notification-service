@@ -29,6 +29,7 @@ import com.techeazy.notification.persistence.NotificationMessageRepository;
 import com.techeazy.notification.persistence.NotificationRequestRepository;
 import com.techeazy.notification.port.RateLimiter.Decision;
 import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.Timer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -60,6 +61,11 @@ public class DispatchService {
     }
 
     static final long UNAVAILABLE_POLL_MS = 2000;
+
+    /** Acceptance-to-sent time per channel; see {@link #recordDeliveryLatency}. */
+    public static final String DELIVERY_LATENCY = "notification.delivery.latency";
+    private static final Duration[] DELIVERY_LATENCY_THRESHOLDS = {
+            Duration.ofSeconds(10), Duration.ofSeconds(30), Duration.ofMinutes(1), Duration.ofMinutes(5)};
 
     private final NotificationMessageRepository messages;
     private final NotificationRequestRepository requests;
@@ -109,8 +115,10 @@ public class DispatchService {
         try {
             Outbound outbound = render(m);
             SendResult result = providers.send(outbound);
-            messages.markSent(messageId, result.providerMessageId(), Instant.now());
+            Instant sentAt = Instant.now();
+            messages.markSent(messageId, result.providerMessageId(), sentAt);
             count(m.getChannel(), "sent");
+            recordDeliveryLatency(m, sentAt);
             return new Outcome.Done();
         } catch (ProviderRegistry.ProvidersUnavailableException e) {
             // Circuit opened between the availability check and the send: undo the claim, do not count the attempt.
@@ -150,6 +158,22 @@ public class DispatchService {
     Duration backoff(int attempt) {
         long seconds = props.getBaseBackoffSeconds() * (1L << Math.min(attempt - 1, 20));
         return Duration.ofSeconds(Math.min(seconds, props.getMaxBackoffSeconds()));
+    }
+
+    /**
+     * Time from acceptance to a successful send, with buckets at the freshness thresholds, so the share of messages
+     * delivered within each can be computed and alerted on (see ADR-024).
+     */
+    private void recordDeliveryLatency(NotificationMessage m, Instant sentAt) {
+        if (m.getCreatedAt() == null) {
+            return;
+        }
+        Timer.builder(DELIVERY_LATENCY)
+                .description("Time from accepting a message to its provider confirming the send")
+                .tag("channel", m.getChannel().name())
+                .serviceLevelObjectives(DELIVERY_LATENCY_THRESHOLDS)
+                .register(metrics)
+                .record(Duration.between(m.getCreatedAt(), sentAt));
     }
 
     private void count(Channel channel, String outcome) {

@@ -1,0 +1,306 @@
+# Copyright 2026 Vasantha Kumar
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+# @author Vasantha Kumar <vasantha.kumar@hotmail.com>
+#
+# Service level indicators, objectives and alerts for the notification service. See docs/slo.md and ADR-024.
+# Checked and unit-tested in CI with promtool (notification-slo.test.yml).
+groups:
+  - name: notification-sli
+    interval: 30s
+    rules:
+      - record: notification:accept_errors:ratio_rate5m
+        expr: |
+          sum(rate(http_server_requests_seconds_count{
+            method="POST", uri=~"/v1/notifications(/bulk(/upload)?)?", status=~"5.."
+          }[5m]))
+          /
+          sum(rate(http_server_requests_seconds_count{method="POST",uri=~"/v1/notifications(/bulk(/upload)?)?"}[5m]))
+      - record: notification:accept_errors:ratio_rate30m
+        expr: |
+          sum(rate(http_server_requests_seconds_count{
+            method="POST", uri=~"/v1/notifications(/bulk(/upload)?)?", status=~"5.."
+          }[30m]))
+          /
+          sum(rate(http_server_requests_seconds_count{method="POST",uri=~"/v1/notifications(/bulk(/upload)?)?"}[30m]))
+      - record: notification:accept_errors:ratio_rate1h
+        expr: |
+          sum(rate(http_server_requests_seconds_count{
+            method="POST", uri=~"/v1/notifications(/bulk(/upload)?)?", status=~"5.."
+          }[1h]))
+          /
+          sum(rate(http_server_requests_seconds_count{method="POST",uri=~"/v1/notifications(/bulk(/upload)?)?"}[1h]))
+      - record: notification:accept_errors:ratio_rate6h
+        expr: |
+          sum(rate(http_server_requests_seconds_count{
+            method="POST", uri=~"/v1/notifications(/bulk(/upload)?)?", status=~"5.."
+          }[6h]))
+          /
+          sum(rate(http_server_requests_seconds_count{method="POST",uri=~"/v1/notifications(/bulk(/upload)?)?"}[6h]))
+      - record: notification:accept_slow:ratio_rate5m
+        expr: |
+          1 - (
+            sum(rate(http_server_requests_seconds_bucket{method="POST",uri="/v1/notifications",le="0.25"}[5m]))
+            /
+            sum(rate(http_server_requests_seconds_count{method="POST",uri="/v1/notifications"}[5m]))
+          )
+      - record: notification:accept_slow:ratio_rate30m
+        expr: |
+          1 - (
+            sum(rate(http_server_requests_seconds_bucket{method="POST",uri="/v1/notifications",le="0.25"}[30m]))
+            /
+            sum(rate(http_server_requests_seconds_count{method="POST",uri="/v1/notifications"}[30m]))
+          )
+      - record: notification:accept_slow:ratio_rate1h
+        expr: |
+          1 - (
+            sum(rate(http_server_requests_seconds_bucket{method="POST",uri="/v1/notifications",le="0.25"}[1h]))
+            /
+            sum(rate(http_server_requests_seconds_count{method="POST",uri="/v1/notifications"}[1h]))
+          )
+      - record: notification:accept_slow:ratio_rate6h
+        expr: |
+          1 - (
+            sum(rate(http_server_requests_seconds_bucket{method="POST",uri="/v1/notifications",le="0.25"}[6h]))
+            /
+            sum(rate(http_server_requests_seconds_count{method="POST",uri="/v1/notifications"}[6h]))
+          )
+      - record: notification:delivery_late:ratio_rate5m
+        expr: |
+          1 - (
+            sum(rate(notification_delivery_latency_seconds_bucket{le="300.0"}[5m]))
+            /
+            sum(rate(notification_delivery_latency_seconds_count[5m]))
+          )
+      - record: notification:delivery_late:ratio_rate30m
+        expr: |
+          1 - (
+            sum(rate(notification_delivery_latency_seconds_bucket{le="300.0"}[30m]))
+            /
+            sum(rate(notification_delivery_latency_seconds_count[30m]))
+          )
+      - record: notification:delivery_late:ratio_rate1h
+        expr: |
+          1 - (
+            sum(rate(notification_delivery_latency_seconds_bucket{le="300.0"}[1h]))
+            /
+            sum(rate(notification_delivery_latency_seconds_count[1h]))
+          )
+      - record: notification:delivery_late:ratio_rate6h
+        expr: |
+          1 - (
+            sum(rate(notification_delivery_latency_seconds_bucket{le="300.0"}[6h]))
+            /
+            sum(rate(notification_delivery_latency_seconds_count[6h]))
+          )
+      - record: notification:delivery_failed:ratio_rate5m
+        expr: |
+          (
+            sum(rate(notification_dispatch_total{outcome="failed_exhausted"}[5m]))
+            + (sum(rate(notification_dead_letter_total[5m])) or vector(0))
+          )
+          /
+          (
+            sum(rate(notification_dispatch_total{outcome=~"sent|failed_exhausted"}[5m]))
+            + (sum(rate(notification_dead_letter_total[5m])) or vector(0))
+          )
+      - record: notification:delivery_failed:ratio_rate30m
+        expr: |
+          (
+            sum(rate(notification_dispatch_total{outcome="failed_exhausted"}[30m]))
+            + (sum(rate(notification_dead_letter_total[30m])) or vector(0))
+          )
+          /
+          (
+            sum(rate(notification_dispatch_total{outcome=~"sent|failed_exhausted"}[30m]))
+            + (sum(rate(notification_dead_letter_total[30m])) or vector(0))
+          )
+      - record: notification:delivery_failed:ratio_rate1h
+        expr: |
+          (
+            sum(rate(notification_dispatch_total{outcome="failed_exhausted"}[1h]))
+            + (sum(rate(notification_dead_letter_total[1h])) or vector(0))
+          )
+          /
+          (
+            sum(rate(notification_dispatch_total{outcome=~"sent|failed_exhausted"}[1h]))
+            + (sum(rate(notification_dead_letter_total[1h])) or vector(0))
+          )
+      - record: notification:delivery_failed:ratio_rate6h
+        expr: |
+          (
+            sum(rate(notification_dispatch_total{outcome="failed_exhausted"}[6h]))
+            + (sum(rate(notification_dead_letter_total[6h])) or vector(0))
+          )
+          /
+          (
+            sum(rate(notification_dispatch_total{outcome=~"sent|failed_exhausted"}[6h]))
+            + (sum(rate(notification_dead_letter_total[6h])) or vector(0))
+          )
+
+  - name: notification-slo-burn
+    rules:
+      - alert: NotificationAcceptAvailabilityBudgetBurnFast
+        expr: |
+          notification:accept_errors:ratio_rate1h > 0.0144
+          and
+          notification:accept_errors:ratio_rate5m > 0.0144
+        for: 2m
+        labels:
+          severity: critical
+          slo: accept-availability
+        annotations:
+          summary: "Accept availability: error budget burning 14.4x faster than it can last 30 days"
+          description: "Bad-event ratio over 1h is {{ $value | humanizePercentage }}; the budget is 0.1%."
+          runbook: docs/slo.md#accept-availability
+      - alert: NotificationAcceptAvailabilityBudgetBurnSlow
+        expr: |
+          notification:accept_errors:ratio_rate6h > 0.006
+          and
+          notification:accept_errors:ratio_rate30m > 0.006
+        for: 15m
+        labels:
+          severity: warning
+          slo: accept-availability
+        annotations:
+          summary: "Accept availability: error budget burning 6x faster than it can last 30 days"
+          description: "Bad-event ratio over 6h is {{ $value | humanizePercentage }}; the budget is 0.1%."
+          runbook: docs/slo.md#accept-availability
+      - alert: NotificationAcceptLatencyBudgetBurnFast
+        expr: |
+          notification:accept_slow:ratio_rate1h > 0.144
+          and
+          notification:accept_slow:ratio_rate5m > 0.144
+        for: 2m
+        labels:
+          severity: critical
+          slo: accept-latency
+        annotations:
+          summary: "Accept latency: error budget burning 14.4x faster than it can last 30 days"
+          description: "Bad-event ratio over 1h is {{ $value | humanizePercentage }}; the budget is 1%."
+          runbook: docs/slo.md#accept-latency
+      - alert: NotificationAcceptLatencyBudgetBurnSlow
+        expr: |
+          notification:accept_slow:ratio_rate6h > 0.06
+          and
+          notification:accept_slow:ratio_rate30m > 0.06
+        for: 15m
+        labels:
+          severity: warning
+          slo: accept-latency
+        annotations:
+          summary: "Accept latency: error budget burning 6x faster than it can last 30 days"
+          description: "Bad-event ratio over 6h is {{ $value | humanizePercentage }}; the budget is 1%."
+          runbook: docs/slo.md#accept-latency
+      - alert: NotificationDeliveryFreshnessBudgetBurnFast
+        expr: |
+          notification:delivery_late:ratio_rate1h > 0.144
+          and
+          notification:delivery_late:ratio_rate5m > 0.144
+        for: 2m
+        labels:
+          severity: critical
+          slo: delivery-freshness
+        annotations:
+          summary: "Delivery freshness: error budget burning 14.4x faster than it can last 30 days"
+          description: "Bad-event ratio over 1h is {{ $value | humanizePercentage }}; the budget is 1%."
+          runbook: docs/slo.md#delivery-freshness
+      - alert: NotificationDeliveryFreshnessBudgetBurnSlow
+        expr: |
+          notification:delivery_late:ratio_rate6h > 0.06
+          and
+          notification:delivery_late:ratio_rate30m > 0.06
+        for: 15m
+        labels:
+          severity: warning
+          slo: delivery-freshness
+        annotations:
+          summary: "Delivery freshness: error budget burning 6x faster than it can last 30 days"
+          description: "Bad-event ratio over 6h is {{ $value | humanizePercentage }}; the budget is 1%."
+          runbook: docs/slo.md#delivery-freshness
+      - alert: NotificationDeliverySuccessBudgetBurnFast
+        expr: |
+          notification:delivery_failed:ratio_rate1h > 0.072
+          and
+          notification:delivery_failed:ratio_rate5m > 0.072
+        for: 2m
+        labels:
+          severity: critical
+          slo: delivery-success
+        annotations:
+          summary: "Delivery success: error budget burning 14.4x faster than it can last 30 days"
+          description: "Bad-event ratio over 1h is {{ $value | humanizePercentage }}; the budget is 0.5%."
+          runbook: docs/slo.md#delivery-success
+      - alert: NotificationDeliverySuccessBudgetBurnSlow
+        expr: |
+          notification:delivery_failed:ratio_rate6h > 0.03
+          and
+          notification:delivery_failed:ratio_rate30m > 0.03
+        for: 15m
+        labels:
+          severity: warning
+          slo: delivery-success
+        annotations:
+          summary: "Delivery success: error budget burning 6x faster than it can last 30 days"
+          description: "Bad-event ratio over 6h is {{ $value | humanizePercentage }}; the budget is 0.5%."
+          runbook: docs/slo.md#delivery-success
+
+  - name: notification-symptoms
+    rules:
+      - alert: NotificationBacklogStale
+        expr: max(notification_backlog_oldest_age_seconds{status=~"PENDING|QUEUED"}) > 900
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "A message accepted over 15 minutes ago is still waiting to be sent"
+          description: "The oldest waiting message is {{ $value | humanizeDuration }} old."
+          runbook: docs/slo.md#backlog-stale
+      - alert: NotificationServiceDown
+        expr: up{job=~"notification-.*"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "{{ $labels.job }} on {{ $labels.instance }} cannot be scraped"
+          runbook: docs/slo.md#service-down
+      - alert: NotificationProviderCircuitOpen
+        expr: max by (name) (resilience4j_circuitbreaker_state{state="open"}) == 1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Provider {{ $labels.name }} has been failing for 5 minutes and its circuit is open"
+          runbook: docs/slo.md#provider-circuit-open
+      - alert: NotificationDeadLetters
+        expr: sum(increase(notification_dead_letter_total[15m])) > 0
+        labels:
+          severity: warning
+        annotations:
+          summary: "Messages were dead-lettered by the broker in the last 15 minutes"
+          runbook: docs/slo.md#dead-letters
+      - alert: NotificationRateLimiterFailingOpen
+        expr: sum(increase(notification_rate_limiter_errors_total[5m])) > 0
+        labels:
+          severity: warning
+        annotations:
+          summary: "Redis is not answering, so rate limits are not being enforced"
+          runbook: docs/slo.md#rate-limiter-failing-open
+      - alert: NotificationAuditWriteFailures
+        expr: sum(increase(notification_audit_write_failures_total[10m])) > 0
+        labels:
+          severity: critical
+        annotations:
+          summary: "Administrator actions are happening without an audit record"
+          runbook: docs/slo.md#audit-write-failures

@@ -1,0 +1,203 @@
+# Copyright 2026 Vasantha Kumar
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+# @author Vasantha Kumar <vasantha.kumar@hotmail.com>
+#
+# promtool unit tests for notification-slo.rules.yml: each case feeds synthetic metrics through the real rules and
+# states which alerts must fire and which must stay quiet. Run: promtool test rules notification-slo.test.yml
+rule_files:
+  - notification-slo.rules.yml
+evaluation_interval: 30s
+
+tests:
+  - name: five percent of accepts failing burns the availability budget fast
+    interval: 1m
+    input_series:
+      - series: 'http_server_requests_seconds_count{method="POST",uri="/v1/notifications",status="202"}'
+        values: '0+950x90'
+      - series: 'http_server_requests_seconds_count{method="POST",uri="/v1/notifications",status="500"}'
+        values: '0+50x90'
+    alert_rule_test:
+      - eval_time: 70m
+        alertname: NotificationAcceptAvailabilityBudgetBurnFast
+        exp_alerts:
+          - exp_labels: {severity: critical, slo: accept-availability}
+            exp_annotations:
+              summary: "Accept availability: error budget burning 14.4x faster than it can last 30 days"
+              description: "Bad-event ratio over 1h is 5%; the budget is 0.1%."
+              runbook: docs/slo.md#accept-availability
+
+  - name: accepts without server errors raise nothing
+    interval: 1m
+    input_series:
+      - series: 'http_server_requests_seconds_count{method="POST",uri="/v1/notifications",status="202"}'
+        values: '0+950x90'
+      - series: 'http_server_requests_seconds_count{method="POST",uri="/v1/notifications",status="400"}'
+        values: '0+50x90'
+    alert_rule_test:
+      - eval_time: 70m
+        alertname: NotificationAcceptAvailabilityBudgetBurnFast
+        exp_alerts: []
+      - eval_time: 70m
+        alertname: NotificationAcceptAvailabilityBudgetBurnSlow
+        exp_alerts: []
+
+  - name: ten percent of slow accepts is a slow burn, not a page
+    interval: 1m
+    input_series:
+      - series: 'http_server_requests_seconds_bucket{method="POST",uri="/v1/notifications",status="202",le="0.25"}'
+        values: '0+900x90'
+      - series: 'http_server_requests_seconds_count{method="POST",uri="/v1/notifications",status="202"}'
+        values: '0+1000x90'
+    alert_rule_test:
+      - eval_time: 70m
+        alertname: NotificationAcceptLatencyBudgetBurnFast
+        exp_alerts: []
+      - eval_time: 70m
+        alertname: NotificationAcceptLatencyBudgetBurnSlow
+        exp_alerts:
+          - exp_labels: {severity: warning, slo: accept-latency}
+            exp_annotations:
+              summary: "Accept latency: error budget burning 6x faster than it can last 30 days"
+              description: "Bad-event ratio over 6h is 10%; the budget is 1%."
+              runbook: docs/slo.md#accept-latency
+
+  - name: half the messages arriving late burns the freshness budget fast
+    interval: 1m
+    input_series:
+      - series: 'notification_delivery_latency_seconds_bucket{channel="SMS",le="300.0"}'
+        values: '0+50x90'
+      - series: 'notification_delivery_latency_seconds_count{channel="SMS"}'
+        values: '0+100x90'
+    alert_rule_test:
+      - eval_time: 70m
+        alertname: NotificationDeliveryFreshnessBudgetBurnFast
+        exp_alerts:
+          - exp_labels: {severity: critical, slo: delivery-freshness}
+            exp_annotations:
+              summary: "Delivery freshness: error budget burning 14.4x faster than it can last 30 days"
+              description: "Bad-event ratio over 1h is 50%; the budget is 1%."
+              runbook: docs/slo.md#delivery-freshness
+
+  - name: exhausted retries count against delivery success even with no dead letters reported
+    interval: 1m
+    input_series:
+      - series: 'notification_dispatch_total{channel="SMS",outcome="sent"}'
+        values: '0+90x90'
+      - series: 'notification_dispatch_total{channel="SMS",outcome="failed_exhausted"}'
+        values: '0+10x90'
+      - series: 'notification_dispatch_total{channel="SMS",outcome="failed_permanent"}'
+        values: '0+500x90'
+    alert_rule_test:
+      - eval_time: 70m
+        alertname: NotificationDeliverySuccessBudgetBurnFast
+        exp_alerts:
+          - exp_labels: {severity: critical, slo: delivery-success}
+            exp_annotations:
+              summary: "Delivery success: error budget burning 14.4x faster than it can last 30 days"
+              description: "Bad-event ratio over 1h is 10%; the budget is 0.5%."
+              runbook: docs/slo.md#delivery-success
+
+  - name: rejected recipients are failures of the caller and spend no budget
+    interval: 1m
+    input_series:
+      - series: 'notification_dispatch_total{channel="SMS",outcome="sent"}'
+        values: '0+90x90'
+      - series: 'notification_dispatch_total{channel="SMS",outcome="failed_permanent"}'
+        values: '0+500x90'
+    alert_rule_test:
+      - eval_time: 70m
+        alertname: NotificationDeliverySuccessBudgetBurnFast
+        exp_alerts: []
+
+  - name: a message waiting over fifteen minutes is a stale backlog
+    interval: 1m
+    input_series:
+      - series: 'notification_backlog_oldest_age_seconds{status="QUEUED"}'
+        values: '1000x15'
+      - series: 'notification_backlog_oldest_age_seconds{status="RETRYING"}'
+        values: '5000x15'
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: NotificationBacklogStale
+        exp_alerts:
+          - exp_labels: {severity: critical}
+            exp_annotations:
+              summary: A message accepted over 15 minutes ago is still waiting to be sent
+              description: The oldest waiting message is 16m 40s old.
+              runbook: docs/slo.md#backlog-stale
+
+  - name: messages waiting out retry backoff alone are not a stale backlog
+    interval: 1m
+    input_series:
+      - series: 'notification_backlog_oldest_age_seconds{status="QUEUED"}'
+        values: '20x15'
+      - series: 'notification_backlog_oldest_age_seconds{status="RETRYING"}'
+        values: '5000x15'
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: NotificationBacklogStale
+        exp_alerts: []
+
+  - name: operational failures that bypass the objectives
+    interval: 1m
+    input_series:
+      - series: 'up{job="notification-dispatcher",instance="dispatcher:8082"}'
+        values: '0x10'
+      - series: 'resilience4j_circuitbreaker_state{name="catcher-sms",state="open"}'
+        values: '1x10'
+      - series: 'resilience4j_circuitbreaker_state{name="mailpit-smtp",state="open"}'
+        values: '0x10'
+      - series: 'notification_dead_letter_total{channel="SMS"}'
+        values: '0 0 0 2 2 2 2 2 2 2 2'
+      - series: 'notification_rate_limiter_errors_total'
+        values: '0 0 0 1 3 3 3 3 3 3 3'
+      - series: 'notification_audit_write_failures_total'
+        values: '0 0 0 1 1 1 1 1 1 1 1'
+    alert_rule_test:
+      - eval_time: 6m
+        alertname: NotificationServiceDown
+        exp_alerts:
+          - exp_labels: {severity: critical, job: notification-dispatcher, instance: "dispatcher:8082"}
+            exp_annotations:
+              summary: "notification-dispatcher on dispatcher:8082 cannot be scraped"
+              runbook: docs/slo.md#service-down
+      - eval_time: 6m
+        alertname: NotificationProviderCircuitOpen
+        exp_alerts:
+          - exp_labels: {severity: warning, name: catcher-sms}
+            exp_annotations:
+              summary: Provider catcher-sms has been failing for 5 minutes and its circuit is open
+              runbook: docs/slo.md#provider-circuit-open
+      - eval_time: 6m
+        alertname: NotificationDeadLetters
+        exp_alerts:
+          - exp_labels: {severity: warning}
+            exp_annotations:
+              summary: Messages were dead-lettered by the broker in the last 15 minutes
+              runbook: docs/slo.md#dead-letters
+      - eval_time: 6m
+        alertname: NotificationRateLimiterFailingOpen
+        exp_alerts:
+          - exp_labels: {severity: warning}
+            exp_annotations:
+              summary: Redis is not answering, so rate limits are not being enforced
+              runbook: docs/slo.md#rate-limiter-failing-open
+      - eval_time: 6m
+        alertname: NotificationAuditWriteFailures
+        exp_alerts:
+          - exp_labels: {severity: critical}
+            exp_annotations:
+              summary: Administrator actions are happening without an audit record
+              runbook: docs/slo.md#audit-write-failures
