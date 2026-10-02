@@ -59,6 +59,13 @@ class OperationalEndpointsConfigurationTest {
                 .isEqualTo(0.1);
     }
 
+    /** Kubernetes probes {@code /actuator/health/liveness} and {@code /readiness} on the management port. */
+    @Test
+    void livenessAndReadinessProbesAreServed() {
+        assertThat(shippedConfiguration.getProperty("management.endpoint.health.probes.enabled", Boolean.class))
+                .isTrue();
+    }
+
     @Test
     void onlyHealthInformationAndMetricsAreExposed() {
         assertThat(shippedConfiguration.getProperty("management.endpoints.web.exposure.include"))

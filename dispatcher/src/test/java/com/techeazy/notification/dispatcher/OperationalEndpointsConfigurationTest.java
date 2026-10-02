@@ -15,7 +15,7 @@
  *
  * @author Vasantha Kumar <vasantha.kumar@hotmail.com>
  */
-package com.techeazy.notification.adminapi;
+package com.techeazy.notification.dispatcher;
 
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -30,8 +30,7 @@ import java.io.IOException;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * The shipped configuration keeps operational endpoints off the port that the reverse proxy publishes (see ADR-021).
- * Read from {@code application.yml} with only its own defaults, so a variable set on the build machine cannot mask it.
+ * The dispatcher has no public surface; its only port serves health and metrics (see ADR-021). Read from {@code application.yml} with only its own defaults, so a variable set on the build machine cannot mask it.
  */
 class OperationalEndpointsConfigurationTest {
 
@@ -45,20 +44,6 @@ class OperationalEndpointsConfigurationTest {
         shippedConfiguration = new PropertySourcesPropertyResolver(sources);
     }
 
-    @Test
-    void actuatorIsServedOnItsOwnManagementPortNotOnThePublicOne() {
-        assertThat(shippedConfiguration.getProperty("server.port", Integer.class)).isEqualTo(8081);
-        assertThat(shippedConfiguration.getProperty("management.server.port", Integer.class)).isEqualTo(9081);
-    }
-
-    /** Machine-readable logs, each line carrying its trace id, unless {@code LOG_FORMAT} is set empty (see ADR-023). */
-    @Test
-    void logsAreStructuredAndTracesSampledByDefault() {
-        assertThat(shippedConfiguration.getProperty("logging.structured.format.console")).isEqualTo("ecs");
-        assertThat(shippedConfiguration.getProperty("management.tracing.sampling.probability", Double.class))
-                .isEqualTo(0.1);
-    }
-
     /** Kubernetes probes {@code /actuator/health/liveness} and {@code /readiness} on the management port. */
     @Test
     void livenessAndReadinessProbesAreServed() {
@@ -69,13 +54,6 @@ class OperationalEndpointsConfigurationTest {
     @Test
     void onlyHealthInformationAndMetricsAreExposed() {
         assertThat(shippedConfiguration.getProperty("management.endpoints.web.exposure.include"))
-                .isEqualTo("health,info,prometheus");
-    }
-
-    /** The admin API documentation maps the whole administrative surface, so it is off unless switched on. */
-    @Test
-    void apiDocumentationIsServedOnlyWhereIntended() {
-        assertThat(shippedConfiguration.getProperty("springdoc.api-docs.enabled", Boolean.class)).isEqualTo(false);
-        assertThat(shippedConfiguration.getProperty("springdoc.swagger-ui.enabled", Boolean.class)).isEqualTo(false);
+                .isEqualTo("health,info,prometheus,providerhealth");
     }
 }

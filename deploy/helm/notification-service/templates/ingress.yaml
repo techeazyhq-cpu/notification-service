@@ -1,0 +1,63 @@
+{{/*
+Copyright 2026 Vasantha Kumar. Licensed under the Apache License, Version 2.0.
+@author Vasantha Kumar <vasantha.kumar@hotmail.com>
+
+Three hosts: the client API on its own, the client UI with the API paths it calls, and the admin UI with /api.
+Management ports are never routed (ADR-021).
+*/}}
+{{- if .Values.ingress.enabled }}
+{{- $root := . -}}
+{{- $clientApi := include "notification.componentName" (dict "root" . "component" "client-api") }}
+{{- $adminApi := include "notification.componentName" (dict "root" . "component" "admin-api") }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ .Release.Name }}-notification
+  labels:
+    {{- include "notification.labels" (dict "root" . "component" "ingress") | nindent 4 }}
+  {{- with .Values.ingress.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  {{- with .Values.ingress.className }}
+  ingressClassName: {{ . }}
+  {{- end }}
+  {{- with .Values.ingress.tls }}
+  tls:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  rules:
+    - host: {{ .Values.ingress.hosts.api | quote }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend: {service: {name: {{ $clientApi }}, port: {name: http}}}
+    - host: {{ .Values.ingress.hosts.app | quote }}
+      http:
+        paths:
+          {{- range list "/v1" "/swagger-ui" "/swagger-ui.html" "/v3/api-docs" }}
+          - path: {{ . }}
+            pathType: Prefix
+            backend: {service: {name: {{ $clientApi }}, port: {name: http}}}
+          {{- end }}
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "notification.componentName" (dict "root" $root "component" "client-ui") }}
+                port: {name: http}
+    - host: {{ .Values.ingress.hosts.admin | quote }}
+      http:
+        paths:
+          - path: /api
+            pathType: Prefix
+            backend: {service: {name: {{ $adminApi }}, port: {name: http}}}
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "notification.componentName" (dict "root" $root "component" "admin-ui") }}
+                port: {name: http}
+{{- end }}

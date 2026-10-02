@@ -78,6 +78,10 @@ management:
       probability: ${TRACING_SAMPLING_PROBABILITY:0.1}
   server:
     port: ${MANAGEMENT_PORT:9081}
+  endpoint:
+    health:
+      probes:
+        enabled: true
   endpoints:
     web:
       exposure:

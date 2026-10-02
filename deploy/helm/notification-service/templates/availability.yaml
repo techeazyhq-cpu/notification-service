@@ -1,0 +1,61 @@
+{{/*
+Copyright 2026 Vasantha Kumar. Licensed under the Apache License, Version 2.0.
+@author Vasantha Kumar <vasantha.kumar@hotmail.com>
+
+Service account (no API token: nothing here talks to the Kubernetes API), disruption budgets so a node drain never
+takes a component to zero, and CPU autoscaling where enabled.
+*/}}
+{{- $root := . -}}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ .Release.Name }}-notification
+  labels:
+    {{- include "notification.labels" (dict "root" . "component" "service-account") | nindent 4 }}
+automountServiceAccountToken: false
+{{- $components := list
+      (dict "component" "client-api" "settings" .Values.clientApi)
+      (dict "component" "admin-api" "settings" .Values.adminApi)
+      (dict "component" "dispatcher" "settings" .Values.dispatcher)
+      (dict "component" "admin-ui" "settings" .Values.adminUi)
+      (dict "component" "client-ui" "settings" .Values.clientUi) -}}
+{{- range $components }}
+{{- $context := dict "root" $root "component" .component }}
+{{- $autoscaling := .settings.autoscaling | default dict }}
+{{- $minimum := ternary $autoscaling.minReplicas .settings.replicas (default false $autoscaling.enabled) }}
+{{- if gt (int $minimum) 1 }}
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "notification.componentName" $context }}
+  labels:
+    {{- include "notification.labels" $context | nindent 4 }}
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      {{- include "notification.selectorLabels" $context | nindent 6 }}
+{{- end }}
+{{- if $autoscaling.enabled }}
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: {{ include "notification.componentName" $context }}
+  labels:
+    {{- include "notification.labels" $context | nindent 4 }}
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: {{ include "notification.componentName" $context }}
+  minReplicas: {{ $autoscaling.minReplicas }}
+  maxReplicas: {{ $autoscaling.maxReplicas }}
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target: {type: Utilization, averageUtilization: {{ $autoscaling.targetCPUUtilizationPercentage }}}
+{{- end }}
+{{- end }}

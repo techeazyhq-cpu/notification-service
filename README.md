@@ -191,6 +191,22 @@ GitHub Actions run on every pull request and on `main` (`.github/workflows`):
 
 Make the **CI** and **Security** checks required in the branch protection rules of `main` so nothing merges while they are red.
 
+## Deploying to Kubernetes
+
+`deploy/helm/notification-service` installs all six components:
+- the migration runs as a pre-upgrade hook and gates every release;
+- pods are hardened (non-root, read-only filesystem, no capabilities), with two replicas, disruption budgets and
+  autoscaling;
+- network policies deny by default.
+
+PostgreSQL, Redis and Pulsar are external. Before installing:
+- create the Secret it references from your secrets manager;
+- set `networkPolicy.datastoreEgress` for your datastores;
+- install as release `notification`.
+
+The chart's `values.yaml` documents every setting. To try it locally on k3s in Docker, follow
+[deploy/k8s/dev/README.md](deploy/k8s/dev/README.md). See ADR-025.
+
 ## Tracing and logs
 
 Every request gets a trace that follows the message through Pulsar to the dispatcher and each provider call; responses return its id in `X-Trace-Id`, and every log line carries the same `traceId`. Quote it when reporting a problem. Logs are JSON (Elastic Common Schema) unless `LOG_FORMAT` is set empty, which `docker compose` does. Spans are exported over OTLP when `MANAGEMENT_OTLP_TRACING_ENDPOINT` is set; `TRACING_SAMPLING_PROBABILITY` (default 0.1) decides how many. To see traces locally:

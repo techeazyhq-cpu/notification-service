@@ -1,0 +1,143 @@
+{{/*
+Copyright 2026 Vasantha Kumar. Licensed under the Apache License, Version 2.0.
+@author Vasantha Kumar <vasantha.kumar@hotmail.com>
+
+Default deny for every pod of the release, then only what each component needs (ADR-025). An empty peer list
+grants nothing: Kubernetes reads "from: []" as "from anywhere", so such a rule is not rendered at all.
+- public ports from the ingress controller, management ports from monitoring;
+- DNS for everyone; datastores and telemetry for the Java services and the migration job;
+- providers for the dispatcher and client-api (sender confirmation e-mail): the listed ports anywhere except private
+  ranges, plus any trusted internal gateways. This is the network-level half of the provider destination policy and
+  closes what the application check cannot: a host that resolves to a public address when checked and to an internal
+  one when connected (ADR-022).
+*/}}
+{{- if .Values.networkPolicy.enabled }}
+{{- $root := . -}}
+{{- $policy := .Values.networkPolicy -}}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ .Release.Name }}-default-deny
+  labels:
+    {{- include "notification.labels" (dict "root" . "component" "network-policy") | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "notification.releaseSelector" . | nindent 6 }}
+  policyTypes: [Ingress, Egress]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ .Release.Name }}-dns
+  labels:
+    {{- include "notification.labels" (dict "root" . "component" "network-policy") | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "notification.releaseSelector" . | nindent 6 }}
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels: {kubernetes.io/metadata.name: kube-system}
+          podSelector:
+            matchLabels: {k8s-app: kube-dns}
+      ports:
+        - {protocol: UDP, port: 53}
+        - {protocol: TCP, port: 53}
+{{- $publicComponents := list
+      (dict "component" "client-api" "port" .Values.clientApi.port)
+      (dict "component" "admin-api" "port" .Values.adminApi.port)
+      (dict "component" "admin-ui" "port" .Values.adminUi.port)
+      (dict "component" "client-ui" "port" .Values.clientUi.port) }}
+{{- if $policy.ingressControllerPeers }}
+{{- range $publicComponents }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "notification.componentName" (dict "root" $root "component" .component) }}-from-ingress
+  labels:
+    {{- include "notification.labels" (dict "root" $root "component" "network-policy") | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "notification.selectorLabels" (dict "root" $root "component" .component) | nindent 6 }}
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        {{- toYaml $policy.ingressControllerPeers | nindent 8 }}
+      ports:
+        - {protocol: TCP, port: {{ .port }}}
+{{- end }}
+{{- end }}
+{{- $monitoredComponents := list
+      (dict "component" "client-api" "port" .Values.clientApi.managementPort)
+      (dict "component" "admin-api" "port" .Values.adminApi.managementPort)
+      (dict "component" "dispatcher" "port" .Values.dispatcher.managementPort) }}
+{{- if $policy.monitoringPeers }}
+{{- range $monitoredComponents }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "notification.componentName" (dict "root" $root "component" .component) }}-from-monitoring
+  labels:
+    {{- include "notification.labels" (dict "root" $root "component" "network-policy") | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "notification.selectorLabels" (dict "root" $root "component" .component) | nindent 6 }}
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        {{- toYaml $policy.monitoringPeers | nindent 8 }}
+      ports:
+        - {protocol: TCP, port: {{ .port }}}
+{{- end }}
+{{- end }}
+{{- with (concat $policy.datastoreEgress $policy.telemetryEgress) }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ $root.Release.Name }}-to-datastores
+  labels:
+    {{- include "notification.labels" (dict "root" $root "component" "network-policy") | nindent 4 }}
+spec:
+  podSelector:
+    matchExpressions:
+      - {key: app.kubernetes.io/instance, operator: In, values: [{{ $root.Release.Name }}]}
+      - {key: app.kubernetes.io/component, operator: In, values: [client-api, admin-api, dispatcher, db-migration]}
+  policyTypes: [Egress]
+  egress:
+    {{- toYaml . | nindent 4 }}
+{{- end }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ .Release.Name }}-to-providers
+  labels:
+    {{- include "notification.labels" (dict "root" . "component" "network-policy") | nindent 4 }}
+spec:
+  podSelector:
+    matchExpressions:
+      - {key: app.kubernetes.io/instance, operator: In, values: [{{ .Release.Name }}]}
+      - {key: app.kubernetes.io/component, operator: In, values: [client-api, dispatcher]}
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except:
+              {{- toYaml $policy.providerEgress.exceptCidrs | nindent 14 }}
+      ports:
+        {{- range $policy.providerEgress.ports }}
+        - {protocol: TCP, port: {{ . }}}
+        {{- end }}
+    {{- with $policy.providerEgress.trustedInternalEgress }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+{{- end }}

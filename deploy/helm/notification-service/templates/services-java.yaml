@@ -1,0 +1,130 @@
+{{/*
+Copyright 2026 Vasantha Kumar. Licensed under the Apache License, Version 2.0.
+@author Vasantha Kumar <vasantha.kumar@hotmail.com>
+
+client-api, admin-api and the dispatcher: Deployment and Service each.
+*/}}
+{{- $root := . -}}
+{{- $components := list
+      (dict "component" "client-api" "settings" .Values.clientApi)
+      (dict "component" "admin-api" "settings" .Values.adminApi)
+      (dict "component" "dispatcher" "settings" .Values.dispatcher) -}}
+{{- range $components }}
+{{- $component := .component }}
+{{- $settings := .settings }}
+{{- $context := dict "root" $root "component" $component }}
+{{- $separateManagementPort := ne (int $settings.port) (int $settings.managementPort) }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "notification.componentName" $context }}
+  labels:
+    {{- include "notification.labels" $context | nindent 4 }}
+spec:
+  {{- if not $settings.autoscaling.enabled }}
+  replicas: {{ $settings.replicas }}
+  {{- end }}
+  revisionHistoryLimit: 5
+  strategy:
+    type: RollingUpdate
+    rollingUpdate: {maxUnavailable: 0, maxSurge: 1}
+  selector:
+    matchLabels:
+      {{- include "notification.selectorLabels" $context | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "notification.selectorLabels" $context | nindent 8 }}
+    spec:
+      serviceAccountName: {{ $root.Release.Name }}-notification
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 45
+      securityContext:
+        {{- include "notification.podSecurityContext" (dict "uid" 1001) | nindent 8 }}
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              {{- include "notification.selectorLabels" $context | nindent 14 }}
+      {{- with $root.Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: {{ $component }}
+          image: {{ include "notification.image" $context }}
+          imagePullPolicy: {{ $root.Values.image.pullPolicy }}
+          ports:
+            {{- if $separateManagementPort }}
+            - {name: http, containerPort: {{ $settings.port }}}
+            {{- end }}
+            - {name: management, containerPort: {{ $settings.managementPort }}}
+          env:
+            - name: SERVER_PORT
+              value: {{ $settings.port | quote }}
+            {{- if $separateManagementPort }}
+            - name: MANAGEMENT_PORT
+              value: {{ $settings.managementPort | quote }}
+            {{- end }}
+            {{- include "notification.serviceEnv" $root | nindent 12 }}
+            {{- if eq $component "client-api" }}
+            - name: CLIENT_API_PUBLIC_BASE_URL
+              value: {{ $root.Values.config.clientApiPublicBaseUrl | quote }}
+            - name: CLIENT_API_CORS_ORIGINS
+              value: {{ $root.Values.config.clientApiCorsOrigins | quote }}
+            {{- end }}
+            {{- if eq $component "admin-api" }}
+            - name: ADMIN_USERNAME
+              value: {{ $root.Values.config.admin.username | quote }}
+            - name: ADMIN_PASSWORD
+              valueFrom: {secretKeyRef: {name: {{ $root.Values.secrets.existingSecret }}, key: ADMIN_PASSWORD}}
+            - name: ADMIN_TWO_FACTOR_KEY
+              valueFrom: {secretKeyRef: {name: {{ $root.Values.secrets.existingSecret }}, key: ADMIN_TWO_FACTOR_KEY}}
+            - name: ADMIN_CORS_ORIGINS
+              value: {{ $root.Values.config.adminCorsOrigins | quote }}
+            - name: FORWARD_HEADERS_STRATEGY
+              value: {{ ternary "native" "none" $root.Values.networkPolicy.enabled | quote }}
+            {{- end }}
+            {{- if eq $component "dispatcher" }}
+            - name: CONSUMERS_PER_CHANNEL
+              value: {{ $settings.consumersPerChannel | quote }}
+            {{- end }}
+          {{- include "notification.javaProbes" . | nindent 10 }}
+          lifecycle:
+            preStop:
+              sleep: {seconds: 5}
+          resources:
+            {{- toYaml $settings.resources | nindent 12 }}
+          securityContext:
+            {{- include "notification.containerSecurityContext" . | nindent 12 }}
+          volumeMounts:
+            - {name: tmp, mountPath: /tmp}
+            {{- with $settings.extraVolumeMounts }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+      volumes:
+        - name: tmp
+          emptyDir: {sizeLimit: 256Mi}
+        {{- with $settings.extraVolumes }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "notification.componentName" $context }}
+  labels:
+    {{- include "notification.labels" $context | nindent 4 }}
+spec:
+  type: ClusterIP
+  selector:
+    {{- include "notification.selectorLabels" $context | nindent 4 }}
+  ports:
+    {{- if $separateManagementPort }}
+    - {name: http, port: {{ $settings.port }}, targetPort: http}
+    {{- end }}
+    - {name: management, port: {{ $settings.managementPort }}, targetPort: management}
+{{- end }}

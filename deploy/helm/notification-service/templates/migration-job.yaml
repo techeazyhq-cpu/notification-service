@@ -1,0 +1,60 @@
+{{/*
+Copyright 2026 Vasantha Kumar. Licensed under the Apache License, Version 2.0.
+@author Vasantha Kumar <vasantha.kumar@hotmail.com>
+
+Liquibase migration (ADR-003) before every install and upgrade, as the schema owner. A failed migration fails the
+release before any service is replaced. The finished Job is kept for a day so its log can be read.
+*/}}
+{{- if .Values.migration.enabled }}
+{{- $context := dict "root" . "component" "db-migration" }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "notification.componentName" $context }}
+  labels:
+    {{- include "notification.labels" $context | nindent 4 }}
+  annotations:
+    helm.sh/hook: pre-install,pre-upgrade
+    helm.sh/hook-weight: "0"
+    helm.sh/hook-delete-policy: before-hook-creation
+spec:
+  backoffLimit: {{ .Values.migration.backoffLimit }}
+  activeDeadlineSeconds: 900
+  ttlSecondsAfterFinished: 86400
+  template:
+    metadata:
+      labels:
+        {{- include "notification.selectorLabels" $context | nindent 8 }}
+    spec:
+      restartPolicy: Never
+      automountServiceAccountToken: false
+      securityContext:
+        {{- include "notification.podSecurityContext" (dict "uid" 1001) | nindent 8 }}
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: db-migration
+          image: {{ include "notification.image" $context }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          args: ["update"]
+          env:
+            - name: DB_URL
+              value: {{ .Values.config.database.url | quote }}
+            - name: DB_USER
+              value: {{ .Values.config.database.migrationUser | quote }}
+            - name: DB_PASSWORD
+              valueFrom: {secretKeyRef: {name: {{ .Values.secrets.existingSecret }}, key: MIGRATION_DB_PASSWORD}}
+            - name: LOG_FORMAT
+              value: {{ .Values.config.logFormat | quote }}
+          resources:
+            {{- toYaml .Values.migration.resources | nindent 12 }}
+          securityContext:
+            {{- include "notification.containerSecurityContext" . | nindent 12 }}
+          volumeMounts:
+            - {name: tmp, mountPath: /tmp}
+      volumes:
+        - name: tmp
+          emptyDir: {sizeLimit: 64Mi}
+{{- end }}

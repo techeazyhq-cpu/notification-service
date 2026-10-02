@@ -223,6 +223,16 @@ class SecurityRulesTest {
         assertThat(auditLog.recorded()).isEmpty();
     }
 
+    /** Kubernetes probes these without credentials; a 401 would keep every admin-api pod out of service. */
+    @Test
+    void healthProbesAndMetricsNeedNoSession() throws Exception {
+        assertThat(status(null, HttpMethod.GET, "/actuator/health")).isEqualTo(404);
+        assertThat(status(null, HttpMethod.GET, "/actuator/health/liveness")).isEqualTo(404);
+        assertThat(status(null, HttpMethod.GET, "/actuator/health/readiness")).isEqualTo(404);
+        assertThat(status(null, HttpMethod.GET, "/actuator/prometheus")).isEqualTo(404);
+        assertThat(status(null, HttpMethod.GET, "/actuator/env")).isEqualTo(401);
+    }
+
     @Test
     void anythingOutsideTheApiIsDenied() throws Exception {
         assertThat(status(AdminRole.ADMIN, HttpMethod.GET, "/somewhere-else")).isEqualTo(403);

@@ -1,0 +1,147 @@
+# Copyright 2026 Vasantha Kumar
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+# @author Vasantha Kumar <vasantha.kumar@hotmail.com>
+#
+# DEVELOPMENT ONLY: single-replica, non-persistent PostgreSQL, Redis, Pulsar and the two provider catchers, to try
+# the Helm chart on a local cluster (k3s, kind). Production datastores are managed services or operators (ADR-025).
+# Needs the Secret "datastore-credentials" (keys POSTGRES_PASSWORD, DB_APP_PASSWORD) and the ConfigMap
+# "postgres-init" made from scripts/postgres-init; see deploy/k8s/dev/README.md.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: datastores
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: postgres, namespace: datastores}
+spec:
+  selector: {matchLabels: {app: postgres}}
+  template:
+    metadata: {labels: {app: postgres}}
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:16-alpine
+          env:
+            - {name: POSTGRES_DB, value: notification}
+            - {name: POSTGRES_USER, value: notification}
+            - {name: DB_APP_USER, value: notification_app}
+            - name: POSTGRES_PASSWORD
+              valueFrom: {secretKeyRef: {name: datastore-credentials, key: POSTGRES_PASSWORD}}
+            - name: DB_APP_PASSWORD
+              valueFrom: {secretKeyRef: {name: datastore-credentials, key: DB_APP_PASSWORD}}
+          ports: [{containerPort: 5432}]
+          readinessProbe:
+            exec: {command: [pg_isready, -U, notification]}
+            periodSeconds: 5
+          volumeMounts:
+            - {name: init, mountPath: /docker-entrypoint-initdb.d, readOnly: true}
+      volumes:
+        - name: init
+          configMap: {name: postgres-init}
+---
+apiVersion: v1
+kind: Service
+metadata: {name: postgres, namespace: datastores}
+spec:
+  selector: {app: postgres}
+  ports: [{port: 5432}]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: redis, namespace: datastores}
+spec:
+  selector: {matchLabels: {app: redis}}
+  template:
+    metadata: {labels: {app: redis}}
+    spec:
+      containers:
+        - name: redis
+          image: redis:7-alpine
+          ports: [{containerPort: 6379}]
+---
+apiVersion: v1
+kind: Service
+metadata: {name: redis, namespace: datastores}
+spec:
+  selector: {app: redis}
+  ports: [{port: 6379}]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: pulsar, namespace: datastores}
+spec:
+  selector: {matchLabels: {app: pulsar}}
+  template:
+    metadata: {labels: {app: pulsar}}
+    spec:
+      containers:
+        - name: pulsar
+          image: apachepulsar/pulsar:3.3.3
+          command: [bin/pulsar, standalone, -nfw, -nss]
+          env:
+            - {name: PULSAR_MEM, value: "-Xms512m -Xmx768m -XX:MaxDirectMemorySize=512m"}
+          ports: [{containerPort: 6650}]
+          readinessProbe:
+            tcpSocket: {port: 6650}
+            periodSeconds: 10
+---
+apiVersion: v1
+kind: Service
+metadata: {name: pulsar, namespace: datastores}
+spec:
+  selector: {app: pulsar}
+  ports: [{port: 6650}]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: mailpit, namespace: datastores}
+spec:
+  selector: {matchLabels: {app: mailpit}}
+  template:
+    metadata: {labels: {app: mailpit}}
+    spec:
+      containers:
+        - name: mailpit
+          image: axllent/mailpit:v1.31.3
+          ports: [{containerPort: 1025}, {containerPort: 8025}]
+---
+apiVersion: v1
+kind: Service
+metadata: {name: mailpit, namespace: datastores}
+spec:
+  selector: {app: mailpit}
+  ports: [{name: smtp, port: 1025}, {name: web, port: 8025}]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: catcher, namespace: datastores}
+spec:
+  selector: {matchLabels: {app: catcher}}
+  template:
+    metadata: {labels: {app: catcher}}
+    spec:
+      containers:
+        - name: catcher
+          image: registry.local/notification-catcher:test
+          imagePullPolicy: Never
+          ports: [{containerPort: 9000}]
+---
+apiVersion: v1
+kind: Service
+metadata: {name: catcher, namespace: datastores}
+spec:
+  selector: {app: catcher}
+  ports: [{port: 9000}]

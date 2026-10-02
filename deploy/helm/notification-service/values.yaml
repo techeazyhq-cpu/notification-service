@@ -1,0 +1,163 @@
+# Copyright 2026 Vasantha Kumar
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+# @author Vasantha Kumar <vasantha.kumar@hotmail.com>
+#
+# Install as release "notification" so services are named notification-<component>, which is what the
+# NotificationServiceDown alert matches (docs/slo.md). Datastores are not part of this chart (ADR-025).
+
+image:
+  # Images are named <registry>/<repository prefix><component>, e.g. registry.example.com/notification-client-api.
+  registry: registry.example.com
+  repositoryPrefix: notification-
+  # Defaults to the chart's appVersion. Pin by digest in production: tag: "0.1.0@sha256:...".
+  tag: ""
+  pullPolicy: IfNotPresent
+imagePullSecrets: []
+
+# Secrets are never stored in this chart. Create this Secret from your secrets manager (External Secrets, Sealed
+# Secrets, Vault) with the keys DB_PASSWORD (runtime role), MIGRATION_DB_PASSWORD (schema owner),
+# SECRETS_ENCRYPTION_KEY, DATA_ENCRYPTION_KEY, ADMIN_TWO_FACTOR_KEY and ADMIN_PASSWORD.
+secrets:
+  existingSecret: notification-secrets
+
+config:
+  database:
+    url: jdbc:postgresql://postgres:5432/notification?sslmode=verify-full
+    # Runtime role with DML rights only; the migration job uses the schema owner (ADR-012).
+    appUser: notification_app
+    migrationUser: notification
+  redis:
+    host: redis
+    port: 6379
+  pulsar:
+    url: pulsar+ssl://pulsar:6651
+    # Path of the broker CA inside the containers; mount it with each component's extraVolumes.
+    tlsTrustCertsFile: ""
+  # Hosts providers may reach even when internal or plain HTTP (ADR-022). Comma-separated, *.domain allowed.
+  providerTrustedHosts: ""
+  otherPublicProviderHostsAllowed: true
+  # OTLP endpoint for traces, e.g. http://otel-collector.observability:4318/v1/traces; empty means not exported.
+  otlpTracingEndpoint: ""
+  tracingSamplingProbability: "0.1"
+  logFormat: ecs
+  admin:
+    username: admin
+  clientApiPublicBaseUrl: https://api.example.com
+  clientApiCorsOrigins: https://app.example.com
+  adminCorsOrigins: https://admin.example.com
+  # Any further environment variables for every service, as a map.
+  extraEnv: {}
+
+clientApi:
+  replicas: 2
+  port: 8080
+  managementPort: 9080
+  resources:
+    requests: {cpu: 500m, memory: 768Mi}
+    limits: {memory: 1Gi}
+  autoscaling: {enabled: true, minReplicas: 2, maxReplicas: 10, targetCPUUtilizationPercentage: 70}
+  extraVolumes: []
+  extraVolumeMounts: []
+
+adminApi:
+  replicas: 2
+  port: 8081
+  managementPort: 9081
+  resources:
+    requests: {cpu: 250m, memory: 640Mi}
+    limits: {memory: 768Mi}
+  autoscaling: {enabled: false, minReplicas: 2, maxReplicas: 4, targetCPUUtilizationPercentage: 70}
+  extraVolumes: []
+  extraVolumeMounts: []
+
+dispatcher:
+  replicas: 2
+  # The dispatcher has no public surface: its only port serves health and metrics (ADR-021).
+  port: 8082
+  managementPort: 8082
+  consumersPerChannel: 2
+  resources:
+    requests: {cpu: 500m, memory: 640Mi}
+    limits: {memory: 896Mi}
+  autoscaling: {enabled: true, minReplicas: 2, maxReplicas: 8, targetCPUUtilizationPercentage: 70}
+  extraVolumes: []
+  extraVolumeMounts: []
+
+adminUi:
+  replicas: 2
+  port: 8080
+  resources:
+    requests: {cpu: 50m, memory: 32Mi}
+    limits: {memory: 64Mi}
+
+clientUi:
+  replicas: 2
+  port: 8080
+  resources:
+    requests: {cpu: 50m, memory: 32Mi}
+    limits: {memory: 64Mi}
+
+migration:
+  # Runs Liquibase as a pre-install and pre-upgrade hook; services refuse to start against an outdated schema.
+  enabled: true
+  backoffLimit: 2
+  resources:
+    requests: {cpu: 250m, memory: 384Mi}
+    limits: {memory: 512Mi}
+
+ingress:
+  enabled: true
+  className: ""
+  annotations: {}
+  hosts:
+    api: api.example.com
+    app: app.example.com
+    admin: admin.example.com
+  # e.g. [{secretName: notification-tls, hosts: [api.example.com, app.example.com, admin.example.com]}]
+  tls: []
+
+networkPolicy:
+  enabled: true
+  # Who may reach the public ports: the ingress controller.
+  ingressControllerPeers:
+    - namespaceSelector:
+        matchLabels: {kubernetes.io/metadata.name: ingress-nginx}
+  # Who may scrape the management ports.
+  monitoringPeers:
+    - namespaceSelector:
+        matchLabels: {kubernetes.io/metadata.name: monitoring}
+  # Egress to PostgreSQL, Redis and Pulsar: NetworkPolicyEgressRule entries ({to: [...], ports: [...]}). Nothing is
+  # reachable until these are set, so set them for your datastores (pod selectors in-cluster, ipBlock if external).
+  datastoreEgress: []
+  # Egress to the OpenTelemetry collector, same format.
+  telemetryEgress: []
+  providerEgress:
+    # Dispatcher and client-api may reach providers on these ports anywhere except private, loopback, link-local and
+    # carrier-grade NAT ranges: the network-level half of the provider destination policy (ADR-022, ADR-025).
+    ports: [443, 25, 465, 587]
+    exceptCidrs:
+      - 10.0.0.0/8
+      - 100.64.0.0/10
+      - 127.0.0.0/8
+      - 169.254.0.0/16
+      - 172.16.0.0/12
+      - 192.168.0.0/16
+    # Internal gateways or relays listed in providerTrustedHosts need their own rules here, same format.
+    trustedInternalEgress: []
+
+serviceMonitor:
+  # Requires the Prometheus Operator CRDs. Load deploy/observability/prometheus/notification-slo.rules.yml too.
+  enabled: false
+  interval: 15s

@@ -1,0 +1,28 @@
+{{/*
+Copyright 2026 Vasantha Kumar. Licensed under the Apache License, Version 2.0.
+@author Vasantha Kumar <vasantha.kumar@hotmail.com>
+
+Prometheus Operator scrape configuration for the three management ports. The job label is the Service name,
+notification-<component> when the release is named "notification", which the alert rules expect (docs/slo.md).
+*/}}
+{{- if .Values.serviceMonitor.enabled }}
+{{- $root := . -}}
+{{- range list "client-api" "admin-api" "dispatcher" }}
+{{- $context := dict "root" $root "component" . }}
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: {{ include "notification.componentName" $context }}
+  labels:
+    {{- include "notification.labels" $context | nindent 4 }}
+spec:
+  selector:
+    matchLabels:
+      {{- include "notification.selectorLabels" $context | nindent 6 }}
+  endpoints:
+    - port: management
+      path: /actuator/prometheus
+      interval: {{ $root.Values.serviceMonitor.interval }}
+{{- end }}
+{{- end }}
