@@ -110,7 +110,7 @@ export interface RateLimit { id: string; scope: 'CLIENT_API' | 'CLIENT_CHANNEL' 
 export interface Count { channel: string; status: string; count: number }
 export interface Summary { hours: number; counts: Count[]; backlog: number; requests: number }
 export interface Point { bucket: string; channel: string; status: string; count: number }
-export interface MessageRow { id: string; requestId: string; clientId: string; clientName: string; channel: string; recipient: string; status: string; attempts: number; lastError?: string; providerMessageId?: string; createdAt: string; sentAt?: string }
+export interface MessageRow { id: string; requestId: string; clientId: string; clientName: string; channel: string; recipient: string; status: string; attempts: number; lastError?: string; providerMessageId?: string; createdAt: string; sentAt?: string; errorCode?: string; errorId?: string; category?: Category; expiresAt?: string }
 export interface MessagePage { items: MessageRow[]; page: number; size: number; totalItems: number }
 
 export const AUDIT_OUTCOMES = ['SUCCEEDED', 'REJECTED', 'DENIED', 'FAILED'] as const;
