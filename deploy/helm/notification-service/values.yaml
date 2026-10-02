@@ -44,6 +44,11 @@ config:
   redis:
     host: redis
     port: 6379
+    # Read the Redis password from the Secret's REDIS_PASSWORD key (Azure Managed Redis, Memorystore with AUTH).
+    passwordFromSecret: false
+    # PEM file of a private CA that signs the Redis server certificate (Memorystore); enables TLS with that trust.
+    # Leave empty for no TLS, or for TLS with a public CA via SPRING_DATA_REDIS_SSL_ENABLED in extraEnv.
+    tlsTrustCertificateFile: ""
   pulsar:
     url: pulsar+ssl://pulsar:6651
     # Path of the broker CA inside the containers; mount it with each component's extraVolumes.

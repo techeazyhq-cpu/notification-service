@@ -73,11 +73,11 @@ In this order. Each is a standard Helm chart; pin the versions you have tested.
 5. **Pulsar:**
 
    ```bash
-   kubectl apply -f deploy/k8s/pulsar/storage-class.yaml
+   kubectl apply -f deploy/k8s/pulsar/storage-class-aws.yaml
    ```
 
    ```bash
-   helm install pulsar apache/pulsar --version 4.7.0 -n pulsar --create-namespace -f deploy/k8s/pulsar/values-aws.yaml --set initialize=true
+   helm install pulsar apache/pulsar --version 4.7.0 -n pulsar --create-namespace -f deploy/k8s/pulsar/values.yaml --set initialize=true
    ```
 
 ## Prepare the namespace

@@ -1,0 +1,53 @@
+# Copyright 2026 Vasantha Kumar
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+# @author Vasantha Kumar <vasantha.kumar@hotmail.com>
+#
+# Settings shared by every Azure environment built with deploy/terraform/azure (ADR-029). The environment-specific
+# values (database URL, Redis host, datastore egress) come from `terraform output -json helm_values`; pass them after
+# this file. Hosts and TLS are per environment too. See docs/azure-deployment.md.
+
+config:
+  redis:
+    port: 10000
+    passwordFromSecret: true
+  pulsar:
+    url: pulsar+ssl://pulsar-broker.pulsar.svc.cluster.local:6651
+    tlsTrustCertsFile: /etc/pulsar-ca/ca.crt
+  extraEnv:
+    SPRING_DATA_REDIS_SSL_ENABLED: "true"
+
+clientApi: &serviceTrust
+  extraVolumes:
+    - name: db-ca
+      configMap: {name: db-ca-bundle}
+    - name: pulsar-ca
+      configMap: {name: pulsar-ca}
+  extraVolumeMounts:
+    - {name: db-ca, mountPath: /etc/db-ca, readOnly: true}
+    - {name: pulsar-ca, mountPath: /etc/pulsar-ca, readOnly: true}
+
+adminApi: *serviceTrust
+
+dispatcher: *serviceTrust
+
+migration:
+  extraVolumes:
+    - name: db-ca
+      configMap: {name: db-ca-bundle}
+  extraVolumeMounts:
+    - {name: db-ca, mountPath: /etc/db-ca, readOnly: true}
+
+ingress:
+  className: nginx

@@ -41,8 +41,10 @@ Run at least three instances across zones with one synchronous standby:
 - **On AWS:** RDS Multi-AZ from [`deploy/terraform/aws`](../deploy/terraform/aws), with point-in-time recovery,
   backups replicated to a second region, and RDS events for backups and failovers on an SNS topic. Its objectives and
   steps are in [aws-deployment.md](aws-deployment.md#recovery-on-aws) and ADR-028.
-- **Other managed equivalents:** Aurora, Cloud SQL with high availability, or Azure Database for PostgreSQL with
-  zone-redundant HA.
+- **On Azure:** Flexible Server with zone-redundant HA from [`deploy/terraform/azure`](../deploy/terraform/azure),
+  with geo-redundant backups to the paired region; see [azure-deployment.md](azure-deployment.md#recovery-on-azure)
+  and ADR-029.
+- **Other managed equivalents:** Aurora, or Cloud SQL with high availability.
 
 Either way the services connect to one read-write endpoint that follows the primary (`notification-db-rw` with
 CloudNativePG), so a failover needs no configuration change.

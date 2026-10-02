@@ -29,7 +29,7 @@ had only been proven on k3s. The architecture review lists this as finding D1. T
 3. **Redis: ElastiCache for Valkey,** a primary and a replica in two zones with automatic failover, TLS required,
    encrypted at rest, no snapshots. It holds only rate-limit counters (ADR-026), and the services enable TLS with
    `SPRING_DATA_REDIS_SSL_ENABLED`.
-4. **Pulsar on EKS** from the Apache Pulsar Helm chart (`deploy/k8s/pulsar/values-aws.yaml`):
+4. **Pulsar on EKS** from the Apache Pulsar Helm chart (`deploy/k8s/pulsar/values.yaml`, shared with Azure and GCP since ADR-029):
    - three ZooKeeper, bookie and broker pods, spread one per zone, on encrypted gp3 volumes;
    - TLS on the broker port from a cert-manager CA;
    - no proxy, functions or bundled monitoring.

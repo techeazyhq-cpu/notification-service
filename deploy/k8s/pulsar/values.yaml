@@ -14,11 +14,12 @@
 #
 # @author Vasantha Kumar <vasantha.kumar@hotmail.com>
 #
-# Values for the Apache Pulsar Helm chart (apache/pulsar 4.7.x) on the EKS cluster of deploy/terraform/aws (ADR-028).
-# AWS has no managed Pulsar, and the broker holds nothing that cannot be rebuilt from PostgreSQL (ADR-026), so it runs
-# in the cluster: three ZooKeeper, bookie and broker pods, one per availability zone, on encrypted gp3 volumes, with
-# TLS on the broker port the services use. Needs cert-manager and storage-class.yaml. See docs/aws-deployment.md.
-#   helm install pulsar apache/pulsar --version 4.7.0 -n pulsar --create-namespace -f values-aws.yaml
+# Values for the Apache Pulsar Helm chart (apache/pulsar 4.7.x) on the clusters of deploy/terraform (ADR-028, ADR-029).
+# None of the three clouds offers managed Pulsar, and the broker holds nothing that cannot be rebuilt from PostgreSQL
+# (ADR-026), so it runs in the cluster: three ZooKeeper, bookie and broker pods, one per availability zone, on
+# encrypted SSD volumes, with TLS on the broker port the services use. Needs cert-manager and the cloud's
+# storage-class-<cloud>.yaml, which provides pulsar-disk. See docs/<cloud>-deployment.md.
+#   helm install pulsar apache/pulsar --version 4.7.0 -n pulsar --create-namespace -f values.yaml
 #     --set initialize=true
 
 volumes:
@@ -67,7 +68,7 @@ zookeeper:
     data:
       size: 20Gi
       local_storage: false
-      storageClassName: gp3-encrypted
+      storageClassName: pulsar-disk
 
 bookkeeper:
   replicaCount: 3
@@ -82,11 +83,11 @@ bookkeeper:
     journal:
       size: 20Gi
       local_storage: false
-      storageClassName: gp3-encrypted
+      storageClassName: pulsar-disk
     ledgers:
       size: 100Gi
       local_storage: false
-      storageClassName: gp3-encrypted
+      storageClassName: pulsar-disk
 
 autorecovery:
   replicaCount: 1

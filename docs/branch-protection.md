@@ -27,7 +27,7 @@ satisfy a check, not a status posted by anything else):
 | CI | `Backend build and tests` |
 | CI | `admin-ui build and tests`, `client-ui build and tests` |
 | CI | `Helm chart` (lint, render, schema validation; added with ADR-025, so re-run step 2 once it is on `main`) |
-| CI | `Terraform` (format, module tests, validate, tflint; added with ADR-028, so re-run step 2 once it is on `main`) |
+| CI | `Terraform` (format, module tests, validate and tflint for every cloud; added with ADR-028, so re-run step 2 once it is on `main`) |
 | CI | `Docker images build (...)`, one per image: client-api, admin-api, dispatcher, db-migration, admin-ui, client-ui |
 | Security | `Dependency and secret scan` |
 | Security | `CodeQL (java-kotlin)`, `CodeQL (javascript-typescript)` |
