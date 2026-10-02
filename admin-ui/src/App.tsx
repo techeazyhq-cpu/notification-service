@@ -17,8 +17,8 @@
  */
 
 import { useEffect, useState } from 'react';
-import { NavLink, Navigate, Route, Routes } from 'react-router-dom';
-import { ApiError, auth, signIn, signOut } from './api';
+import { NavLink, Navigate, Route, Routes, useNavigate } from 'react-router-dom';
+import { ACCOUNT_SETUP_REQUIRED, ApiError, auth, LoginResult, signIn, signOut } from './api';
 import Dashboard from './pages/Dashboard';
 import Clients from './pages/Clients';
 import Templates from './pages/Templates';
@@ -33,7 +33,7 @@ import Account from './pages/Account';
 import Privacy from './pages/Privacy';
 import AuditLog from './pages/AuditLog';
 
-function Login({ onDone }: Readonly<{ onDone: () => void }>) {
+function Login({ onDone }: Readonly<{ onDone: (result: LoginResult) => void }>) {
   const [user, setUser] = useState('admin');
   const [password, setPassword] = useState('');
   const [code, setCode] = useState('');
@@ -43,8 +43,7 @@ function Login({ onDone }: Readonly<{ onDone: () => void }>) {
   async function submit(e: React.SubmitEvent<HTMLFormElement>) {
     e.preventDefault();
     try {
-      await signIn(user, password, code);
-      onDone();
+      onDone(await signIn(user, password, code));
     } catch (err) {
       const failure = err as ApiError;
       if (failure.code === 'OTP_REQUIRED') {
@@ -78,14 +77,25 @@ function Login({ onDone }: Readonly<{ onDone: () => void }>) {
 
 export default function App() {
   const [authed, setAuthed] = useState(!!auth.get());
+  const navigate = useNavigate();
 
   useEffect(() => {
     const lost = () => setAuthed(false);
+    const setupRequired = () => navigate('/account');
     window.addEventListener('auth-lost', lost);
-    return () => window.removeEventListener('auth-lost', lost);
-  }, []);
+    window.addEventListener(ACCOUNT_SETUP_REQUIRED, setupRequired);
+    return () => {
+      window.removeEventListener('auth-lost', lost);
+      window.removeEventListener(ACCOUNT_SETUP_REQUIRED, setupRequired);
+    };
+  }, [navigate]);
 
-  if (!authed) return <Login onDone={() => setAuthed(true)} />;
+  function signedIn(result: LoginResult) {
+    setAuthed(true);
+    if (result.pendingSetup.length > 0) navigate('/account');
+  }
+
+  if (!authed) return <Login onDone={signedIn} />;
 
   return (
     <div className="shell">

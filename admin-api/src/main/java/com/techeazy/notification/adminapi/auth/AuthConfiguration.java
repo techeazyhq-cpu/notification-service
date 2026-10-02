@@ -52,12 +52,24 @@ public class AuthConfiguration {
                                       @Value("${admin.session-idle-minutes:30}") long idleMinutes,
                                       @Value("${admin.session-max-hours:12}") long maxHours,
                                       @Value("${admin.max-failed-attempts:5}") int maxFailedAttempts,
-                                      @Value("${admin.lockout-minutes:15}") long lockoutMinutes) {
+                                      @Value("${admin.lockout-minutes:15}") long lockoutMinutes,
+                                      @Value("${admin.require-password-change:true}") boolean requirePasswordChange,
+                                      @Value("${admin.require-two-factor:true}") boolean requireTwoFactor) {
         InsecureDefaults.reject(env, "admin.two-factor-key", twoFactorKey, DEFAULT_TWO_FACTOR_KEY);
+        rejectRelaxedAccountRules(env, requirePasswordChange, requireTwoFactor);
         AuthSettings settings = new AuthSettings(issuer, Duration.ofMinutes(idleMinutes), Duration.ofHours(maxHours),
-                maxFailedAttempts, Duration.ofMinutes(lockoutMinutes));
+                maxFailedAttempts, Duration.ofMinutes(lockoutMinutes), requirePasswordChange, requireTwoFactor);
         return new AdminAuthService(new JdbcAdminUserStore(jdbc), new JdbcSessionStore(jdbc), encoder,
                 new SecretCipher(twoFactorKey, RANDOM), new Totp(RANDOM), Clock.systemUTC(), settings, RANDOM);
+    }
+
+    /**
+     * Switching off the password-change or two-factor requirement is for local development only, so a service refuses
+     * to start with either one off unless the {@code local} profile is active, like the shipped default secrets.
+     */
+    static void rejectRelaxedAccountRules(Environment env, boolean requirePasswordChange, boolean requireTwoFactor) {
+        InsecureDefaults.reject(env, "admin.require-password-change", String.valueOf(requirePasswordChange), "false");
+        InsecureDefaults.reject(env, "admin.require-two-factor", String.valueOf(requireTwoFactor), "false");
     }
 
     @Bean

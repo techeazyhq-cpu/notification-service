@@ -37,6 +37,12 @@ import java.util.List;
  */
 public class BearerTokenFilter extends OncePerRequestFilter {
 
+    /**
+     * The only role a session gets while its account setup is incomplete (see {@link AccountSetupStep}): enough to
+     * manage its own account, nothing else.
+     */
+    public static final String ACCOUNT_SETUP_ROLE = "ACCOUNT_SETUP";
+
     private static final String PREFIX = "Bearer ";
 
     private final AdminAuthService auth;
@@ -51,7 +57,7 @@ public class BearerTokenFilter extends OncePerRequestFilter {
         String header = request.getHeader("Authorization");
         if (header != null && header.startsWith(PREFIX)) {
             auth.authenticate(header.substring(PREFIX.length()).trim()).ifPresent(session -> {
-                List<SimpleGrantedAuthority> authorities = session.role().impliedRoleNames().stream()
+                List<SimpleGrantedAuthority> authorities = grantedRoleNames(session).stream()
                         .map(role -> new SimpleGrantedAuthority("ROLE_" + role)).toList();
                 UsernamePasswordAuthenticationToken authentication = UsernamePasswordAuthenticationToken.authenticated(
                         session.username(), null, authorities);
@@ -60,5 +66,9 @@ public class BearerTokenFilter extends OncePerRequestFilter {
             });
         }
         chain.doFilter(request, response);
+    }
+
+    private static List<String> grantedRoleNames(AdminAuthService.AuthenticatedSession session) {
+        return session.setupComplete() ? session.role().impliedRoleNames() : List.of(ACCOUNT_SETUP_ROLE);
     }
 }

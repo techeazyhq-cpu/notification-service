@@ -18,8 +18,23 @@
 
 import { useEffect, useState } from 'react';
 import QRCode from 'qrcode';
-import { Account as AccountInfo, api, TwoFactorSetup } from '../api';
+import { Account as AccountInfo, AccountSetupStep, api, TwoFactorSetup } from '../api';
 import { useLoad } from '../hooks';
+
+const SETUP_STEP_LABELS: Record<AccountSetupStep, string> = {
+  CHANGE_PASSWORD: 'Replace the initial password with one of your own',
+  ENABLE_TWO_FACTOR: 'Turn on two-factor authentication with an authenticator app',
+};
+
+function SetupChecklist({ pending }: Readonly<{ pending: AccountSetupStep[] }>) {
+  return (
+    <div className="card error" role="alert">
+      <h3>Finish setting up your account</h3>
+      <p>The rest of the console stays locked until you have done the following:</p>
+      <ul>{pending.map((step) => <li key={step}>{SETUP_STEP_LABELS[step]}</li>)}</ul>
+    </div>
+  );
+}
 
 function Notice({ message, isError }: Readonly<{ message: string; isError: boolean }>) {
   return message ? <p className={isError ? 'error' : 'muted'}>{message}</p> : null;
@@ -196,7 +211,10 @@ export default function Account() {
       <h1>My account</h1>
       {error && <p className="error">{error}</p>}
       {data && <p className="muted">Signed in as <b>{data.username}</b></p>}
-      {data?.initialPassword && <div className="card error">You are still using the initial password. Change it now.</div>}
+      {data && data.pendingSetup.length > 0 && <SetupChecklist pending={data.pendingSetup} />}
+      {data?.initialPassword && data.pendingSetup.length === 0 && (
+        <div className="card error">You are still using the initial password. Change it now.</div>
+      )}
       <PasswordForm onChanged={reload} />
       {codes && <RecoveryCodes codes={codes} onDone={() => setCodes(null)} />}
       <div className="card">
@@ -206,7 +224,9 @@ export default function Account() {
           <>
             <p className="muted">{data.recoveryCodesRemaining} recovery codes left.</p>
             <ProtectedAction title="Get new recovery codes (the old ones stop working)" button="Generate new codes" run={regenerate} />
-            <ProtectedAction title="Turn two-factor authentication off" button="Turn off" danger run={disable} />
+            {data.twoFactorRequired
+              ? <p className="muted">Two-factor authentication is required for every administrator.</p>
+              : <ProtectedAction title="Turn two-factor authentication off" button="Turn off" danger run={disable} />}
           </>
         )}
       </div>

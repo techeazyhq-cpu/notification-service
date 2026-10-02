@@ -15,14 +15,15 @@
  *
  * @author Vasantha Kumar <vasantha.kumar@hotmail.com>
  */
-
 package com.techeazy.notification.adminapi.auth;
 
-import java.time.Duration;
-
 /**
- * Tunable limits for sessions and failed-attempt lockout, and which account setup steps are mandatory; see the
- * {@code admin.*} properties.
+ * What an administrator still has to do before their session may use anything but their own account (see ADR-020).
+ * Which steps apply is set by {@code admin.require-password-change} and {@code admin.require-two-factor}.
  */
-record AuthSettings(String issuer, Duration idleTimeout, Duration maxSessionAge, int maxFailedAttempts,
-                    Duration lockout, boolean requirePasswordChange, boolean requireTwoFactor) {}
+public enum AccountSetupStep {
+    /** Replace the password the account was created with, by the bootstrap or by another administrator. */
+    CHANGE_PASSWORD,
+    /** Turn on authenticator-app two-factor authentication. */
+    ENABLE_TWO_FACTOR
+}

@@ -31,6 +31,7 @@ import org.springframework.security.config.annotation.web.configurers.AbstractHt
 import org.springframework.security.config.http.SessionCreationPolicy;
 import com.techeazy.notification.adminapi.audit.AuditLog;
 import com.techeazy.notification.adminapi.audit.AuditTrailFilter;
+import com.techeazy.notification.adminapi.auth.AccountSetupAccessDeniedHandler;
 import com.techeazy.notification.adminapi.auth.AdminAuthService;
 import com.techeazy.notification.adminapi.auth.BearerTokenFilter;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
@@ -52,6 +53,9 @@ import java.util.List;
  * Administrators sign in at {@code /api/admin/auth/login} (password, plus a TOTP code when two-factor authentication is
  * enabled) and then send the returned session token as a Bearer token. Accounts live in the database (see ADR-005);
  * the intended production setup for many administrators is OIDC with role-based access (see ADR-001).
+ *
+ * <p>Every role manages its own account under {@code /api/admin/auth/**}. A session whose account setup is unfinished
+ * (initial password, or two-factor authentication off while it is required) can do only that (see ADR-020).
  */
 @Configuration
 @EnableWebSecurity
@@ -92,8 +96,7 @@ class SecurityConfig {
                         .requestMatchers("/actuator/health", "/actuator/prometheus").permitAll()
                         .requestMatchers("/swagger-ui/**", "/swagger-ui.html", "/v3/api-docs/**").permitAll()
                         .requestMatchers("/api/admin/auth/login").permitAll()
-                        // Every role manages its own account: password, two-factor, sign out.
-                        .requestMatchers("/api/admin/auth/**").hasRole(VIEWER)
+                        .requestMatchers("/api/admin/auth/**").hasAnyRole(VIEWER, BearerTokenFilter.ACCOUNT_SETUP_ROLE)
                         // Managing other administrators is always an ADMIN action, GET included.
                         .requestMatchers("/api/admin/administrators/**").hasRole(ADMIN)
                         .requestMatchers("/api/admin/audit-events/**").hasRole(ADMIN)
@@ -109,7 +112,8 @@ class SecurityConfig {
                         .anyRequest().denyAll())
                 .addFilterBefore(new BearerTokenFilter(auth), UsernamePasswordAuthenticationFilter.class)
                 .addFilterAfter(new AuditTrailFilter(auditLog, Clock.systemUTC(), meters), BearerTokenFilter.class)
-                .exceptionHandling(e -> e.authenticationEntryPoint(new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED)));
+                .exceptionHandling(e -> e.authenticationEntryPoint(new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED))
+                        .accessDeniedHandler(new AccountSetupAccessDeniedHandler()));
         return http.build();
     }
 

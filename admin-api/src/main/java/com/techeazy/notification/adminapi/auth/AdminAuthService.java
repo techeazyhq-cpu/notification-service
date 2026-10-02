@@ -52,13 +52,25 @@ public class AdminAuthService {
     private static final String RECOVERY_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
     private static final Duration TOUCH_INTERVAL = Duration.ofMinutes(1);
 
-    record Login(String token, Instant expiresAt, boolean twoFactorEnabled, boolean initialPassword, AdminRole role) {}
+    record Login(String token, Instant expiresAt, boolean twoFactorEnabled, boolean initialPassword, AdminRole role,
+                 List<AccountSetupStep> pendingSetup) {}
 
-    record Account(String username, boolean twoFactorEnabled, int recoveryCodesRemaining, boolean initialPassword, AdminRole role) {}
+    record Account(String username, boolean twoFactorEnabled, int recoveryCodesRemaining, boolean initialPassword,
+                   AdminRole role, List<AccountSetupStep> pendingSetup, boolean twoFactorRequired) {}
 
     record TwoFactorSetup(String secret, String otpauthUri) {}
 
-    public record AuthenticatedSession(String username, String tokenHash, AdminRole role) {}
+    /**
+     * A signed-in administrator. While {@code pendingSetup} is not empty the session may only manage its own account,
+     * whatever its role.
+     */
+    public record AuthenticatedSession(String username, String tokenHash, AdminRole role,
+                                       List<AccountSetupStep> pendingSetup) {
+
+        public boolean setupComplete() {
+            return pendingSetup.isEmpty();
+        }
+    }
 
     public record AdminSummary(java.util.UUID id, String username, AdminRole role, boolean locked, boolean totpEnabled) {}
 
@@ -141,16 +153,15 @@ public class AdminAuthService {
         if (Duration.between(session.lastSeenAt(), now).compareTo(TOUCH_INTERVAL) > 0) {
             sessions.touch(tokenHash, now, expiryFor(session.createdAt(), now));
         }
-        // Looked up fresh rather than carried on the session, so a role change takes effect on the next request,
-        // not only after the administrator signs in again.
         return users.findByUsername(session.username())
-                .map(user -> new AuthenticatedSession(session.username(), tokenHash, user.role()));
+                .map(user -> new AuthenticatedSession(session.username(), tokenHash, user.role(), pendingSetup(user)));
     }
 
     Account account(String username) {
         AdminUser user = require(username);
         int remaining = user.totpEnabled() ? users.remainingRecoveryCodes(user.id()) : 0;
-        return new Account(user.username(), user.totpEnabled(), remaining, user.passwordChangedAt() == null, user.role());
+        return new Account(user.username(), user.totpEnabled(), remaining, user.passwordChangedAt() == null,
+                user.role(), pendingSetup(user), settings.requireTwoFactor());
     }
 
     public List<AdminSummary> listAdmins() {
@@ -242,6 +253,9 @@ public class AdminAuthService {
     }
 
     void disableTwoFactor(String username, String password, String code) {
+        if (settings.requireTwoFactor()) {
+            throw AuthException.conflict("Two-factor authentication is required for every administrator");
+        }
         AdminUser user = require(username);
         requireReauthentication(user, password, code);
         if (!user.totpEnabled()) {
@@ -278,7 +292,23 @@ public class AdminAuthService {
         String token = Base64.getUrlEncoder().withoutPadding().encodeToString(raw);
         Instant expiresAt = expiryFor(now, now);
         sessions.create(hashToken(token), user.id(), now, expiresAt);
-        return new Login(token, expiresAt, user.totpEnabled(), user.passwordChangedAt() == null, user.role());
+        return new Login(token, expiresAt, user.totpEnabled(), user.passwordChangedAt() == null, user.role(),
+                pendingSetup(user));
+    }
+
+    /**
+     * Read from the stored account on every request rather than carried on the session, so completing a step, or a
+     * role change, takes effect on the next request without signing in again.
+     */
+    private List<AccountSetupStep> pendingSetup(AdminUser user) {
+        List<AccountSetupStep> pending = new ArrayList<>();
+        if (settings.requirePasswordChange() && user.passwordChangedAt() == null) {
+            pending.add(AccountSetupStep.CHANGE_PASSWORD);
+        }
+        if (settings.requireTwoFactor() && !user.totpEnabled()) {
+            pending.add(AccountSetupStep.ENABLE_TWO_FACTOR);
+        }
+        return List.copyOf(pending);
     }
 
     private Instant expiryFor(Instant createdAt, Instant now) {

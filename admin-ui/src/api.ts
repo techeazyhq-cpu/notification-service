@@ -33,8 +33,16 @@ export class ApiError extends Error {
   }
 }
 
-export interface LoginResult { token: string; expiresAt: string; twoFactorEnabled: boolean; initialPassword: boolean }
-export interface Account { username: string; twoFactorEnabled: boolean; recoveryCodesRemaining: number; initialPassword: boolean }
+export type AccountSetupStep = 'CHANGE_PASSWORD' | 'ENABLE_TWO_FACTOR';
+export const ACCOUNT_SETUP_REQUIRED = 'account-setup-required';
+export interface LoginResult {
+  token: string; expiresAt: string; twoFactorEnabled: boolean; initialPassword: boolean;
+  pendingSetup: AccountSetupStep[];
+}
+export interface Account {
+  username: string; twoFactorEnabled: boolean; recoveryCodesRemaining: number; initialPassword: boolean;
+  pendingSetup: AccountSetupStep[]; twoFactorRequired: boolean;
+}
 export interface TwoFactorSetup { secret: string; otpauthUri: string }
 
 export async function signIn(username: string, password: string, verificationCode: string): Promise<LoginResult> {
@@ -78,6 +86,7 @@ export async function api<T = unknown>(method: string, path: string, body?: unkn
       code = j.code;
       if (j.errors?.length) message = j.errors.map((e: { defaultMessage: string; field: string }) => `${e.field} ${e.defaultMessage}`).join('; ');
     } catch { /* keep raw text */ }
+    if (code === 'ACCOUNT_SETUP_REQUIRED') window.dispatchEvent(new Event(ACCOUNT_SETUP_REQUIRED));
     throw new ApiError(res.status, message || `HTTP ${res.status}`, code);
   }
   return (text ? JSON.parse(text) : null) as T;
