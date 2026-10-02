@@ -84,7 +84,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
-      CLOUDS: aws azure
+      CLOUDS: aws azure gcp
       CRD_CATALOG: https://raw.githubusercontent.com/datreeio/CRDs-catalog/main
     steps:
       - uses: actions/checkout@v7
@@ -126,6 +126,11 @@ jobs:
             POSTGRES_FQDN=example.postgres.database.azure.com
             BACKUP_STORAGE_ACCOUNT=examplebackups POSTGRES_SUBNET_CIDR=10.50.64.0/24
             PRIVATE_ENDPOINT_SUBNET_CIDR=10.50.80.0/24
+            PROJECT_ID=example-project CLUSTER_LOCATION=europe-west1 CLUSTER_NAME=notification-prod
+            SECRET_PREFIX=notification-prod-
+            EXTERNAL_SECRETS_SERVICE_ACCOUNT=notif-prod-secrets-sync@example-project.iam.gserviceaccount.com
+            LOGICAL_BACKUP_SERVICE_ACCOUNT=notif-prod-db-dump@example-project.iam.gserviceaccount.com
+            POSTGRES_PRIVATE_IP=10.70.0.3 PRIVATE_SERVICES_CIDR=10.70.0.0/20
         run: |
           # Placeholders are written ${NAME}; shell variables inside the manifests are written $NAME. Only the listed
           # placeholders are substituted, so the shell variables reach the containers untouched.
@@ -157,7 +162,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
-      CLOUDS: aws azure
+      CLOUDS: aws azure gcp
       TF_PLUGIN_CACHE_DIR: ${{ github.workspace }}/.terraform-plugins
     steps:
       - uses: actions/checkout@v7
