@@ -17,6 +17,8 @@
  */
 package com.techeazy.notification.adminapi.auth;
 
+import java.util.Optional;
+import com.techeazy.notification.adminapi.AdminErrorHandler;
 import com.techeazy.notification.adminapi.audit.AuditTrailFilter;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.MediaType;
@@ -35,7 +37,8 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 class SignInAuditAttributionTest {
 
     private final AdminAuthService auth = mock(AdminAuthService.class);
-    private final MockMvc mvc = MockMvcBuilders.standaloneSetup(new AuthController(auth)).build();
+    private final MockMvc mvc = MockMvcBuilders.standaloneSetup(new AuthController(auth))
+            .setControllerAdvice(new AdminErrorHandler(Optional::empty)).build();
 
     @Test
     void aRejectedSignInIsAttributedToTheClaimedUsername() throws Exception {

@@ -18,6 +18,7 @@
 
 package com.techeazy.notification.clientapi;
 
+import com.techeazy.notification.error.ErrorCode;
 import com.techeazy.notification.application.TemplateRenderer;
 import com.techeazy.notification.clientapi.Dtos.*;
 import com.techeazy.notification.domain.Template;
@@ -72,7 +73,8 @@ public class ClientTemplateService {
         validate(client, in);
         requireNameAvailable(client, in.name());
         if (templates.countByClientId(client.id()) >= maxPerClient) {
-            throw ApiException.conflict("TEMPLATE_LIMIT", "Template limit reached (" + maxPerClient + "); delete unused templates first");
+            throw ApiException.conflict(ErrorCode.TEMPLATE_LIMIT, "Template limit reached (" + maxPerClient
+                    + "); delete unused templates first");
         }
         Template t = new Template();
         t.setId(UUID.randomUUID());
@@ -120,13 +122,14 @@ public class ClientTemplateService {
     /** A name must not be held by a shared template (it would be ambiguous) nor by another of the client's templates. */
     private void requireNameAvailable(AuthenticatedClient client, String name) {
         if (templates.findByClientIdIsNullAndName(name).isPresent()) {
-            throw ApiException.conflict("TEMPLATE_NAME_RESERVED", "'" + name + "' is the name of a shared template; pick another name");
+            throw ApiException.conflict(ErrorCode.TEMPLATE_NAME_RESERVED, "'" + name
+                    + "' is the name of a shared template; pick another name");
         }
         if (templates.findByClientIdAndName(client.id(), name).isPresent()) throw nameTaken(name);
     }
 
     private static ApiException nameTaken(String name) {
-        return ApiException.conflict("TEMPLATE_EXISTS", "You already have a template named '" + name + "'");
+        return ApiException.conflict(ErrorCode.TEMPLATE_EXISTS, "You already have a template named '" + name + "'");
     }
 
     private void validate(AuthenticatedClient client, TemplateInput in) {
@@ -134,7 +137,8 @@ public class ClientTemplateService {
             throw ApiException.badRequest("Name must be 2-64 characters: letters, digits, '.', '-' or '_', starting with a letter or digit");
         }
         if (!client.allows(in.channel())) {
-            throw ApiException.forbidden("CHANNEL_NOT_ALLOWED", "Client is not allowed to use channel " + in.channel());
+            throw ApiException.forbidden(ErrorCode.CHANNEL_NOT_ALLOWED, "Client is not allowed to use channel "
+                    + in.channel());
         }
         if (in.channel() == com.techeazy.notification.domain.Channel.EMAIL && (in.subject() == null || in.subject().isBlank())) {
             throw ApiException.badRequest("EMAIL templates need a subject");
@@ -162,7 +166,8 @@ public class ClientTemplateService {
     private Template owned(AuthenticatedClient client, UUID id) {
         Template t = visible(client, id);
         if (t.getClientId() == null) {
-            throw ApiException.forbidden("TEMPLATE_READ_ONLY", "Shared templates are managed by the platform administrators");
+            throw ApiException.forbidden(ErrorCode.TEMPLATE_READ_ONLY,
+                    "Shared templates are managed by the platform administrators");
         }
         return t;
     }

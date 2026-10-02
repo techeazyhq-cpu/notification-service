@@ -67,8 +67,10 @@ public final class Dtos {
     public record RequestView(UUID requestId, RequestKind kind, Channel channel, RequestStatus status, int total,
                               StatusCounts counts, String clientReference, Instant createdAt) {}
 
+    /** {@code errorCode} and {@code errorId} name why the message failed or is retrying (docs/error-codes.md). */
     public record MessageView(UUID messageId, String recipient, MessageStatus status, int attempts, String lastError,
-                              String providerMessageId, Instant sentAt, Instant updatedAt) {}
+                              String providerMessageId, Instant sentAt, Instant updatedAt, String errorCode,
+                              String errorId) {}
 
     public record PageView<T>(List<T> items, int page, int size, long totalItems, int totalPages) {}
 

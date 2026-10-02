@@ -24,6 +24,9 @@ import com.github.benmanes.caffeine.cache.Caffeine;
 import com.techeazy.notification.application.ApiKeys;
 import com.techeazy.notification.application.RateLimitService;
 import com.techeazy.notification.domain.Client;
+import com.techeazy.notification.error.ErrorBody;
+import com.techeazy.notification.error.ErrorCode;
+import com.techeazy.notification.error.TraceIdSource;
 import com.techeazy.notification.persistence.ClientRepository;
 import com.techeazy.notification.port.RateLimiter.Decision;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -32,7 +35,6 @@ import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
@@ -52,12 +54,16 @@ public class ClientAuthFilter extends OncePerRequestFilter {
     private final ClientRepository clients;
     private final RateLimitService rateLimits;
     private final ObjectMapper mapper;
+    private final TraceIdSource traceIds;
     private final Timer authTimer;
     private final Timer rateLimitTimer;
     private final Cache<String, Optional<AuthenticatedClient>> cache = Caffeine.newBuilder()
             .expireAfterWrite(Duration.ofSeconds(30)).maximumSize(10_000).build();
 
-    public ClientAuthFilter(ClientRepository clients, RateLimitService rateLimits, ObjectMapper mapper, MeterRegistry meters) {
+    public ClientAuthFilter(ClientRepository clients, RateLimitService rateLimits, ObjectMapper mapper,
+            MeterRegistry meters,
+                            TraceIdSource traceIds) {
+        this.traceIds = traceIds;
         this.clients = clients;
         this.rateLimits = rateLimits;
         this.mapper = mapper;
@@ -68,7 +74,8 @@ public class ClientAuthFilter extends OncePerRequestFilter {
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
         String uri = request.getRequestURI();
-        return !uri.startsWith("/v1/") || uri.equals(SENDER_VERIFY_PATH);
+        return !uri.startsWith("/v1/") || uri.equals(SENDER_VERIFY_PATH)
+                || uri.startsWith(ErrorCatalogueController.PATH);
     }
 
     @Override
@@ -76,18 +83,18 @@ public class ClientAuthFilter extends OncePerRequestFilter {
             throws ServletException, IOException {
         String key = req.getHeader("X-API-Key");
         if (key == null || key.isBlank()) {
-            reject(res, HttpStatus.UNAUTHORIZED, "UNAUTHORIZED", "Missing X-API-Key header", null);
+            reject(res, ErrorCode.UNAUTHORIZED, "Missing X-API-Key header", null);
             return;
         }
         Optional<AuthenticatedClient> client = authTimer.record(() -> cache.get(ApiKeys.hash(key), this::lookup));
         if (client.isEmpty()) {
-            reject(res, HttpStatus.UNAUTHORIZED, "UNAUTHORIZED", "Invalid or disabled API key", null);
+            reject(res, ErrorCode.UNAUTHORIZED, "Invalid or disabled API key", null);
             return;
         }
         Decision d = rateLimitTimer.record(() -> rateLimits.checkClientApi(client.get().id()));
         if (!d.allowed()) {
             long seconds = Math.max(1, (d.waitMillis() + 999) / 1000);
-            reject(res, HttpStatus.TOO_MANY_REQUESTS, "RATE_LIMITED", "API rate limit exceeded", seconds);
+            reject(res, ErrorCode.RATE_LIMITED, "API rate limit exceeded", seconds);
             return;
         }
         req.setAttribute(CLIENT_ATTRIBUTE, client.get());
@@ -99,11 +106,12 @@ public class ClientAuthFilter extends OncePerRequestFilter {
         return clients.findByApiKeyHash(keyHash).filter(Client::isActive).map(AuthenticatedClient::from);
     }
 
-    private void reject(HttpServletResponse res, HttpStatus status, String code, String message, Long retryAfter)
+    private void reject(HttpServletResponse res, ErrorCode errorCode, String message, Long retryAfter)
             throws IOException {
-        res.setStatus(status.value());
+        res.setStatus(errorCode.httpStatus().orElseThrow());
         res.setContentType(MediaType.APPLICATION_JSON_VALUE);
         if (retryAfter != null) res.setHeader("Retry-After", Long.toString(retryAfter));
-        mapper.writeValue(res.getOutputStream(), new ApiExceptionHandler.ErrorBody(code, message));
+        mapper.writeValue(res.getOutputStream(), ErrorBody.of(errorCode, message,
+                traceIds.currentTraceId().orElse(null)));
     }
 }

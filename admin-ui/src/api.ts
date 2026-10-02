@@ -84,6 +84,7 @@ export async function api<T = unknown>(method: string, path: string, body?: unkn
       const j = JSON.parse(text);
       message = j.message || j.error || text;
       code = j.code;
+      if (j.errorId && message) message += ` (${j.errorId})`;
       if (j.errors?.length) message = j.errors.map((e: { defaultMessage: string; field: string }) => `${e.field} ${e.defaultMessage}`).join('; ');
     } catch { /* keep raw text */ }
     if (code === 'ACCOUNT_SETUP_REQUIRED') window.dispatchEvent(new Event(ACCOUNT_SETUP_REQUIRED));

@@ -18,6 +18,7 @@
 
 package com.techeazy.notification.adminapi;
 
+import com.techeazy.notification.error.ErrorCode;
 import com.techeazy.notification.application.PersonalData;
 import com.techeazy.notification.config.CoreConfig;
 import com.techeazy.notification.domain.Channel;
@@ -141,24 +142,29 @@ class DeadLetterPersistenceTest {
         UUID client = client();
         UUID id = message(client, MessageStatus.PROCESSING, null, "+1", 1);
 
-        messages.markFailed(id, FailureKind.EXHAUSTED, "Gave up after 5 attempts", NOW);
+        messages.markFailed(id, FailureKind.EXHAUSTED, ErrorCode.DELIVERY_ATTEMPTS_EXHAUSTED,
+                "Gave up after 5 attempts",
+                NOW);
         NotificationMessage failed = reload(id);
         assertThat(failed.getStatus()).isEqualTo(MessageStatus.FAILED);
         assertThat(failed.getFailureKind()).isEqualTo(FailureKind.EXHAUSTED);
+        assertThat(failed.getErrorCode()).isEqualTo(ErrorCode.DELIVERY_ATTEMPTS_EXHAUSTED);
 
         messages.requeueFailed(id, NOW);
         NotificationMessage requeued = reload(id);
         assertThat(requeued.getStatus()).isEqualTo(MessageStatus.PENDING);
         assertThat(requeued.getFailureKind()).isNull();
+        assertThat(requeued.getErrorCode()).isNull();
         assertThat(requeued.getReprocessCount()).isEqualTo(1);
         assertThat(requeued.getAttempts()).isZero();
 
-        messages.markFailed(id, FailureKind.EXHAUSTED, "again", NOW);
+        messages.markFailed(id, FailureKind.EXHAUSTED, ErrorCode.DELIVERY_ATTEMPTS_EXHAUSTED, "again", NOW);
         messages.requeueFailed(id, NOW);
         assertThat(reload(id).getReprocessCount()).isEqualTo(2);
 
         messages.markSent(id, "provider-1", NOW);
         assertThat(reload(id).getFailureKind()).isNull();
+        assertThat(reload(id).getErrorCode()).isNull();
     }
 
     @Test
@@ -176,6 +182,7 @@ class DeadLetterPersistenceTest {
 
         assertThat(reload(queued).getFailureKind()).isEqualTo(FailureKind.DEAD_LETTERED);
         assertThat(reload(queued).getLastError()).isEqualTo("gave up");
+        assertThat(reload(queued).getErrorCode()).isEqualTo(ErrorCode.DELIVERY_DEAD_LETTERED);
         assertThat(reload(sent).getStatus()).isEqualTo(MessageStatus.SENT);
         assertThat(reload(failed).getFailureKind()).isEqualTo(FailureKind.PERMANENT);
     }

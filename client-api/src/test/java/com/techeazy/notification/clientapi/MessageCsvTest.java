@@ -48,7 +48,7 @@ class MessageCsvTest {
     @Test
     void rowKeepsPhoneNumbersIntactAndMatchesHeaderWidth() {
         MessageView m = new MessageView(UUID.randomUUID(), "+14155550123", MessageStatus.FAILED, 3,
-                "=bad", null, null, Instant.now());
+                "=bad", null, null, Instant.now(), "DELIVERY_REJECTED", "NS-6001");
 
         List<String> row = MessageCsv.row(m);
 
@@ -57,5 +57,24 @@ class MessageCsvTest {
         assertThat(row.get(1)).isEqualTo("FAILED");
         assertThat(row.get(3)).isEqualTo("'=bad");
         assertThat(row.get(5)).isEmpty();
+    }
+
+    @Test
+    void theErrorCodeAndIdComeLastSoExistingColumnsKeepTheirPlaces() {
+        MessageView m = new MessageView(UUID.randomUUID(), "+14155550123", MessageStatus.FAILED, 3,
+                "invalid number", null, null, Instant.now(), "DELIVERY_REJECTED", "NS-6001");
+
+        List<String> row = MessageCsv.row(m);
+
+        assertThat(MessageCsv.HEADER).endsWith("errorCode", "errorId");
+        assertThat(row).endsWith("DELIVERY_REJECTED", "NS-6001");
+    }
+
+    @Test
+    void aMessageWithoutAnErrorLeavesTheErrorColumnsEmpty() {
+        MessageView m = new MessageView(UUID.randomUUID(), "+14155550123", MessageStatus.SENT, 1,
+                null, "provider-1", Instant.now(), Instant.now(), null, null);
+
+        assertThat(MessageCsv.row(m)).endsWith("", "");
     }
 }

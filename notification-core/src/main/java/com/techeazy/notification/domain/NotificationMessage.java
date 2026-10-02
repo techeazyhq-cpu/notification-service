@@ -18,6 +18,7 @@
 
 package com.techeazy.notification.domain;
 
+import com.techeazy.notification.error.ErrorCode;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -45,6 +46,8 @@ public class NotificationMessage {
     private int attempts;
     private String lastError;
     @Enumerated(EnumType.STRING) private FailureKind failureKind;
+    /** Why the message failed or is being retried, from the error dictionary (ADR-031); null once sent. */
+    @Enumerated(EnumType.STRING) private ErrorCode errorCode;
     private int reprocessCount;
     private String providerMessageId;
     private Instant createdAt;

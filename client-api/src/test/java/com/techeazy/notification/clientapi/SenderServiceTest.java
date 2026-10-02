@@ -18,6 +18,7 @@
 
 package com.techeazy.notification.clientapi;
 
+import com.techeazy.notification.error.ErrorCode;
 import com.techeazy.notification.application.ApiKeys;
 import com.techeazy.notification.domain.Channel;
 import org.junit.jupiter.api.BeforeEach;
@@ -97,7 +98,8 @@ class SenderServiceTest {
 
     @Test
     void ifTheConfirmationMailCannotBeSentTheAddressIsNotKept() {
-        doThrow(new ApiException(HttpStatus.SERVICE_UNAVAILABLE, "EMAIL_NOT_AVAILABLE", "x")).when(mailer).send(anyString(), anyString(), anyString());
+        doThrow(new ApiException(ErrorCode.EMAIL_NOT_AVAILABLE, "x")).when(mailer).send(anyString(), anyString(),
+                anyString());
 
         assertThatThrownBy(() -> service.add(acme, "orders@acme.com", null)).isInstanceOf(ApiException.class);
 

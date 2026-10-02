@@ -18,12 +18,12 @@
 
 package com.techeazy.notification.clientapi;
 
+import com.techeazy.notification.error.ErrorCode;
 import com.techeazy.notification.application.ApiKeys;
 import com.techeazy.notification.domain.Channel;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.dao.DuplicateKeyException;
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -88,7 +88,7 @@ public class SenderService {
             throw ApiException.badRequest("At most " + maxSendersPerClient + " sender addresses per client");
         }
         if (senders.emailExists(client.id(), address)) {
-            throw ApiException.conflict("SENDER_EXISTS", "That address is already registered");
+            throw ApiException.conflict(ErrorCode.SENDER_EXISTS, "That address is already registered");
         }
         Instant now = clock.instant();
         String token = newToken();
@@ -97,7 +97,7 @@ public class SenderService {
         try {
             senders.insert(sender, ApiKeys.hash(token), now.plus(TOKEN_LIFETIME));
         } catch (DuplicateKeyException e) {
-            throw ApiException.conflict("SENDER_EXISTS", "That address is already registered");
+            throw ApiException.conflict(ErrorCode.SENDER_EXISTS, "That address is already registered");
         }
         try {
             mailer.send(address, client.name(), verificationUrl(token));
@@ -111,11 +111,12 @@ public class SenderService {
     public SenderAddress resend(AuthenticatedClient client, UUID id) {
         SenderAddress sender = require(client, id);
         if (sender.verified()) {
-            throw ApiException.conflict("INVALID_STATE", "That address is already verified");
+            throw ApiException.conflict(ErrorCode.INVALID_STATE, "That address is already verified");
         }
         Instant now = clock.instant();
         if (sender.verificationSentAt() != null && sender.verificationSentAt().plus(RESEND_COOLDOWN).isAfter(now)) {
-            throw new ApiException(HttpStatus.TOO_MANY_REQUESTS, "RATE_LIMITED", "Wait a minute before asking for another confirmation e-mail");
+            throw new ApiException(ErrorCode.RATE_LIMITED,
+                    "Wait a minute before asking for another confirmation e-mail");
         }
         String token = newToken();
         mailer.send(sender.email(), client.name(), verificationUrl(token));
@@ -135,7 +136,7 @@ public class SenderService {
     public SenderAddress makeDefault(AuthenticatedClient client, UUID id) {
         SenderAddress sender = require(client, id);
         if (!sender.verified()) {
-            throw ApiException.conflict("SENDER_NOT_VERIFIED", "Only a verified address can be the default");
+            throw ApiException.conflict(ErrorCode.SENDER_NOT_VERIFIED, "Only a verified address can be the default");
         }
         senders.clearDefault(client.id());
         senders.markDefault(client.id(), id);
@@ -157,8 +158,8 @@ public class SenderService {
             if (channel != Channel.EMAIL) {
                 throw ApiException.badRequest("from is only supported for the EMAIL channel");
             }
-            return Optional.of(senders.findVerifiedByEmail(client.id(), normalise(from)).orElseThrow(() -> new ApiException(
-                    HttpStatus.UNPROCESSABLE_ENTITY, "SENDER_NOT_VERIFIED",
+            return Optional.of(senders.findVerifiedByEmail(client.id(),
+                    normalise(from)).orElseThrow(() -> new ApiException(ErrorCode.SENDER_NOT_VERIFIED,
                     "The from address is not a verified sender of this client; register and confirm it first")));
         }
         return channel == Channel.EMAIL ? senders.findVerifiedDefault(client.id()) : Optional.empty();
@@ -170,7 +171,7 @@ public class SenderService {
 
     private static void requireEmailChannel(AuthenticatedClient client) {
         if (!client.allows(Channel.EMAIL)) {
-            throw new ApiException(HttpStatus.FORBIDDEN, "CHANNEL_NOT_ALLOWED", "Client is not allowed to use channel EMAIL");
+            throw new ApiException(ErrorCode.CHANNEL_NOT_ALLOWED, "Client is not allowed to use channel EMAIL");
         }
     }
 

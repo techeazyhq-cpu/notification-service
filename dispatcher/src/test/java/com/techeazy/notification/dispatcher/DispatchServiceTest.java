@@ -18,6 +18,7 @@
 
 package com.techeazy.notification.dispatcher;
 
+import com.techeazy.notification.error.ErrorCode;
 import com.techeazy.notification.application.RateLimitService;
 import com.techeazy.notification.dispatcher.DispatchService.Outcome;
 import com.techeazy.notification.dispatcher.provider.ChannelProvider.PermanentSendException;
@@ -101,7 +102,7 @@ class DispatchServiceTest {
         assertThat(service.process(id)).isInstanceOf(Outcome.Unavailable.class);
 
         verify(messages).release(eq(id), any());
-        verify(messages, never()).markFailedOrRetry(any(), any(), any(), any());
+        verify(messages, never()).markFailedOrRetry(any(), any(), any(), any(), any());
     }
 
     @Test
@@ -173,7 +174,9 @@ class DispatchServiceTest {
         when(providers.send(any())).thenThrow(new TransientSendException("timeout"));
 
         assertThat(service.process(id)).isEqualTo(new Outcome.Retry(Duration.ofSeconds(5)));
-        verify(messages).markFailedOrRetry(eq(id), eq(MessageStatus.RETRYING), contains("timeout"), any());
+        verify(messages).markFailedOrRetry(eq(id), eq(MessageStatus.RETRYING),
+                eq(ErrorCode.PROVIDER_TEMPORARILY_FAILING),
+                contains("timeout"), any());
 
         message.setAttempts(1);
         assertThat(service.process(id)).isEqualTo(new Outcome.Retry(Duration.ofSeconds(10)));
@@ -186,7 +189,8 @@ class DispatchServiceTest {
 
         assertThat(service.process(id)).isInstanceOf(Outcome.Done.class);
 
-        verify(messages).markFailed(eq(id), eq(FailureKind.EXHAUSTED), contains("Gave up after 3"), any());
+        verify(messages).markFailed(eq(id), eq(FailureKind.EXHAUSTED), eq(ErrorCode.DELIVERY_ATTEMPTS_EXHAUSTED),
+                contains("Gave up after 3"), any());
     }
 
     @Test
@@ -195,7 +199,8 @@ class DispatchServiceTest {
 
         assertThat(service.process(id)).isInstanceOf(Outcome.Done.class);
 
-        verify(messages).markFailed(eq(id), eq(FailureKind.PERMANENT), contains("invalid recipient"), any());
+        verify(messages).markFailed(eq(id), eq(FailureKind.PERMANENT), eq(ErrorCode.DELIVERY_REJECTED),
+                contains("invalid recipient"), any());
     }
 
     @Test
@@ -205,6 +210,20 @@ class DispatchServiceTest {
         assertThat(service.process(id)).isInstanceOf(Outcome.Done.class);
 
         verify(providers, never()).send(any());
-        verify(messages).markFailed(eq(id), eq(FailureKind.PERMANENT), contains("name"), any());
+        verify(messages).markFailed(eq(id), eq(FailureKind.PERMANENT), eq(ErrorCode.TEMPLATE_VARIABLE_MISSING),
+                contains("name"), any());
+    }
+
+    @Test
+    void aRequestWhoseContentWasErasedFailsAsContentMissingWithoutCallingProvider() {
+        NotificationRequest erased = new NotificationRequest();
+        erased.setId(message.getRequestId());
+        when(requests.findById(message.getRequestId())).thenReturn(Optional.of(erased));
+
+        assertThat(service.process(id)).isInstanceOf(Outcome.Done.class);
+
+        verify(providers, never()).send(any());
+        verify(messages).markFailed(eq(id), eq(FailureKind.PERMANENT), eq(ErrorCode.MESSAGE_CONTENT_MISSING),
+                contains("no content"), any());
     }
 }

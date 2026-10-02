@@ -18,6 +18,7 @@
 
 package com.techeazy.notification.clientapi;
 
+import com.techeazy.notification.error.ErrorCode;
 import com.techeazy.notification.clientapi.Dtos.*;
 import com.techeazy.notification.domain.Channel;
 import com.techeazy.notification.domain.MessageStatus;
@@ -148,8 +149,10 @@ public class StatusQueryService {
     }
 
     private static MessageView toView(NotificationMessage m) {
+        ErrorCode errorCode = m.getErrorCode();
         return new MessageView(m.getId(), m.getRecipient(), m.getStatus(), m.getAttempts(), m.getLastError(),
-                m.getProviderMessageId(), m.getSentAt(), m.getUpdatedAt());
+                m.getProviderMessageId(), m.getSentAt(), m.getUpdatedAt(),
+                errorCode == null ? null : errorCode.code(), errorCode == null ? null : errorCode.errorId());
     }
 
     private static PageRequest pageRequest(int page, int size, Sort sort) {

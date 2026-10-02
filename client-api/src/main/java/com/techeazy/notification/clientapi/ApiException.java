@@ -18,34 +18,35 @@
 
 package com.techeazy.notification.clientapi;
 
+import com.techeazy.notification.error.ErrorCode;
 import org.springframework.http.HttpStatus;
 
+/** A refusal of the client API, named by its {@link ErrorCode}; the handler turns it into the error body (ADR-031). */
 public class ApiException extends RuntimeException {
-    private final HttpStatus status;
-    private final String code;
+    private final ErrorCode errorCode;
 
-    public ApiException(HttpStatus status, String code, String message) {
+    public ApiException(ErrorCode errorCode, String message) {
         super(message);
-        this.status = status;
-        this.code = code;
+        this.errorCode = errorCode;
     }
 
-    public HttpStatus status() { return status; }
-    public String code() { return code; }
+    public ErrorCode errorCode() { return errorCode; }
+    public HttpStatus status() { return HttpStatus.valueOf(errorCode.httpStatus().orElseThrow()); }
+    public String code() { return errorCode.code(); }
 
     public static ApiException badRequest(String message) {
-        return new ApiException(HttpStatus.BAD_REQUEST, "INVALID_REQUEST", message);
+        return new ApiException(ErrorCode.INVALID_REQUEST, message);
     }
 
     public static ApiException notFound(String message) {
-        return new ApiException(HttpStatus.NOT_FOUND, "NOT_FOUND", message);
+        return new ApiException(ErrorCode.NOT_FOUND, message);
     }
 
-    public static ApiException conflict(String code, String message) {
-        return new ApiException(HttpStatus.CONFLICT, code, message);
+    public static ApiException conflict(ErrorCode errorCode, String message) {
+        return new ApiException(errorCode, message);
     }
 
-    public static ApiException forbidden(String code, String message) {
-        return new ApiException(HttpStatus.FORBIDDEN, code, message);
+    public static ApiException forbidden(ErrorCode errorCode, String message) {
+        return new ApiException(errorCode, message);
     }
 }

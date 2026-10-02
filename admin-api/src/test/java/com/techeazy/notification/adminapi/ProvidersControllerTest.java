@@ -17,6 +17,7 @@
  */
 package com.techeazy.notification.adminapi;
 
+import java.util.Optional;
 import com.techeazy.notification.application.ProviderDestinationPolicy;
 import com.techeazy.notification.domain.ProviderConfig;
 import com.techeazy.notification.infra.AesGcmCipher;
@@ -52,7 +53,8 @@ class ProvidersControllerTest {
                 host -> List.of(InetAddress.getAllByName(host)));
         ProvidersController controller = new ProvidersController(repository,
                 new ProviderSecrets(new AesGcmCipher("test-key")), destinations);
-        mvc = MockMvcBuilders.standaloneSetup(controller).build();
+        mvc = MockMvcBuilders.standaloneSetup(controller)
+                .setControllerAdvice(new AdminErrorHandler(Optional::empty)).build();
         when(repository.save(any(ProviderConfig.class))).thenAnswer(invocation -> invocation.getArgument(0));
     }
 
