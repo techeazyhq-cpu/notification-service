@@ -33,6 +33,27 @@ Positive: schema changes are an explicit, reviewable, gated step; previews and r
 
 Negative / accepted: one more artifact to build and run; `ddl-auto: validate` catches missing tables and columns but not every difference (for example indexes or constraints); rollback scripts are hand-written and only as good as their tests; a bad rollback of a data-changing changeset cannot restore deleted rows (changeset 003 documents this); the job has to be wired into any new deployment target (compose is done; Kubernetes/CI is not).
 
+## Amendment (2026-10-02): changesets must not lock large tables
+
+The job runs while the services keep serving, so a changeset that holds a write lock on `notification_message` or
+`notification_request` stops every accept and every send for as long as it runs. Changesets 011 and 012 did that: 011
+backfilled every failed row in one transaction, and 012 added CHECK constraints (each one scans the table under an
+exclusive lock) and built an index without `CONCURRENTLY`. They were harmless at pilot size and have already run
+everywhere, so they stay as they are. Every changeset from 013 on follows these rules, and review checks them:
+
+- **Indexes:** build with `CREATE INDEX CONCURRENTLY` (and drop with `DROP INDEX CONCURRENTLY`) in a changeset marked
+  `runInTransaction:false`. Its precondition must check the index is *valid* (`pg_index.indisvalid`), not just
+  present, and the changeset drops any invalid leftover first, so a build that failed halfway is redone rather than
+  adopted. Changeset 013 is the example.
+- **CHECK and foreign-key constraints:** add them `NOT VALID`, then `VALIDATE CONSTRAINT` in a later statement. The
+  validation scans the table without blocking writes.
+- **Backfills:** update in batches (for example 10,000 rows per statement, keyed on the primary key) in their own
+  changeset, never in the changeset that changes the table's structure.
+- **Columns:** `ADD COLUMN` with a constant default or no default is instant in PostgreSQL 11 and later. A volatile
+  default, or a type change, rewrites the table and needs a new column, a backfill and a switch-over instead.
+- **The run lock** is taken by polling `pg_try_advisory_lock`. A second migration blocked in `pg_advisory_lock` keeps
+  a snapshot open, which `CREATE INDEX CONCURRENTLY` waits for, so the two would deadlock.
+
 ## Follow-ups
 
 Separate database roles (migration job owns the schema; services get only DML rights); run `validate` and `update-sql` in CI against a production-like snapshot; wire the job into the real deployment pipeline; drop the unused `flyway_schema_history` table once every environment has been adopted.

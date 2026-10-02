@@ -28,6 +28,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeoutException;
@@ -46,6 +48,8 @@ import static org.mockito.Mockito.when;
 class CircuitBreakingMessagePublisherTest {
 
     private final MessagePublisher broker = mock(MessagePublisher.class);
+    private static final long SLOW_MS = 50;
+
     private final SimpleMeterRegistry meters = new SimpleMeterRegistry();
     private CircuitBreakingMessagePublisher publisher;
 
@@ -58,6 +62,7 @@ class CircuitBreakingMessagePublisherTest {
         settings.setFailureRateThreshold(50);
         settings.setWaitDurationInOpenStateMs(60_000);
         settings.setPermittedCallsInHalfOpenState(1);
+        settings.setSlowCallDurationThresholdMs(SLOW_MS);
         publisher = new CircuitBreakingMessagePublisher(broker, properties, meters);
     }
 
@@ -101,6 +106,40 @@ class CircuitBreakingMessagePublisherTest {
         assertThat(publisher.state()).isEqualTo(CircuitBreaker.State.CLOSED);
     }
 
+    /** A broker that confirms every publish, but only after seconds, is failing before publishes time out. */
+    @Test
+    void publishesTheBrokerConfirmsSlowlyOpenTheCircuitToo() {
+        when(broker.publish(any(), any(), any(), any())).thenAnswer(invocation -> confirmedAfter(SLOW_MS * 2));
+        List<CompletableFuture<Void>> published = new ArrayList<>();
+        for (int attempt = 0; attempt < 4; attempt++) {
+            published.add(publish());
+        }
+        published.forEach(CompletableFuture::join);
+
+        assertThat(publisher.state()).isEqualTo(CircuitBreaker.State.OPEN);
+        assertThat(publisher.circuitBreaker().getMetrics().getNumberOfSlowSuccessfulCalls()).isEqualTo(4);
+        assertThat(publish()).isCompletedExceptionally();
+    }
+
+    @Test
+    void publishesConfirmedQuicklyAreNotSlow() {
+        when(broker.publish(any(), any(), any(), any())).thenAnswer(invocation -> confirmedAfter(1));
+        for (int attempt = 0; attempt < 4; attempt++) {
+            publish().join();
+        }
+
+        assertThat(publisher.state()).isEqualTo(CircuitBreaker.State.CLOSED);
+        assertThat(publisher.circuitBreaker().getMetrics().getNumberOfSlowCalls()).isZero();
+    }
+
+    @Test
+    void theDefaultsTreatAPublishAsSlowWellBeforeItsTimeout() {
+        NotificationProperties.Pulsar pulsar = new NotificationProperties().getPulsar();
+
+        assertThat(pulsar.getCircuitBreaker().getSlowCallDurationThresholdMs())
+                .isLessThan(pulsar.getPublishTimeoutSeconds() * 1000L);
+    }
+
     @Test
     void aFailureRaisedBeforeAFutureExistsCountsAgainstTheBrokerToo() {
         when(broker.publish(any(), any(), any(), any())).thenThrow(new IllegalStateException("client closed"));
@@ -140,6 +179,11 @@ class CircuitBreakingMessagePublisherTest {
     @Test
     void theStateIsExportedAsTheSameMetricTheProviderBreakersUse() {
         assertThat(meters.find("resilience4j.circuitbreaker.state").tag("name", "broker").gauges()).isNotEmpty();
+    }
+
+    private static CompletableFuture<Void> confirmedAfter(long millis) {
+        return CompletableFuture.runAsync(() -> { },
+                CompletableFuture.delayedExecutor(millis, java.util.concurrent.TimeUnit.MILLISECONDS));
     }
 
     private CompletableFuture<Void> publish() {

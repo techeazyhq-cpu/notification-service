@@ -71,6 +71,8 @@ public class CircuitBreakingMessagePublisher implements MessagePublisher {
                 .failureRateThreshold(settings.getFailureRateThreshold())
                 .waitDurationInOpenState(Duration.ofMillis(settings.getWaitDurationInOpenStateMs()))
                 .permittedNumberOfCallsInHalfOpenState(settings.getPermittedCallsInHalfOpenState())
+                .slowCallDurationThreshold(Duration.ofMillis(settings.getSlowCallDurationThresholdMs()))
+                .slowCallRateThreshold(settings.getSlowCallRateThreshold())
                 .automaticTransitionFromOpenToHalfOpenEnabled(true)
                 .build());
         this.circuitBreaker = registry.circuitBreaker(NAME);

@@ -102,6 +102,13 @@ class RateLimitServiceTest {
     }
 
     @Test
+    void theErrorDictionaryHasOneSharedBucketPerPath() {
+        service.checkPublicCatalogue("/v1/errors");
+
+        verify(limiter).tryAcquire("public:/v1/errors", 20.0, 100);
+    }
+
+    @Test
     void theReserveShareIsConfigurable() {
         NotificationProperties properties = new NotificationProperties();
         properties.getRateLimit().setPriorityReserveFraction(0.5);
