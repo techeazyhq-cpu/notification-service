@@ -161,6 +161,7 @@ networkPolicy:
     trustedInternalEgress: []
 
 serviceMonitor:
-  # Requires the Prometheus Operator CRDs. Load deploy/observability/prometheus/notification-slo.rules.yml too.
+  # Requires the Prometheus Operator CRDs. Load deploy/observability/prometheus/notification-slo.rules.yml too, and
+  # postgres-recovery.rules.yml with deploy/k8s/postgres/pod-monitor.yaml when PostgreSQL runs on CloudNativePG.
   enabled: false
   interval: 15s

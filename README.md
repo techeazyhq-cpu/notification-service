@@ -223,7 +223,7 @@ then open Jaeger at http://localhost:16686 for traces and Prometheus at http://l
 
 ## Objectives and alerts
 
-Four service level objectives (accept availability 99.9%, accept latency 99% within 250 ms, delivery within 5 minutes for 99%, delivery success 99.5%) with burn-rate alerts, plus alerts for a stale backlog, a service down, an open provider circuit, dead letters, the rate limiter failing open (Redis down: limits are not enforced, but the platform keeps working) and lost audit records. The rules are in `deploy/observability/prometheus/notification-slo.rules.yml` and unit-tested in CI with `promtool`; [docs/slo.md](docs/slo.md) defines each objective and is the runbook for every alert. See ADR-024.
+Four service level objectives (accept availability 99.9%, accept latency 99% within 250 ms, delivery within 5 minutes for 99%, delivery success 99.5%) with burn-rate alerts, plus alerts for a stale backlog, a service down, an open provider circuit, dead letters, the rate limiter failing open (Redis down: limits are not enforced, but the platform keeps working) and lost audit records. The rules are in `deploy/observability/prometheus/notification-slo.rules.yml` and unit-tested in CI with `promtool`; [docs/slo.md](docs/slo.md) defines each objective and is the runbook for every alert. See ADR-024. PostgreSQL's recovery point is guarded separately: alerts for failing or stalled WAL archiving and for a missing, failed or day-old base backup (`postgres-recovery.rules.yml`, runbook in [docs/disaster-recovery.md](docs/disaster-recovery.md#backup-alerts)).
 
 ## Where providers may connect
 

@@ -95,6 +95,7 @@ Negative / accepted:
 ## Follow-ups
 
 - Alerts on archiving failures and on the age of the last successful base backup, from the operator's or managed
-  service's metrics.
+  service's metrics. Done for CloudNativePG: `deploy/observability/prometheus/postgres-recovery.rules.yml`, with the
+  runbook in docs/disaster-recovery.md.
 - Infrastructure as code for the chosen cloud: managed PostgreSQL with the settings above, a cross-region backup
   bucket, a Pulsar cluster and Redis.

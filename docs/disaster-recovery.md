@@ -54,12 +54,57 @@ CloudNativePG), so a failover needs no configuration change.
 
 1. **Continuous WAL archiving plus a daily base backup** to object storage in another region, kept for 30 days
    ([`object-store.yaml`](../deploy/k8s/postgres/object-store.yaml)). This is what point-in-time recovery uses.
-   Watch the cluster's `ContinuousArchiving` and `LastBackupSucceeded` conditions, and the failure count in
-   `pg_stat_archiver`. A failed archive upload is retried, but a persistent one silently stretches the recovery
-   point.
+   A failed archive upload is retried, but a persistent one silently stretches the recovery point, so the
+   [alerts below](#backup-alerts) watch both archiving and base backups.
 2. **A logical dump** with [`deploy/backup/postgres-backup.sh`](../deploy/backup/postgres-backup.sh) for drills,
    migrations between versions, and as an independent copy. It records every table's row count from the same
    snapshot as the dump.
+
+### Backup alerts
+
+[`postgres-recovery.rules.yml`](../deploy/observability/prometheus/postgres-recovery.rules.yml) holds four alerts,
+unit-tested in CI with `promtool`. Apply [`pod-monitor.yaml`](../deploy/k8s/postgres/pod-monitor.yaml) so Prometheus
+scrapes every instance and labels it with its cluster, and load the rules file next to `notification-slo.rules.yml`.
+With a managed service, alert on its equivalents instead: failed WAL uploads and the age of the latest snapshot.
+
+#### WAL archiving failing
+
+Critical. The primary's last archive upload failed and nothing has been archived since, for 10 minutes. Every
+minute this lasts adds to the data a point-in-time recovery would lose, beyond the 5-minute objective.
+
+1. `kubectl cnpg status notification-db -n datastores` shows the archiving error and the `ContinuousArchiving`
+   condition. The primary's log has the plugin's upload error.
+2. Usual causes: expired or rotated object-store credentials, a deleted or renamed bucket, a changed bucket policy,
+   or the network policy or firewall in front of the object store.
+3. Once uploads succeed again the backlog drains on its own. Check that the alert clears and that
+   `cnpg_collector_pg_wal_archive_status{value="ready"}` falls back to zero.
+
+#### WAL archive stalled
+
+Critical. WAL segments are waiting to be archived and nothing has been archived for 15 minutes (or ever), without a
+recorded failure: a hung or misconfigured archiver rather than a rejected upload. An idle database with nothing
+waiting does not raise it.
+
+1. Check the plugin sidecar of the primary is running and the cluster's `plugins` entry still has
+   `isWALArchiver: true`.
+2. Watch `pg_wal` usage: segments that cannot be archived are kept, and a full WAL volume stops the database.
+3. Then follow the steps for [WAL archiving failing](#wal-archiving-failing).
+
+#### Base backup too old
+
+Warning. The newest successful base backup is over 26 hours old (the schedule is daily at 02:00 UTC). Recovery is
+still possible as long as archiving works, but it replays every WAL segment since the backup, which stretches the
+one-hour recovery objective.
+
+1. `kubectl get backups -n datastores` lists recent attempts. Check the `ScheduledBackup` is not suspended.
+2. Take one now: `kubectl cnpg backup notification-db -n datastores --method plugin --plugin-name
+   barman-cloud.cloudnative-pg.io`.
+
+#### Base backup failed
+
+Warning. The latest base backup attempt failed after the last good one. `kubectl describe backup <name> -n
+datastores` gives the reason; the causes overlap with failed archiving. Fix it and take a backup by hand, as above,
+rather than waiting a day for the next scheduled one.
 
 ### Point-in-time recovery
 

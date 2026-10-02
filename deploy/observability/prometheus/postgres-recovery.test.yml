@@ -1,0 +1,185 @@
+# Copyright 2026 Vasantha Kumar
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+# @author Vasantha Kumar <vasantha.kumar@hotmail.com>
+#
+# promtool unit tests for postgres-recovery.rules.yml. Seconds-since gauges grow by 60 per one-minute sample, as the
+# CloudNativePG exporter reports them; -1 means "never". Run: promtool test rules postgres-recovery.test.yml
+rule_files:
+  - postgres-recovery.rules.yml
+evaluation_interval: 30s
+
+tests:
+  - name: archive uploads failing with no success since raise an archiving alert
+    interval: 1m
+    input_series:
+      - series: 'cnpg_pg_stat_archiver_seconds_since_last_archival{namespace="datastores",
+          cluster="notification-db",pod="notification-db-1"}'
+        values: '120+60x30'
+      - series: 'cnpg_pg_stat_archiver_seconds_since_last_failure{namespace="datastores",
+          cluster="notification-db",pod="notification-db-1"}'
+        values: '10x30'
+    alert_rule_test:
+      - eval_time: 15m
+        alertname: PostgresWalArchivingFailing
+        exp_alerts:
+          - exp_labels: {severity: critical, namespace: datastores, cluster: notification-db}
+            exp_annotations:
+              summary: "WAL archiving of datastores/notification-db is failing"
+              description: "No WAL segment has been archived since the uploads started failing, so the recovery
+                point is falling behind."
+              runbook: docs/disaster-recovery.md#wal-archiving-failing
+
+  - name: a failure followed by a successful upload is not an alert
+    interval: 1m
+    input_series:
+      - series: 'cnpg_pg_stat_archiver_seconds_since_last_archival{namespace="datastores",
+          cluster="notification-db",pod="notification-db-1"}'
+        values: '30x30'
+      - series: 'cnpg_pg_stat_archiver_seconds_since_last_failure{namespace="datastores",
+          cluster="notification-db",pod="notification-db-1"}'
+        values: '90+60x30'
+    alert_rule_test:
+      - eval_time: 15m
+        alertname: PostgresWalArchivingFailing
+        exp_alerts: []
+
+  - name: an archiver that has never failed is not an alert
+    interval: 1m
+    input_series:
+      - series: 'cnpg_pg_stat_archiver_seconds_since_last_archival{namespace="datastores",
+          cluster="notification-db",pod="notification-db-1"}'
+        values: '30x30'
+      - series: 'cnpg_pg_stat_archiver_seconds_since_last_failure{namespace="datastores",
+          cluster="notification-db",pod="notification-db-1"}'
+        values: '-1x30'
+    alert_rule_test:
+      - eval_time: 15m
+        alertname: PostgresWalArchivingFailing
+        exp_alerts: []
+
+  - name: segments waiting while nothing has been archived for 15 minutes stall the recovery point
+    interval: 1m
+    input_series:
+      - series: 'cnpg_pg_stat_archiver_seconds_since_last_archival{namespace="datastores",
+          cluster="notification-db",pod="notification-db-1"}'
+        values: '600+60x30'
+      - series: 'cnpg_collector_pg_wal_archive_status{value="ready",namespace="datastores",
+          cluster="notification-db",pod="notification-db-1"}'
+        values: '3x30'
+    alert_rule_test:
+      - eval_time: 15m
+        alertname: PostgresWalArchiveStalled
+        exp_alerts:
+          - exp_labels: {severity: critical, namespace: datastores, cluster: notification-db}
+            exp_annotations:
+              summary: "WAL of datastores/notification-db is waiting to be archived and nothing has been archived for
+                15 minutes"
+              runbook: docs/disaster-recovery.md#wal-archive-stalled
+
+  - name: a primary that has never archived while segments wait stalls too
+    interval: 1m
+    input_series:
+      - series: 'cnpg_pg_stat_archiver_seconds_since_last_archival{namespace="datastores",
+          cluster="notification-db",pod="notification-db-1"}'
+        values: '-1x30'
+      - series: 'cnpg_collector_pg_wal_archive_status{value="ready",namespace="datastores",
+          cluster="notification-db",pod="notification-db-1"}'
+        values: '1x30'
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: PostgresWalArchiveStalled
+        exp_alerts:
+          - exp_labels: {severity: critical, namespace: datastores, cluster: notification-db}
+            exp_annotations:
+              summary: "WAL of datastores/notification-db is waiting to be archived and nothing has been archived for
+                15 minutes"
+              runbook: docs/disaster-recovery.md#wal-archive-stalled
+
+  - name: an idle database with nothing waiting to archive is not an alert
+    interval: 1m
+    input_series:
+      - series: 'cnpg_pg_stat_archiver_seconds_since_last_archival{namespace="datastores",
+          cluster="notification-db",pod="notification-db-1"}'
+        values: '7200+60x30'
+      - series: 'cnpg_collector_pg_wal_archive_status{value="ready",namespace="datastores",
+          cluster="notification-db",pod="notification-db-1"}'
+        values: '0x30'
+    alert_rule_test:
+      - eval_time: 15m
+        alertname: PostgresWalArchiveStalled
+        exp_alerts: []
+
+  - name: a base backup older than a day and two hours is too old, on any instance's report
+    interval: 1m
+    input_series:
+      - series: 'barman_cloud_cloudnative_pg_io_last_available_backup_timestamp{namespace="datastores",
+          cluster="notification-db",pod="notification-db-1"}'
+        values: '0x1700'
+      - series: 'barman_cloud_cloudnative_pg_io_last_available_backup_timestamp{namespace="datastores",
+          cluster="notification-db",pod="notification-db-2"}'
+        values: '0x1700'
+    alert_rule_test:
+      - eval_time: 27h
+        alertname: PostgresBaseBackupTooOld
+        exp_alerts:
+          - exp_labels: {severity: warning, namespace: datastores, cluster: notification-db}
+            exp_annotations:
+              summary: "The last base backup of datastores/notification-db is older than 26 hours"
+              description: "It is 1d 3h 0m 0s old. Point-in-time recovery has to replay every WAL segment since,
+                which stretches the recovery time."
+              runbook: docs/disaster-recovery.md#base-backup-too-old
+
+  - name: a base backup from today is not an alert
+    interval: 1m
+    input_series:
+      - series: 'barman_cloud_cloudnative_pg_io_last_available_backup_timestamp{namespace="datastores",
+          cluster="notification-db",pod="notification-db-1"}'
+        values: '72000x1700'
+    alert_rule_test:
+      - eval_time: 27h
+        alertname: PostgresBaseBackupTooOld
+        exp_alerts: []
+
+  - name: a failed attempt after the last good backup raises a backup failure
+    interval: 1m
+    input_series:
+      - series: 'barman_cloud_cloudnative_pg_io_last_available_backup_timestamp{namespace="datastores",
+          cluster="notification-db",pod="notification-db-1"}'
+        values: '100x30'
+      - series: 'barman_cloud_cloudnative_pg_io_last_failed_backup_timestamp{namespace="datastores",
+          cluster="notification-db",pod="notification-db-1"}'
+        values: '500x30'
+    alert_rule_test:
+      - eval_time: 15m
+        alertname: PostgresBaseBackupFailed
+        exp_alerts:
+          - exp_labels: {severity: warning, namespace: datastores, cluster: notification-db}
+            exp_annotations:
+              summary: "The latest base backup of datastores/notification-db failed"
+              runbook: docs/disaster-recovery.md#base-backup-failed
+
+  - name: a good backup after an earlier failure clears the backup failure
+    interval: 1m
+    input_series:
+      - series: 'barman_cloud_cloudnative_pg_io_last_available_backup_timestamp{namespace="datastores",
+          cluster="notification-db",pod="notification-db-1"}'
+        values: '900x30'
+      - series: 'barman_cloud_cloudnative_pg_io_last_failed_backup_timestamp{namespace="datastores",
+          cluster="notification-db",pod="notification-db-1"}'
+        values: '500x30'
+    alert_rule_test:
+      - eval_time: 15m
+        alertname: PostgresBaseBackupFailed
+        exp_alerts: []
