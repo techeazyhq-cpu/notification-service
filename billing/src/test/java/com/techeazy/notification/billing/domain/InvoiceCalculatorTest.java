@@ -27,6 +27,7 @@ import java.util.Map;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class InvoiceCalculatorTest {
 
@@ -111,5 +112,78 @@ class InvoiceCalculatorTest {
         Map<Channel, Long> usage = Map.of(Channel.SMS, 55L);
 
         assertThat(calculator.linesFor(plan, usage)).isEqualTo(calculator.linesFor(plan, usage));
+    }
+
+
+    private static Money usd(String amount) {
+        return Money.of(amount, "USD");
+    }
+
+    private static OtpPrices smsOtpAt(String price) {
+        return new OtpPrices(Map.of(Channel.SMS, usd(price)));
+    }
+
+    @Test
+    void aTenantsOneTimePasswordsGetALineOfTheirOwnAtItsOtpPrice() {
+        Plan plan = plan(Money.zero("USD"), Map.of(Channel.SMS, new ChannelRate(usd("0.008"), 0)));
+
+        List<InvoiceLine> lines = calculator.linesFor(plan, smsOtpAt("0.012"),
+                Map.of(Channel.SMS, new SentCount(12_000, 3_000)));
+
+        assertThat(lines).extracting(InvoiceLine::kind, InvoiceLine::quantity, InvoiceLine::unitPrice, InvoiceLine::amount)
+                .containsExactly(
+                        org.assertj.core.groups.Tuple.tuple(InvoiceLineKind.USAGE, 12_000L, usd("0.008"), usd("96.00")),
+                        org.assertj.core.groups.Tuple.tuple(InvoiceLineKind.OTP_USAGE, 3_000L, usd("0.012"), usd("36.00")));
+        assertThat(lines.get(1).description()).isEqualTo("SMS one-time passwords: 3000 sent, 0 included free");
+    }
+
+    @Test
+    void theFreeAllowanceCoversOrdinaryMessagesFirstAndWhatIsLeftCoversOneTimePasswords() {
+        Plan plan = plan(Money.zero("USD"), Map.of(Channel.SMS, new ChannelRate(usd("0.008"), 1_000)));
+
+        List<InvoiceLine> lines = calculator.linesFor(plan, smsOtpAt("0.012"), Map.of(Channel.SMS, new SentCount(700, 500)));
+
+        assertThat(lines).extracting(InvoiceLine::kind, InvoiceLine::quantity)
+                .containsExactly(org.assertj.core.groups.Tuple.tuple(InvoiceLineKind.USAGE, 0L),
+                        org.assertj.core.groups.Tuple.tuple(InvoiceLineKind.OTP_USAGE, 200L));
+        assertThat(lines.get(0).description()).contains("700 sent", "700 included free");
+        assertThat(lines.get(1).description()).contains("500 sent", "300 included free");
+    }
+
+    @Test
+    void oneTimePasswordsAloneShowOnlyTheirOwnLine() {
+        Plan plan = plan(Money.zero("USD"), Map.of(Channel.SMS, new ChannelRate(usd("0.008"), 0)));
+
+        List<InvoiceLine> lines = calculator.linesFor(plan, smsOtpAt("0.012"), Map.of(Channel.SMS, new SentCount(0, 10)));
+
+        assertThat(lines).singleElement().satisfies(line -> assertThat(line.kind()).isEqualTo(InvoiceLineKind.OTP_USAGE));
+    }
+
+    /** A tenant without an OTP price for the channel is billed exactly as before OTP prices existed. */
+    @Test
+    void withoutAnOtpPriceOneTimePasswordsAreOrdinaryMessagesOfTheChannel() {
+        Plan plan = plan(Money.zero("USD"), Map.of(Channel.SMS, new ChannelRate(usd("0.008"), 100)));
+        OtpPrices emailOnly = new OtpPrices(Map.of(Channel.EMAIL, usd("0.002")));
+
+        List<InvoiceLine> lines = calculator.linesFor(plan, emailOnly, Map.of(Channel.SMS, new SentCount(400, 100)));
+
+        assertThat(lines).isEqualTo(calculator.linesFor(plan, Map.of(Channel.SMS, 500L)));
+    }
+
+    @Test
+    void otpPricesInAnotherCurrencyThanThePlanAreRefused() {
+        Plan plan = plan(Money.zero("USD"), Map.of(Channel.SMS, new ChannelRate(usd("0.008"), 0)));
+        OtpPrices euros = new OtpPrices(Map.of(Channel.SMS, Money.of("0.01", "EUR")));
+        Map<Channel, SentCount> sent = Map.of(Channel.SMS, new SentCount(1, 1));
+
+        assertThatThrownBy(() -> calculator.linesFor(plan, euros, sent)).isInstanceOf(InvalidBillingStateException.class);
+    }
+
+    @Test
+    void otpPricesAreNeverNegativeAndShareOneCurrency() {
+        assertThatThrownBy(() -> new OtpPrices(Map.of(Channel.SMS, usd("-0.01"))))
+                .isInstanceOf(InvalidBillingDataException.class);
+        assertThatThrownBy(() -> new OtpPrices(Map.of(Channel.SMS, usd("0.01"), Channel.EMAIL, Money.of("0.01", "EUR"))))
+                .isInstanceOf(InvalidBillingDataException.class);
     }
 }

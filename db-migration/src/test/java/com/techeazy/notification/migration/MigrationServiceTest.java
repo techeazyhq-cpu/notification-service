@@ -59,9 +59,10 @@ class MigrationServiceTest {
             List.of("001-baseline", "002-client-tracking-indexes", "003-client-owned-templates", "004-billing",
                     "005-admin-accounts", "006-client-senders", "007-personal-data-retention", "008-dead-letters",
                     "009-admin-roles", "010-admin-audit-log", "011-message-error-code",
-                    "012-message-category", "013-otp-sweep-index");
+                    "012-message-category", "013-otp-sweep-index", "014-billing-otp-price",
+                    "015-sent-usage-by-category");
     private static final String NOT_COMPARED = "('databasechangelog','databasechangeloglock','flyway_schema_history',"
-            + "'billing_plan','billing_plan_rate','billing_account','credit_ledger_entry','credit_hold','invoice','invoice_line','invoice_payment','admin_user','admin_recovery_code','admin_session','client_sender','admin_audit_event')";
+            + "'billing_plan','billing_plan_rate','billing_account','credit_ledger_entry','credit_hold','invoice','invoice_line','invoice_payment','admin_user','admin_recovery_code','admin_session','client_sender','admin_audit_event','billing_account_otp_price')";
     private static final List<String> BILLING_TABLES =
             List.of("billing_plan", "billing_plan_rate", "billing_account", "credit_ledger_entry", "credit_hold", "invoice", "invoice_line", "invoice_payment");
 
@@ -302,6 +303,55 @@ class MigrationServiceTest {
                 + "'ix_message_inflight_otp'::regclass")).containsExactly("true");
         assertThat(query(db, "select pg_get_indexdef('ix_message_inflight_otp'::regclass)").getFirst())
                 .contains("WHERE");
+    }
+
+    @Test
+    void theOtpPriceTableRefusesNegativePricesAndUnknownChannelsAndRollsBackCleanly() throws Exception {
+        String db = newDatabase();
+        MigrationService service = service(db, true);
+        service.update();
+        seed(db);
+        execute(db, "insert into billing_plan (id, name, currency, platform_fee, tax_rate, active, created_at, updated_at) "
+                + "values ('00000000-0000-0000-0000-0000000000e1', 'p', 'USD', 0, 0, true, now(), now())");
+        execute(db, "insert into billing_account (client_id, plan_id, mode, status, created_at, updated_at) "
+                + "select id, '00000000-0000-0000-0000-0000000000e1', 'POSTPAID', 'ACTIVE', now(), now() from client limit 1");
+
+        execute(db, "insert into billing_account_otp_price (client_id, channel, unit_price, currency, updated_at) "
+                + "select client_id, 'SMS', 0.012, 'USD', now() from billing_account");
+        assertThatThrownBy(() -> execute(db, "insert into billing_account_otp_price "
+                + "(client_id, channel, unit_price, currency, updated_at) "
+                + "select client_id, 'EMAIL', -1, 'USD', now() from billing_account"))
+                .hasMessageContaining("ck_otp_price_amount");
+        assertThatThrownBy(() -> execute(db, "insert into billing_account_otp_price "
+                + "(client_id, channel, unit_price, currency, updated_at) "
+                + "select client_id, 'FAX', 1, 'USD', now() from billing_account"))
+                .hasMessageContaining("ck_otp_price_channel");
+
+        undoFrom(service, "014-billing-otp-price");
+
+        assertThat(query(db, "select table_name from information_schema.tables "
+                + "where table_name = 'billing_account_otp_price'")).isEmpty();
+    }
+
+    @Test
+    void theUsageIndexIsRebuiltWithTheCategoryAndRollsBackToTheOldOne() throws Exception {
+        String db = newDatabase();
+        MigrationService service = service(db, true);
+        service.update();
+
+        assertThat(query(db, "select indexname from pg_indexes where indexname in "
+                + "('ix_message_sent_usage', 'ix_message_sent_usage_category')"))
+                .containsExactly("ix_message_sent_usage_category");
+        assertThat(query(db, "select pg_get_indexdef('ix_message_sent_usage_category'::regclass)").getFirst())
+                .contains("INCLUDE (category)").contains("WHERE");
+        assertThat(query(db, "select indisvalid::text from pg_index "
+                + "where indexrelid = 'ix_message_sent_usage_category'::regclass")).containsExactly("true");
+
+        undoFrom(service, "015-sent-usage-by-category");
+
+        assertThat(query(db, "select indexname from pg_indexes where indexname in "
+                + "('ix_message_sent_usage', 'ix_message_sent_usage_category')"))
+                .containsExactly("ix_message_sent_usage");
     }
 
     @Test
@@ -552,7 +602,8 @@ class MigrationServiceTest {
         lines.addAll(query(database, "select 'idx ' || tablename || ' ' || indexdef from pg_indexes "
                 + "where schemaname='public' and indexname not in ('ix_message_sent_usage','ix_message_erase_due',"
                 + "'ix_request_erase_due','ix_request_idempotency_due','ix_message_dead_letters',"
-                + "'ix_message_pending_otp','ix_message_inflight_otp') and tablename not in " + NOT_COMPARED));
+                + "'ix_message_pending_otp','ix_message_inflight_otp',"
+                + "'ix_message_sent_usage_category') and tablename not in " + NOT_COMPARED));
         lines.addAll(query(database, "select 'con ' || conrelid::regclass || ' ' || conname || ' ' || pg_get_constraintdef(oid) "
                 + "from pg_constraint where connamespace = 'public'::regnamespace and conrelid::regclass::text not in "
                         + NOT_COMPARED + " and conname not in ('ck_message_failure_kind', 'ck_request_category',"

@@ -20,6 +20,7 @@ package com.techeazy.notification.billing.application;
 
 import com.techeazy.notification.billing.application.port.AccountRepository;
 import com.techeazy.notification.billing.application.port.InvoiceRepository;
+import com.techeazy.notification.billing.application.port.OtpPriceLookup;
 import com.techeazy.notification.billing.application.port.PlanRepository;
 import com.techeazy.notification.billing.application.port.Transactions;
 import com.techeazy.notification.billing.application.port.UsageReader;
@@ -60,6 +61,7 @@ public class InvoiceService {
     private final InvoiceRepository invoices;
     private final AccountRepository accounts;
     private final PlanRepository plans;
+    private final OtpPriceLookup otpPrices;
     private final UsageReader usage;
     private final InvoiceCalculator calculator;
     private final Transactions transactions;
@@ -68,11 +70,12 @@ public class InvoiceService {
 
     @SuppressWarnings("java:S107")
     public InvoiceService(InvoiceRepository invoices, AccountRepository accounts, PlanRepository plans,
-                          UsageReader usage, InvoiceCalculator calculator, Transactions transactions, Clock clock,
-                          int paymentTermsDays) {
+                          OtpPriceLookup otpPrices, UsageReader usage, InvoiceCalculator calculator,
+                          Transactions transactions, Clock clock, int paymentTermsDays) {
         this.invoices = invoices;
         this.accounts = accounts;
         this.plans = plans;
+        this.otpPrices = otpPrices;
         this.usage = usage;
         this.calculator = calculator;
         this.transactions = transactions;
@@ -170,7 +173,7 @@ public class InvoiceService {
             throw new InvalidBillingStateException("Period " + period.label() + " is not over yet");
         }
         Plan plan = plans.findById(account.planId()).orElseThrow(() -> new BillingNotFoundException("Plan"));
-        List<InvoiceLine> lines = calculator.linesFor(plan,
+        List<InvoiceLine> lines = calculator.linesFor(plan, otpPrices.findByClientId(clientId),
                 usage.sentByChannel(clientId, period.start(), period.endExclusive()));
         Optional<Invoice> existing = invoices.findCurrent(clientId, period);
         if (existing.isPresent()) {

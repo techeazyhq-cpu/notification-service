@@ -29,6 +29,7 @@ import com.techeazy.notification.billing.domain.InvoiceStatus;
 import com.techeazy.notification.billing.domain.LedgerEntry;
 import com.techeazy.notification.billing.domain.LedgerEntryType;
 import com.techeazy.notification.billing.domain.Money;
+import com.techeazy.notification.billing.domain.OtpPrices;
 import com.techeazy.notification.billing.domain.Payment;
 import com.techeazy.notification.billing.domain.Plan;
 import com.techeazy.notification.domain.Channel;
@@ -47,8 +48,14 @@ final class BillingAdminViews {
 
     record PlanView(UUID id, String name, String currency, String platformFee, BigDecimal taxRate, boolean active, List<RateView> rates) {}
 
+    /** {@code otpPrices} lists only the channels where the tenant pays its own OTP price (ADR-034). */
     record AccountView(UUID clientId, String clientName, UUID planId, String planName, String currency, BillingMode mode,
-                       AccountStatus status, String creditBalance, String monthlySpendCap, String billingEmail) {}
+                       AccountStatus status, String creditBalance, String monthlySpendCap, String billingEmail,
+                       List<OtpPriceView> otpPrices) {}
+
+    record OtpPriceView(Channel channel, String unitPrice) {}
+
+    record OtpPricesView(String currency, List<OtpPriceView> prices) {}
 
     record LineView(InvoiceLineKind kind, Channel channel, String description, long quantity, String unitPrice, String amount) {}
 
@@ -71,10 +78,19 @@ final class BillingAdminViews {
         return new PlanView(plan.id(), plan.name(), plan.currency(), plan.platformFee().formatted(), plan.taxRate(), plan.active(), rates);
     }
 
-    static AccountView account(BillingAccount account, String clientName, Plan plan) {
+    static AccountView account(BillingAccount account, String clientName, Plan plan, OtpPrices otpPrices) {
         return new AccountView(account.clientId(), clientName, plan.id(), plan.name(), plan.currency(), account.mode(),
                 account.status(), account.isPrepaid() ? account.creditBalance().formatted() : null,
-                account.spendCap().map(Money::formatted).orElse(null), account.billingEmail());
+                account.spendCap().map(Money::formatted).orElse(null), account.billingEmail(), otpPriceViews(otpPrices));
+    }
+
+    static OtpPricesView otpPrices(Plan plan, OtpPrices otpPrices) {
+        return new OtpPricesView(plan.currency(), otpPriceViews(otpPrices));
+    }
+
+    private static List<OtpPriceView> otpPriceViews(OtpPrices otpPrices) {
+        return otpPrices.prices().entrySet().stream()
+                .map(e -> new OtpPriceView(e.getKey(), e.getValue().unitFormatted())).toList();
     }
 
     static InvoiceView invoice(Invoice invoice, String clientName) {

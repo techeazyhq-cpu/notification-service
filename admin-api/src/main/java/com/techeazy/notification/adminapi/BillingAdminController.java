@@ -22,6 +22,7 @@ import com.techeazy.notification.adminapi.BillingAdminViews.AccountView;
 import com.techeazy.notification.adminapi.BillingAdminViews.GenerationView;
 import com.techeazy.notification.adminapi.BillingAdminViews.InvoiceView;
 import com.techeazy.notification.adminapi.BillingAdminViews.LedgerPageView;
+import com.techeazy.notification.adminapi.BillingAdminViews.OtpPricesView;
 import com.techeazy.notification.adminapi.BillingAdminViews.PlanView;
 import com.techeazy.notification.billing.application.AccountAssignment;
 import com.techeazy.notification.billing.application.AccountManagement;
@@ -36,9 +37,11 @@ import com.techeazy.notification.billing.domain.BillingAccount;
 import com.techeazy.notification.billing.domain.BillingMode;
 import com.techeazy.notification.billing.domain.BillingPeriod;
 import com.techeazy.notification.billing.domain.ChannelRate;
+import com.techeazy.notification.billing.domain.InvalidBillingDataException;
 import com.techeazy.notification.billing.domain.Invoice;
 import com.techeazy.notification.billing.domain.InvoiceStatus;
 import com.techeazy.notification.billing.domain.Money;
+import com.techeazy.notification.billing.domain.OtpPrices;
 import com.techeazy.notification.billing.domain.Plan;
 import com.techeazy.notification.domain.Channel;
 import com.techeazy.notification.domain.Client;
@@ -97,6 +100,11 @@ class BillingAdminController {
 
     record VoidInput(@NotBlank String reason) {}
 
+    record OtpPriceInput(@NotNull Channel channel, @NotNull BigDecimal unitPrice) {}
+
+    /** The tenant's complete set of OTP prices; a channel left out pays the plan's price, and none removes them all. */
+    record OtpPricesInput(List<@Valid OtpPriceInput> prices) {}
+
     private final PlanCatalog plans;
     private final AccountManagement accounts;
     private final CreditService credits;
@@ -133,7 +141,8 @@ class BillingAdminController {
         Map<UUID, String> names = clientNames();
         Map<UUID, Plan> planById = plans.list().stream().collect(Collectors.toMap(Plan::id, Function.identity()));
         return accounts.list().stream()
-                .map(a -> BillingAdminViews.account(a, names.getOrDefault(a.clientId(), UNKNOWN_CLIENT), planById.get(a.planId()))).toList();
+                .map(a -> BillingAdminViews.account(a, names.getOrDefault(a.clientId(), UNKNOWN_CLIENT),
+                        planById.get(a.planId()), accounts.otpPrices(a.clientId()))).toList();
     }
 
     @PutMapping("/accounts/{clientId}")
@@ -141,7 +150,27 @@ class BillingAdminController {
         Plan plan = plans.get(in.planId());
         Money cap = in.monthlySpendCap() == null ? null : new Money(in.monthlySpendCap(), plan.currency());
         BillingAccount saved = accounts.assign(new AccountAssignment(clientId, in.planId(), in.mode(), cap, in.status(), in.billingEmail()));
-        return BillingAdminViews.account(saved, clientName(clientId), plans.get(saved.planId()));
+        return BillingAdminViews.account(saved, clientName(clientId), plans.get(saved.planId()),
+                accounts.otpPrices(clientId));
+    }
+
+    @GetMapping("/accounts/{clientId}/otp-prices")
+    OtpPricesView otpPrices(@PathVariable UUID clientId) {
+        return BillingAdminViews.otpPrices(plans.get(accounts.get(clientId).planId()), accounts.otpPrices(clientId));
+    }
+
+    /** Sets what this tenant pays per one-time password, per channel, in its plan's currency (ADR-034). */
+    @PutMapping("/accounts/{clientId}/otp-prices")
+    OtpPricesView setOtpPrices(@PathVariable UUID clientId, @Valid @RequestBody OtpPricesInput in) {
+        Map<Channel, BigDecimal> prices = new EnumMap<>(Channel.class);
+        for (OtpPriceInput price : in.prices() == null ? List.<OtpPriceInput>of() : in.prices()) {
+            if (prices.put(price.channel(), price.unitPrice()) != null) {
+                throw new InvalidBillingDataException("Each channel may have one OTP price; " + price.channel()
+                        + " is given twice");
+            }
+        }
+        OtpPrices saved = accounts.setOtpPrices(clientId, prices);
+        return BillingAdminViews.otpPrices(plans.get(accounts.get(clientId).planId()), saved);
     }
 
     @PostMapping("/accounts/{clientId}/credit")

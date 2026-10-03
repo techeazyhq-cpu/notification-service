@@ -29,6 +29,8 @@ import com.techeazy.notification.billing.application.port.AccountLookup;
 import com.techeazy.notification.billing.application.port.AccountRepository;
 import com.techeazy.notification.billing.application.port.CreditStore;
 import com.techeazy.notification.billing.application.port.InvoiceRepository;
+import com.techeazy.notification.billing.application.port.OtpPriceLookup;
+import com.techeazy.notification.billing.application.port.OtpPriceRepository;
 import com.techeazy.notification.billing.application.port.PlanLookup;
 import com.techeazy.notification.billing.application.port.PlanRepository;
 import com.techeazy.notification.billing.application.port.Transactions;
@@ -83,6 +85,11 @@ public class BillingConfiguration {
     }
 
     @Bean
+    OtpPriceRepository otpPriceRepository(JdbcClient jdbc) {
+        return new JdbcOtpPriceRepository(jdbc);
+    }
+
+    @Bean
     UsageReader usageReader(JdbcClient jdbc) {
         return new JdbcUsageReader(jdbc);
     }
@@ -98,8 +105,9 @@ public class BillingConfiguration {
     }
 
     @Bean
-    AccountManagement accountManagement(AccountRepository accounts, PlanRepository plans, CreditStore credits) {
-        return new AccountManagement(accounts, plans, credits);
+    AccountManagement accountManagement(AccountRepository accounts, PlanRepository plans, CreditStore credits,
+                                        OtpPriceRepository otpPrices, Transactions transactions) {
+        return new AccountManagement(accounts, plans, credits, otpPrices, transactions);
     }
 
     @Bean
@@ -109,13 +117,15 @@ public class BillingConfiguration {
     }
 
     @Bean
-    AdmissionControl admissionControl(AccountRepository accounts, PlanRepository plans, CreditStore credits,
-                                      UsageReader usage, InvoiceCalculator calculator, Clock clock,
-                                      @Value("${billing.admission-cache-seconds:5}") long cacheSeconds) {
+    @SuppressWarnings("java:S107")
+    AdmissionControl admissionControl(AccountRepository accounts, PlanRepository plans, OtpPriceRepository otpPrices,
+                                      CreditStore credits, UsageReader usage, InvoiceCalculator calculator,
+                                      Clock clock, @Value("${billing.admission-cache-seconds:5}") long cacheSeconds) {
         Duration ttl = Duration.ofSeconds(Math.max(cacheSeconds, 1));
         AccountLookup accountLookup = cacheSeconds > 0 ? CachedLookups.accounts(accounts, ttl) : accounts;
         PlanLookup planLookup = cacheSeconds > 0 ? CachedLookups.plans(plans, ttl) : plans;
-        return new AdmissionControl(accountLookup, planLookup, credits, usage, calculator, clock);
+        OtpPriceLookup otpPriceLookup = cacheSeconds > 0 ? CachedLookups.otpPrices(otpPrices, ttl) : otpPrices;
+        return new AdmissionControl(accountLookup, planLookup, otpPriceLookup, credits, usage, calculator, clock);
     }
 
     @Bean
@@ -124,16 +134,17 @@ public class BillingConfiguration {
     }
 
     @Bean
+    @SuppressWarnings("java:S107")
     InvoiceService invoiceService(InvoiceRepository invoices, AccountRepository accounts, PlanRepository plans,
-                                  UsageReader usage, InvoiceCalculator calculator, Transactions transactions,
-                                  Clock clock, BillingProperties properties) {
-        return new InvoiceService(invoices, accounts, plans, usage, calculator, transactions, clock,
+                                  OtpPriceRepository otpPrices, UsageReader usage, InvoiceCalculator calculator,
+                                  Transactions transactions, Clock clock, BillingProperties properties) {
+        return new InvoiceService(invoices, accounts, plans, otpPrices, usage, calculator, transactions, clock,
                 properties.getPaymentTermsDays());
     }
 
     @Bean
-    UsageService usageService(AccountRepository accounts, PlanRepository plans, UsageReader usage,
-                              InvoiceCalculator calculator, Clock clock) {
-        return new UsageService(accounts, plans, usage, calculator, clock);
+    UsageService usageService(AccountRepository accounts, PlanRepository plans, OtpPriceRepository otpPrices,
+                              UsageReader usage, InvoiceCalculator calculator, Clock clock) {
+        return new UsageService(accounts, plans, otpPrices, usage, calculator, clock);
     }
 }

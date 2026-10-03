@@ -21,6 +21,7 @@ package com.techeazy.notification.billing.application;
 import com.techeazy.notification.billing.application.port.AccountRepository;
 import com.techeazy.notification.billing.application.port.CreditStore;
 import com.techeazy.notification.billing.application.port.InvoiceRepository;
+import com.techeazy.notification.billing.application.port.OtpPriceRepository;
 import com.techeazy.notification.billing.application.port.PlanRepository;
 import com.techeazy.notification.billing.application.port.Transactions;
 import com.techeazy.notification.billing.application.port.UsageReader;
@@ -38,7 +39,9 @@ import com.techeazy.notification.billing.domain.InvoiceCalculator;
 import com.techeazy.notification.billing.domain.InvoiceStatus;
 import com.techeazy.notification.billing.domain.LedgerEntry;
 import com.techeazy.notification.billing.domain.Money;
+import com.techeazy.notification.billing.domain.OtpPrices;
 import com.techeazy.notification.billing.domain.Plan;
+import com.techeazy.notification.billing.domain.SentCount;
 import com.techeazy.notification.domain.Channel;
 
 import java.math.BigDecimal;
@@ -69,6 +72,7 @@ final class BillingFixture {
     final FakeInvoices invoices = new FakeInvoices();
     final FakeCredits credits = new FakeCredits(accounts);
     final FakeUsage usage = new FakeUsage();
+    final FakeOtpPrices otpPrices = new FakeOtpPrices();
     final Transactions transactions = new Transactions() {
         @Override
         public <T> T inTransaction(Supplier<T> work) {
@@ -78,12 +82,13 @@ final class BillingFixture {
     final InvoiceCalculator calculator = new InvoiceCalculator();
 
     final PlanCatalog planCatalog = new PlanCatalog(plans, accounts);
-    final AccountManagement accountManagement = new AccountManagement(accounts, plans, credits);
+    final AccountManagement accountManagement = new AccountManagement(accounts, plans, credits, otpPrices, transactions);
     final CreditService creditService = new CreditService(accounts, plans, credits, transactions, clock);
-    final AdmissionControl admission = new AdmissionControl(accounts, plans, credits, usage, calculator, clock);
+    final AdmissionControl admission = new AdmissionControl(accounts, plans, otpPrices, credits, usage, calculator, clock);
     final HoldSettlement settlement = new HoldSettlement(credits, transactions, clock);
-    final InvoiceService invoiceService = new InvoiceService(invoices, accounts, plans, usage, calculator, transactions, clock, 30);
-    final UsageService usageService = new UsageService(accounts, plans, usage, calculator, clock);
+    final InvoiceService invoiceService =
+            new InvoiceService(invoices, accounts, plans, otpPrices, usage, calculator, transactions, clock, 30);
+    final UsageService usageService = new UsageService(accounts, plans, otpPrices, usage, calculator, clock);
 
     Plan savePlan(String name, String tax, String fee, Map<Channel, ChannelRate> rates) {
         return plans.save(new Plan(UUID.randomUUID(), name, USD, Money.of(fee, USD), new BigDecimal(tax), rates, true));
@@ -334,20 +339,38 @@ final class BillingFixture {
     }
 
     static final class FakeUsage implements UsageReader {
-        private record Sent(UUID clientId, Channel channel, Instant at, long count) {}
+        private record Sent(UUID clientId, Channel channel, Instant at, SentCount count) {}
 
         private final List<Sent> sent = new ArrayList<>();
 
         void sent(UUID clientId, Channel channel, String at, long count) {
-            sent.add(new Sent(clientId, channel, Instant.parse(at), count));
+            sent.add(new Sent(clientId, channel, Instant.parse(at), SentCount.ordinary(count)));
+        }
+
+        void sentOneTimePasswords(UUID clientId, Channel channel, String at, long count) {
+            sent.add(new Sent(clientId, channel, Instant.parse(at), new SentCount(0, count)));
         }
 
         @Override
-        public Map<Channel, Long> sentByChannel(UUID clientId, Instant fromInclusive, Instant toExclusive) {
-            Map<Channel, Long> totals = new EnumMap<>(Channel.class);
+        public Map<Channel, SentCount> sentByChannel(UUID clientId, Instant fromInclusive, Instant toExclusive) {
+            Map<Channel, SentCount> totals = new EnumMap<>(Channel.class);
             sent.stream().filter(s -> s.clientId().equals(clientId) && !s.at().isBefore(fromInclusive) && s.at().isBefore(toExclusive))
-                    .forEach(s -> totals.merge(s.channel(), s.count(), Long::sum));
+                    .forEach(s -> totals.merge(s.channel(), s.count(), SentCount::plus));
             return totals;
+        }
+    }
+
+    static final class FakeOtpPrices implements OtpPriceRepository {
+        private final Map<UUID, OtpPrices> byClient = new HashMap<>();
+
+        @Override
+        public OtpPrices findByClientId(UUID clientId) {
+            return byClient.getOrDefault(clientId, OtpPrices.NONE);
+        }
+
+        @Override
+        public void replace(UUID clientId, OtpPrices prices) {
+            byClient.put(clientId, prices);
         }
     }
 }

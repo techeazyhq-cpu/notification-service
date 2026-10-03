@@ -23,6 +23,7 @@ import com.techeazy.notification.billing.application.Admission;
 import com.techeazy.notification.billing.application.AdmissionControl;
 import com.techeazy.notification.billing.domain.HoldScope;
 import com.techeazy.notification.domain.FailureKind;
+import com.techeazy.notification.domain.MessageCategory;
 import com.techeazy.notification.domain.MessageStatus;
 import com.techeazy.notification.domain.NotificationMessage;
 import com.techeazy.notification.persistence.NotificationMessageRepository;
@@ -64,7 +65,8 @@ class MessageRetry {
         if (PersonalData.isErased(message.getRecipient())) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "The personal data of this message was erased, so it cannot be sent again");
         }
-        admission.admit(new Admission(message.getClientId(), message.getChannel(), 1, HoldScope.MESSAGE, message.getId()));
+        admission.admit(new Admission(message.getClientId(), message.getChannel(), 1, HoldScope.MESSAGE, message.getId(),
+                message.getCategory() == MessageCategory.OTP));
         if (messages.requeueFailed(id, Instant.now()) != 1) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "The message changed while it was being retried");
         }

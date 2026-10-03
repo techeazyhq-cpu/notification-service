@@ -17,7 +17,7 @@
  */
 
 import { useState } from 'react';
-import { api, BillingAccount, BillingPlan, Client, LedgerPage, money } from '../api';
+import { api, BillingAccount, BillingPlan, Channel, CHANNELS, Client, LedgerPage, money, OtpPrice } from '../api';
 import { useLoad } from '../hooks';
 
 interface AccountForm { clientId: string; planId: string; mode: 'POSTPAID' | 'PREPAID'; cap: string; status: 'ACTIVE' | 'SUSPENDED'; email: string }
@@ -75,6 +75,57 @@ function CreditForm({ accounts, onDone }: Readonly<{ accounts: BillingAccount[];
   );
 }
 
+function otpSummary(account: BillingAccount): string {
+  if (account.otpPrices.length === 0) return 'plan prices';
+  return account.otpPrices.map((p) => `${p.channel} ${money(p.unitPrice, account.currency)}`).join(', ');
+}
+
+/** Sets what one tenant pays per one-time password; a blank channel pays the plan's price (ADR-034). */
+function OtpPricesForm({ account, plan, onDone }: Readonly<{ account: BillingAccount; plan?: BillingPlan; onDone: () => void }>) {
+  const initial = Object.fromEntries(account.otpPrices.map((p) => [p.channel, p.unitPrice])) as Partial<Record<Channel, string>>;
+  const [prices, setPrices] = useState<Partial<Record<Channel, string>>>(initial);
+  const [message, setMessage] = useState('');
+  const [isError, setIsError] = useState(false);
+  const planPrice = (channel: Channel) => plan?.rates.find((r) => r.channel === channel)?.unitPrice;
+
+  async function submit(e: React.SubmitEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const body: OtpPrice[] = CHANNELS.filter((c) => (prices[c] ?? '').trim() !== '')
+      .map((c) => ({ channel: c, unitPrice: (prices[c] ?? '').trim() }));
+    try {
+      await api('PUT', `/billing/accounts/${account.clientId}/otp-prices`, { prices: body.map((p) => ({ channel: p.channel, unitPrice: Number(p.unitPrice) })) });
+      setMessage('Saved. New prices apply to one-time passwords accepted from now on.');
+      setIsError(false);
+      onDone();
+    } catch (err) {
+      setMessage((err as Error).message);
+      setIsError(true);
+    }
+  }
+
+  return (
+    <form className="card" onSubmit={submit}>
+      <h3>OTP prices: {account.clientName}</h3>
+      <p className="muted">
+        What this tenant pays per one-time password, in {account.currency}. Leave a channel blank to charge its plan price.
+        The channel's free allowance covers ordinary messages first, then one-time passwords. Invoices show one-time passwords on a line of their own.
+      </p>
+      <div className="row">
+        {CHANNELS.map((c) => (
+          <label key={c}><span>{c}{planPrice(c) ? ` (plan ${money(planPrice(c) ?? '0', account.currency)})` : ''}</span>
+            <input type="number" min={0} step="0.000001" value={prices[c] ?? ''} placeholder="plan price"
+              onChange={(e) => setPrices({ ...prices, [c]: e.target.value })} style={{ width: 140 }} />
+          </label>
+        ))}
+      </div>
+      <div className="row" style={{ marginTop: 12 }}>
+        <button type="submit" className="primary">Save OTP prices</button>
+        {message && <span className={isError ? 'error' : 'muted'}>{message}</span>}
+      </div>
+    </form>
+  );
+}
+
 function Ledger({ account }: Readonly<{ account: BillingAccount }>) {
   const [page, setPage] = useState(0);
   const ledger = useLoad(() => api<LedgerPage>('GET', `/billing/accounts/${account.clientId}/ledger?page=${page}&size=15`), [account.clientId, page]);
@@ -112,6 +163,7 @@ export default function BillingAccounts() {
   const [form, setForm] = useState<AccountForm>(EMPTY);
   const [formError, setFormError] = useState('');
   const [ledgerFor, setLedgerFor] = useState<BillingAccount | null>(null);
+  const [otpFor, setOtpFor] = useState<BillingAccount | null>(null);
 
   async function save(e: React.SubmitEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -173,23 +225,29 @@ export default function BillingAccounts() {
       {accounts.error && <p className="error">{accounts.error}</p>}
       <div className="card">
         <table>
-          <thead><tr><th>Client</th><th>Plan</th><th>Mode</th><th>Status</th><th>Credit / cap</th><th></th></tr></thead>
+          <thead><tr><th>Client</th><th>Plan</th><th>Mode</th><th>Status</th><th>Credit / cap</th><th>OTP prices</th><th></th></tr></thead>
           <tbody>
             {accounts.data?.map((a) => (
               <tr key={a.clientId}>
                 <td>{a.clientName}</td><td>{a.planName}</td><td>{a.mode}</td>
                 <td><span className={`badge ${a.status === 'ACTIVE' ? 'ACTIVE' : 'DISABLED'}`}>{a.status}</span></td>
                 <td>{creditOrCap(a)}</td>
+                <td className={a.otpPrices.length === 0 ? 'muted' : ''}>{otpSummary(a)}</td>
                 <td>
                   <button type="button" onClick={() => edit(a)}>Edit</button>{' '}
+                  <button type="button" onClick={() => setOtpFor(a)}>OTP prices</button>{' '}
                   {a.mode === 'PREPAID' && <button type="button" onClick={() => setLedgerFor(a)}>Ledger</button>}
                 </td>
               </tr>
             ))}
-            {accounts.data?.length === 0 && <tr><td colSpan={6} className="muted">No billing accounts: nobody is billed yet.</td></tr>}
+            {accounts.data?.length === 0 && <tr><td colSpan={7} className="muted">No billing accounts: nobody is billed yet.</td></tr>}
           </tbody>
         </table>
       </div>
+      {otpFor && (
+        <OtpPricesForm key={otpFor.clientId} account={otpFor} plan={plans.data?.find((p) => p.id === otpFor.planId)}
+          onDone={() => { setOtpFor(null); accounts.reload(); }} />
+      )}
       {ledgerFor && <Ledger account={ledgerFor} />}
     </>
   );

@@ -275,6 +275,17 @@ class IngestServiceTest {
         });
     }
 
+    /** A tenant may pay a price of its own for one-time passwords, so billing is told what it admits (ADR-034). */
+    @Test
+    void aOneTimePasswordIsAdmittedToBillingAsOne() {
+        runAdmissionInsideThePersistStep();
+
+        service.submit(me, single(MessageCategory.OTP, null));
+
+        NotificationRequest request = persistedRequest();
+        verify(admission).admit(new Admission(me.id(), Channel.SMS, 1, HoldScope.REQUEST, request.getId(), true));
+    }
+
     @Test
     void billingAdmissionRunsInsideTheStoringStepForThisRequest() {
         runAdmissionInsideThePersistStep();

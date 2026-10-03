@@ -135,9 +135,12 @@ export async function download(path: string, filename: string): Promise<void> {
 
 export interface BillingRate { channel: Channel; unitPrice: string; freeAllowance: number }
 export interface BillingPlan { id: string; name: string; currency: string; platformFee: string; taxRate: number; active: boolean; rates: BillingRate[] }
+/** A tenant's own price per one-time password on a channel; channels without one use the plan's price. */
+export interface OtpPrice { channel: Channel; unitPrice: string }
 export interface BillingAccount {
   clientId: string; clientName: string; planId: string; planName: string; currency: string; mode: 'POSTPAID' | 'PREPAID';
   status: 'ACTIVE' | 'SUSPENDED'; creditBalance?: string; monthlySpendCap?: string; billingEmail?: string;
+  otpPrices: OtpPrice[];
 }
 export interface BillingLine { kind: string; channel?: Channel; description: string; quantity: number; unitPrice: string; amount: string }
 export interface BillingPayment { amount: string; method: string; reference: string; receivedAt: string }
