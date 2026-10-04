@@ -18,7 +18,7 @@ the addresses your operator gave you.
 
 - **An API key,** starting with `ntf_`. It identifies your organisation on every call and is your sign-in for the
   console. Treat it like a password: keep it in a secrets store, never in source code, e-mail or chat. If it may have
-  leaked, ask the operator to rotate it. The old key then stops working within 30 seconds.
+  leaked, ask the operator to rotate it. The old key then stops working straight away (within 30 seconds at most).
 - **A signing secret,** starting with `nss_`, if your organisation signs its requests against replay (see
   [Signed requests](#signed-requests-protection-against-replay)). Keep it as safely as the API key.
 - **The channels you may use:** some of `EMAIL`, `SMS`, `WHATSAPP` and `PUSH`.
@@ -378,7 +378,7 @@ Everything you change in the console and the API playground is then signed for y
 no secret.
 
 **When the secret changes:** a new secret replaces the old one, and requests signed with the old one are refused
-within 30 seconds. Agree a moment with your operator, and switch your configuration at that moment.
+straight away (within 30 seconds at most). Agree a moment with your operator, and switch your configuration at that moment.
 
 ### Send to one recipient
 
