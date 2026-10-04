@@ -18,6 +18,7 @@
 
 package com.techeazy.notification.config;
 
+import com.techeazy.notification.application.PayloadFingerprints;
 import com.techeazy.notification.application.RecipientFingerprints;
 import com.techeazy.notification.domain.FieldEncryptor;
 import com.techeazy.notification.infra.AesGcmCipher;
@@ -53,6 +54,13 @@ public class SecretsConfig {
                                                 @Value("${notification.data-key:" + DEFAULT_SECRETS_KEY + "}") String dataKey) {
         InsecureDefaults.reject(env, "notification.data-key", dataKey, DEFAULT_SECRETS_KEY);
         return new RecipientFingerprints(dataKey);
+    }
+
+    @Bean
+    PayloadFingerprints payloadFingerprints(Environment env,
+                                            @Value("${notification.data-key:" + DEFAULT_SECRETS_KEY + "}") String dataKey) {
+        InsecureDefaults.reject(env, "notification.data-key", dataKey, DEFAULT_SECRETS_KEY);
+        return new PayloadFingerprints(dataKey);
     }
 
     @Bean

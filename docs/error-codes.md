@@ -72,6 +72,7 @@ message (`GET /v1/messages/{id}`), next to the provider's own wording in `lastEr
 | [NS-3006](#ns-3006-sender-exists) | `SENDER_EXISTS` | 409 | no | The sender address is already registered |
 | [NS-3007](#ns-3007-sender-not-verified) | `SENDER_NOT_VERIFIED` | 422 | no | The sender address is not verified |
 | [NS-3008](#ns-3008-provider-destination-refused) | `PROVIDER_DESTINATION_REFUSED` | 400 | no | The provider destination is not allowed |
+| [NS-3009](#ns-3009-idempotency-key-reused) | `IDEMPOTENCY_KEY_REUSED` | 422 | no | The idempotency key was already used for a different request |
 | [NS-4001](#ns-4001-insufficient-credit) | `INSUFFICIENT_CREDIT` | 402 | no | There is not enough prepaid credit |
 | [NS-4002](#ns-4002-spend-cap-exceeded) | `SPEND_CAP_EXCEEDED` | 402 | no | The monthly spend cap is reached |
 | [NS-4003](#ns-4003-account-suspended) | `ACCOUNT_SUSPENDED` | 403 | no | The billing account is suspended |
@@ -287,6 +288,13 @@ message (`GET /v1/messages/{id}`), next to the provider's own wording in `lastEr
 
 - **Cause:** The provider URL points at a private, loopback or link-local address, or is not HTTPS (ADR-022).
 - **Resolution:** Use the provider's public HTTPS endpoint, or add an internal gateway to the trusted hosts list.
+
+### NS-3009 IDEMPOTENCY_KEY_REUSED
+
+**The idempotency key was already used for a different request** · HTTP 422 · not retryable
+
+- **Cause:** An earlier request with this Idempotency-Key had different content, recipients or options, so this one is neither sent nor answered with the earlier result.
+- **Resolution:** Use a new Idempotency-Key for every distinct request, and the same key only to retry the same request.
 
 ## Billing (NS-4xxx)
 

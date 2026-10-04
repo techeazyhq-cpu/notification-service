@@ -61,7 +61,7 @@ class MigrationServiceTest {
                     "009-admin-roles", "010-admin-audit-log", "011-message-error-code",
                     "012-message-category", "013-otp-sweep-index", "014-billing-otp-price",
                     "015-sent-usage-by-category", "016-message-event-log", "017-recipient-fingerprint-index",
-                    "018-fingerprint-backfill-index", "019-signed-requests", "021-inflight-usage-index");
+                    "018-fingerprint-backfill-index", "019-signed-requests", "020-idempotency-payload-fingerprint");
     private static final String NOT_COMPARED = "('databasechangelog','databasechangeloglock','flyway_schema_history',"
             + "'billing_plan','billing_plan_rate','billing_account','credit_ledger_entry','credit_hold','invoice','invoice_line','invoice_payment','admin_user','admin_recovery_code','admin_session','client_sender','admin_audit_event','billing_account_otp_price','message_event','api_request_nonce')";
     private static final List<String> BILLING_TABLES =
@@ -382,17 +382,18 @@ class MigrationServiceTest {
     }
 
     @Test
-    void theInFlightUsageIndexIsBuiltValidAndRollsBackCleanly() throws Exception {
+    void theIdempotencyFingerprintColumnIsAddedAndRollsBackCleanly() throws Exception {
         String db = newDatabase();
         MigrationService service = service(db, true);
         service.update();
 
-        assertThat(query(db, "select i.indisvalid::text from pg_index i join pg_class c on c.oid = i.indexrelid "
-                + "where c.relname = 'ix_message_inflight_usage'")).containsExactly("true");
+        assertThat(query(db, "select column_name from information_schema.columns where table_name = 'notification_request' "
+                + "and column_name = 'payload_fingerprint'")).containsExactly("payload_fingerprint");
 
-        undoFrom(service, "021-inflight-usage-index");
+        undoFrom(service, "020-idempotency-payload-fingerprint");
 
-        assertThat(query(db, "select indexname from pg_indexes where indexname = 'ix_message_inflight_usage'")).isEmpty();
+        assertThat(query(db, "select column_name from information_schema.columns where table_name = 'notification_request' "
+                + "and column_name = 'payload_fingerprint'")).isEmpty();
     }
 
     @Test
@@ -656,7 +657,7 @@ class MigrationServiceTest {
                 + "where table_schema='public' and column_name not in "
                 + "('sender_email','sender_name','erased_at','failure_kind',"
                 + "'reprocess_count','error_code','category','expires_at','recipient_fingerprint','template_name',"
-                + "'signing_secret','signing_required') and table_name not in " + NOT_COMPARED));
+                + "'signing_secret','signing_required','payload_fingerprint') and table_name not in " + NOT_COMPARED));
         lines.addAll(query(database, "select 'idx ' || tablename || ' ' || indexdef from pg_indexes "
                 + "where schemaname='public' and indexname not in ('ix_message_sent_usage','ix_message_erase_due',"
                 + "'ix_request_erase_due','ix_request_idempotency_due','ix_message_dead_letters',"
