@@ -36,9 +36,20 @@ interface AdminUserStore {
 
     void insert(AdminUser user, Instant now);
 
-    void updateRole(UUID id, AdminRole role);
+    /**
+     * Changes the role, unless that would leave no administrator with the ADMIN role. The check and the change are one
+     * atomic step, so two administrators demoting each other at the same moment cannot both succeed.
+     *
+     * @return false when the change was refused to keep an administrator, or the user does not exist
+     */
+    boolean updateRoleKeepingAnAdmin(UUID id, AdminRole role);
 
-    boolean delete(UUID id);
+    /**
+     * Deletes the user, unless it is the last one with the ADMIN role; atomic like {@link #updateRoleKeepingAnAdmin}.
+     *
+     * @return false when the deletion was refused to keep an administrator, or the user does not exist
+     */
+    boolean deleteKeepingAnAdmin(UUID id);
 
     void updatePassword(UUID id, String passwordHash, Instant now);
 
