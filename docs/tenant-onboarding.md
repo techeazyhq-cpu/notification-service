@@ -172,6 +172,7 @@ Give the tenant's named contact:
   addresses, billing and an API playground. The key is kept in the browser tab only and is gone when the tab closes.
 - **The client API address and its reference** (`/swagger-ui.html`), and the
   [error code dictionary](error-codes.md), which the API also serves at `GET /v1/errors`.
+- **The [client guide](client-guide.md),** which walks their team through the console and the API.
 
 ## 8. The tenant sets up senders and templates
 
