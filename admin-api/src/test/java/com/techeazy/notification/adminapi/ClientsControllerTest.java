@@ -23,6 +23,7 @@ import com.techeazy.notification.domain.Channel;
 import com.techeazy.notification.domain.Client;
 import com.techeazy.notification.domain.ClientStatus;
 import com.techeazy.notification.infra.AesGcmCipher;
+import com.techeazy.notification.infra.ClientChangeBroadcast;
 import com.techeazy.notification.infra.ClientSigningSecrets;
 import com.techeazy.notification.persistence.ClientRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -40,6 +41,8 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -50,6 +53,7 @@ class ClientsControllerTest {
 
     private final ClientRepository repository = mock(ClientRepository.class);
     private final ClientSigningSecrets secrets = new ClientSigningSecrets(new AesGcmCipher("credentials-key"));
+    private final ClientChangeBroadcast changes = mock(ClientChangeBroadcast.class);
     private final ObjectMapper json = new ObjectMapper();
     private final Client client = new Client();
     private MockMvc mvc;
@@ -63,8 +67,20 @@ class ClientsControllerTest {
         client.setApiKeyPrefix("ntf_abcdef");
         client.setCreatedAt(Instant.parse("2026-10-01T00:00:00Z"));
         when(repository.findById(client.getId())).thenReturn(Optional.of(client));
-        mvc = MockMvcBuilders.standaloneSetup(new ClientsController(repository, secrets))
+        mvc = MockMvcBuilders.standaloneSetup(new ClientsController(repository, secrets, changes))
                 .setControllerAdvice(new AdminErrorHandler(Optional::empty)).build();
+    }
+
+    @Test
+    void everyChangeToAClientIsAnnouncedSoClientApiInstancesDropTheirCachedCopy() throws Exception {
+        perform(post(path("/signing-secret")));
+        perform(put(path("/signing-required")).contentType(MediaType.APPLICATION_JSON).content("{\"required\":true}"));
+        perform(post(path("/rotate-key")));
+        perform(delete(path("/signing-secret")));
+        perform(put(path("")).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"name\":\"Acme\",\"status\":\"DISABLED\",\"allowedChannels\":[\"SMS\"]}"));
+
+        verify(changes, times(5)).clientChanged(client.getId());
     }
 
     @Test

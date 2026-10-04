@@ -22,6 +22,7 @@ import com.techeazy.notification.application.ApiKeys;
 import com.techeazy.notification.domain.Channel;
 import com.techeazy.notification.domain.Client;
 import com.techeazy.notification.domain.ClientStatus;
+import com.techeazy.notification.infra.ClientChangeBroadcast;
 import com.techeazy.notification.infra.ClientSigningSecrets;
 import com.techeazy.notification.persistence.ClientRepository;
 import jakarta.validation.Valid;
@@ -62,10 +63,12 @@ class ClientsController {
 
     private final ClientRepository repo;
     private final ClientSigningSecrets signingSecrets;
+    private final ClientChangeBroadcast changes;
 
-    ClientsController(ClientRepository repo, ClientSigningSecrets signingSecrets) {
+    ClientsController(ClientRepository repo, ClientSigningSecrets signingSecrets, ClientChangeBroadcast changes) {
         this.repo = repo;
         this.signingSecrets = signingSecrets;
+        this.changes = changes;
     }
 
     @GetMapping
@@ -98,6 +101,7 @@ class ClientsController {
         if (in.status() != null) c.setStatus(in.status());
         c.setAllowedChannelSet(in.allowedChannels());
         c.setUpdatedAt(Instant.now());
+        changes.clientChanged(id);
         return view(c);
     }
 
@@ -109,12 +113,13 @@ class ClientsController {
         c.setApiKeyHash(ApiKeys.hash(key));
         c.setApiKeyPrefix(ApiKeys.displayPrefix(key));
         c.setUpdatedAt(Instant.now());
+        changes.clientChanged(id);
         return new ClientWithKey(view(c), key);
     }
 
     /**
      * Issues a new request-signing secret, replacing any previous one at once: requests signed with the old secret
-     * are refused from then on (within the client API's 30-second cache), so the client must switch straight away.
+     * are refused from then on, so the client must switch straight away.
      */
     @PostMapping("/{id}/signing-secret")
     @Transactional
@@ -123,6 +128,7 @@ class ClientsController {
         String secret = signingSecrets.generate();
         c.setSigningSecret(signingSecrets.encryptForStorage(secret));
         c.setUpdatedAt(Instant.now());
+        changes.clientChanged(id);
         return new ClientWithSigningSecret(view(c), secret);
     }
 
@@ -134,6 +140,7 @@ class ClientsController {
         c.setSigningSecret(null);
         c.setSigningRequired(false);
         c.setUpdatedAt(Instant.now());
+        changes.clientChanged(id);
         return view(c);
     }
 
@@ -147,6 +154,7 @@ class ClientsController {
         }
         c.setSigningRequired(in.required());
         c.setUpdatedAt(Instant.now());
+        changes.clientChanged(id);
         return view(c);
     }
 
