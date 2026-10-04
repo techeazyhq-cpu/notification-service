@@ -1,6 +1,6 @@
 # Postman collection
 
-`notification-service.postman_collection.json` walks through the whole product in 50 requests, each with tests:
+`notification-service.postman_collection.json` walks through the whole product in 51 requests, each with tests:
 
 | Folder | What it shows |
 |---|---|

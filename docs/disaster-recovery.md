@@ -11,6 +11,15 @@ the procedures for doing it. The decision record is [ADR-026](adr-026-datastore-
 | Pulsar | Only message ids in flight (ADR-001) | No: everything in it can be rebuilt from PostgreSQL | No |
 | Redis | Rate-limit token buckets | No: buckets refill on their own | No |
 
+A PostgreSQL backup is only usable with the encryption keys it was written under, so keep them in the secrets manager
+and back them up separately from the database:
+
+| Key | What it decrypts | If lost |
+|---|---|---|
+| `SECRETS_ENCRYPTION_KEY` | Provider credentials; tenants' request-signing secrets (ADR-036) | Re-enter every provider's credentials; issue every signing tenant a new secret |
+| `DATA_ENCRYPTION_KEY` | Message template variables; recipient fingerprints for activity reports (ADR-035) | Stored messages' variables cannot be decrypted; activity reports no longer match messages sent before the change |
+| `ADMIN_TWO_FACTOR_KEY` | Administrators' two-factor secrets | Every administrator re-enrols two-factor authentication |
+
 Losing Pulsar's data loses nothing. The outbox sweeper republishes every message still `PENDING`, `QUEUED` or
 `RETRYING` in PostgreSQL once it is older than its timeout (30 s, 15 min and 15 min). Workers claim messages
 atomically, so a republish never sends twice. Losing Redis means rate limits are not enforced until it returns, and

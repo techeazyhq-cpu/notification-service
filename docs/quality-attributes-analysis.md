@@ -145,6 +145,9 @@ is single-node.
 - [ ] Encrypt the PostgreSQL volume and its backups at the storage layer (LUKS or a KMS-backed cloud volume).
 - [ ] Set `SECRETS_ENCRYPTION_KEY`, `DATA_ENCRYPTION_KEY`, `ADMIN_TWO_FACTOR_KEY`, `ADMIN_PASSWORD` and both database
       passwords from a secrets manager; the services refuse the shipped defaults unless the `local` profile is set.
+- [ ] Back up `SECRETS_ENCRYPTION_KEY` and `DATA_ENCRYPTION_KEY` separately from the database. Without the first,
+      provider credentials and tenants' request-signing secrets (ADR-036) cannot be decrypted; without the second,
+      message variables cannot.
 - [ ] Use certificates from your own PKI (or Let's Encrypt for the edge) in place of the generated private CA.
 - [ ] Run PostgreSQL, Redis and Pulsar as replicated or managed services; take and restore-test backups.
 - [ ] Make the CI and Security workflows required status checks on `main`.

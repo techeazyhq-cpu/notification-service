@@ -132,6 +132,7 @@ The last column is the severity of what remains, for a production launch with re
 | N2 | Medium | Signatures and SBOMs are produced but nothing enforces them at deploy time | Kyverno `verifyImages` or the Sigstore policy controller in each cluster, matching the identity in ADR-027 |
 | N3 | Low | While the broker is down, each accept waits the 5 s publish timeout before returning | A circuit breaker on the publisher so accepts return at once and the sweeper publishes later |
 | N4 | Low | The `Helm chart` check is in `branch-protection.json` but not yet applied to `main` | Re-run step 2 of `docs/branch-protection.md` |
+| N5 | Closed | A captured client API request could be sent again, or altered, because the API key alone authenticated it (`Idempotency-Key` is optional and attacker-controlled) | Done: opt-in HMAC request signatures per tenant, with a timestamp window and single-use nonces, and administrators can require them (ADR-036). The client console no longer stores the API key or signing secret in browser storage |
 
 ## Roadmap
 
@@ -146,7 +147,7 @@ The last column is the severity of what remains, for a production launch with re
 
 | Principle | First review | Now | Notes |
 |---|---|---|---|
-| Enterprise architecture (bounded contexts, ADRs, published contracts) | Partly | Yes | 27 ADRs; each blocker and follow-up traced to a decision; shared database remains the accepted trade-off |
+| Enterprise architecture (bounded contexts, ADRs, published contracts) | Partly | Yes | 36 ADRs; each blocker and follow-up traced to a decision; shared database remains the accepted trade-off |
 | Clean architecture | No (billing: yes) | Partly | Ports and fitness functions in billing and the core; entities still the core domain model (A1, A2) |
 | Security | No | Yes, with gaps | S1 SSO, S4 recipient encryption, S5 scopes, N2 signature enforcement |
 | Scalability | Partly | Partly | Stateless tiers autoscale; one database primary and single-partition topics (C1, C3) |
