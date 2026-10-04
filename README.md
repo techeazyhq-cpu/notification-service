@@ -40,6 +40,9 @@ client-api and the dispatcher with `PROVIDER_TRUSTED_HOSTS=localhost` so they ac
 
 ## Try it
 
+The quickest tour is the [Postman collection](postman/README.md): 50 requests, each with tests, that onboard a tenant
+and use every part of the API. Or with curl:
+
 ```bash
 KEY=ntf_...   # from the seed output
 

@@ -1,0 +1,2286 @@
+{
+  "info": {
+    "_postman_id": "b0f6100e-15d1-5429-ac90-cc999be2df9f",
+    "name": "Notification Service",
+    "description": "Try the whole product end to end: an administrator onboards a tenant, the tenant sends e-mail, SMS, one-time passwords and bulk messages, follows delivery, and uses its billing and privacy tools.\n\n**Run it:** start the stack (`docker compose --profile app up -d --build`, then `node scripts/seed.mjs`), import this collection and `postman/local.postman_environment.json`, pick the *Notification Service · local* environment, and run the collection from the top (Runner, or `npx newman run postman/notification-service.postman_collection.json -e postman/local.postman_environment.json`). Every request has tests.\n\nFolder 2 creates a new tenant and stores its API key in `apiKey`, so nothing needs copying. To call the client API as an existing tenant instead, set `apiKey` to its key and run folders 3 to 8.\n\nReferences: client API at `/swagger-ui.html`, `docs/client-guide.md`, `docs/tenant-onboarding.md`, `docs/error-codes.md`.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "1. Admin · Sign in",
+      "description": "Signs in as a platform administrator and keeps the session token for every admin request that follows.",
+      "item": [
+        {
+          "name": "Sign in",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{adminApiUrl}}/api/admin/auth/login",
+              "host": [
+                "{{adminApiUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "auth",
+                "login"
+              ]
+            },
+            "description": "Signs in with `adminUsername` / `adminPassword`. The returned token is stored as `adminToken`. Add `verificationCode` when two-factor authentication is on.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"{{adminUsername}}\",\n  \"password\": \"{{adminPassword}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set('runId', Date.now().toString(36));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('answers 200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('returns a session token', () => pm.expect(body.token).to.be.a('string').and.not.empty);",
+                  "pm.collectionVariables.set('adminToken', body.token);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Who am I",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{adminApiUrl}}/api/admin/auth/me",
+              "host": [
+                "{{adminApiUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "auth",
+                "me"
+              ]
+            },
+            "description": "The signed-in administrator, their role and any account setup still required."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('answers 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "auth": {
+        "type": "bearer",
+        "bearer": [
+          {
+            "key": "token",
+            "value": "{{adminToken}}",
+            "type": "string"
+          }
+        ]
+      }
+    },
+    {
+      "name": "2. Admin · Onboard a tenant",
+      "description": "Creates a tenant from scratch, as in docs/tenant-onboarding.md: client and API key, rate limits, a billing plan, a prepaid account with credit, and its own OTP prices. The new API key is stored as `apiKey`, so the client folders that follow work without copying anything.",
+      "item": [
+        {
+          "name": "Create client",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{adminApiUrl}}/api/admin/clients",
+              "host": [
+                "{{adminApiUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "clients"
+              ]
+            },
+            "description": "Creates the tenant and returns its API key **once**. Stored as `clientId` and `apiKey`.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"postman-{{runId}}\",\n  \"allowedChannels\": [\n    \"EMAIL\",\n    \"SMS\"\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('answers 201', () => pm.response.to.have.status(201));",
+                  "const body = pm.response.json();",
+                  "pm.test('returns the API key once', () => pm.expect(body.apiKey).to.match(/^ntf_/));",
+                  "pm.collectionVariables.set('clientId', body.client.id);",
+                  "pm.collectionVariables.set('apiKey', body.apiKey);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "List clients",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{adminApiUrl}}/api/admin/clients",
+              "host": [
+                "{{adminApiUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "clients"
+              ]
+            },
+            "description": "Every tenant, with its status, channels and key prefix."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('answers 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Rate limit · API calls",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{adminApiUrl}}/api/admin/rate-limits",
+              "host": [
+                "{{adminApiUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "rate-limits"
+              ]
+            },
+            "description": "At most 20 client API calls per second for this tenant, with bursts of 40.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"scope\": \"CLIENT_API\",\n  \"clientId\": \"{{clientId}}\",\n  \"ratePerSecond\": 20,\n  \"burst\": 40,\n  \"enabled\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('answers 201', () => pm.response.to.have.status(201));",
+                  "pm.collectionVariables.set('apiLimitId', pm.response.json().id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Rate limit · SMS delivery",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{adminApiUrl}}/api/admin/rate-limits",
+              "host": [
+                "{{adminApiUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "rate-limits"
+              ]
+            },
+            "description": "At most 10 of this tenant's SMS per second reach the provider. Messages over it wait their turn; nothing is refused.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"scope\": \"CLIENT_CHANNEL\",\n  \"clientId\": \"{{clientId}}\",\n  \"channel\": \"SMS\",\n  \"ratePerSecond\": 10,\n  \"burst\": 20,\n  \"enabled\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('answers 201', () => pm.response.to.have.status(201));",
+                  "pm.collectionVariables.set('smsLimitId', pm.response.json().id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Create billing plan",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{adminApiUrl}}/api/admin/billing/plans",
+              "host": [
+                "{{adminApiUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "billing",
+                "plans"
+              ]
+            },
+            "description": "A EUR plan: SMS 0.008 per message, e-mail 0.001 with 1,000 free per month, 18 % tax. Stored as `planId`.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"standard-{{runId}}\",\n  \"currency\": \"EUR\",\n  \"platformFee\": 0,\n  \"taxRate\": 0.18,\n  \"active\": true,\n  \"rates\": [\n    {\n      \"channel\": \"SMS\",\n      \"unitPrice\": 0.008,\n      \"freeAllowance\": 0\n    },\n    {\n      \"channel\": \"EMAIL\",\n      \"unitPrice\": 0.001,\n      \"freeAllowance\": 1000\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('answers 201', () => pm.response.to.have.status(201));",
+                  "pm.collectionVariables.set('planId', pm.response.json().id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Open prepaid billing account",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{adminApiUrl}}/api/admin/billing/accounts/{{clientId}}",
+              "host": [
+                "{{adminApiUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "billing",
+                "accounts",
+                "{{clientId}}"
+              ]
+            },
+            "description": "Puts the tenant on the plan as **prepaid**: each request reserves its cost from credit. Use `POSTPAID` (optionally with `monthlySpendCap`) for monthly invoicing.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"planId\": \"{{planId}}\",\n  \"mode\": \"PREPAID\",\n  \"status\": \"ACTIVE\",\n  \"billingEmail\": \"billing@example.com\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('answers 200', () => pm.response.to.have.status(200));",
+                  "pm.test('is prepaid', () => pm.expect(pm.response.json().mode).to.eql('PREPAID'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Top up credit",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{adminApiUrl}}/api/admin/billing/accounts/{{clientId}}/credit",
+              "host": [
+                "{{adminApiUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "billing",
+                "accounts",
+                "{{clientId}}",
+                "credit"
+              ]
+            },
+            "description": "Records a 50 EUR payment. The reference makes it idempotent: applying it twice adds nothing.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"kind\": \"TOP_UP\",\n  \"amount\": 50,\n  \"reference\": \"PAY-{{runId}}\",\n  \"description\": \"Initial credit\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('answers 200', () => pm.response.to.have.status(200));",
+                  "pm.test('balance is 50.00', () => pm.expect(pm.response.json().balance).to.eql('50.00'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Set OTP prices",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{adminApiUrl}}/api/admin/billing/accounts/{{clientId}}/otp-prices",
+              "host": [
+                "{{adminApiUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "billing",
+                "accounts",
+                "{{clientId}}",
+                "otp-prices"
+              ]
+            },
+            "description": "This tenant pays 0.012 EUR per one-time password on SMS instead of the plan's 0.008. Channels left out pay the plan price; an empty list removes them all.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"prices\": [\n    {\n      \"channel\": \"SMS\",\n      \"unitPrice\": 0.012\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('answers 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Billing accounts",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{adminApiUrl}}/api/admin/billing/accounts",
+              "host": [
+                "{{adminApiUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "billing",
+                "accounts"
+              ]
+            },
+            "description": "Every billing account with its plan, mode, balance or cap, and OTP prices."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('answers 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "auth": {
+        "type": "bearer",
+        "bearer": [
+          {
+            "key": "token",
+            "value": "{{adminToken}}",
+            "type": "string"
+          }
+        ]
+      }
+    },
+    {
+      "name": "3. Client · Account and error dictionary",
+      "description": "Calls made as the tenant, with its API key in the `X-API-Key` header.",
+      "item": [
+        {
+          "name": "Who am I",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{clientApiUrl}}/v1/me",
+              "host": [
+                "{{clientApiUrl}}"
+              ],
+              "path": [
+                "v1",
+                "me"
+              ]
+            },
+            "description": "The tenant behind the API key and the channels it may use. A good first call to check a key."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('answers 200', () => pm.response.to.have.status(200));",
+                  "pm.test('is the new tenant', () => pm.expect(pm.response.json().id).to.eql(pm.collectionVariables.get('clientId')));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Error dictionary",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{clientApiUrl}}/v1/errors",
+              "host": [
+                "{{clientApiUrl}}"
+              ],
+              "path": [
+                "v1",
+                "errors"
+              ]
+            },
+            "description": "Every error code with its cause and resolution. Needs no API key.",
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('answers 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Explain one error",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{clientApiUrl}}/v1/errors/NS-4001",
+              "host": [
+                "{{clientApiUrl}}"
+              ],
+              "path": [
+                "v1",
+                "errors",
+                "NS-4001"
+              ]
+            },
+            "description": "Look a code up by its error id or its symbolic code (e.g. `INSUFFICIENT_CREDIT`).",
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('answers 200', () => pm.response.to.have.status(200));",
+                  "pm.test('is INSUFFICIENT_CREDIT', () => pm.expect(pm.response.json().code).to.eql('INSUFFICIENT_CREDIT'));"
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "auth": {
+        "type": "apikey",
+        "apikey": [
+          {
+            "key": "key",
+            "value": "X-API-Key",
+            "type": "string"
+          },
+          {
+            "key": "value",
+            "value": "{{apiKey}}",
+            "type": "string"
+          },
+          {
+            "key": "in",
+            "value": "header",
+            "type": "string"
+          }
+        ]
+      }
+    },
+    {
+      "name": "4. Client · Templates",
+      "description": "The tenant's own templates. Shared templates from the platform are listed read-only.",
+      "item": [
+        {
+          "name": "Create OTP template",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{clientApiUrl}}/v1/templates",
+              "host": [
+                "{{clientApiUrl}}"
+              ],
+              "path": [
+                "v1",
+                "templates"
+              ]
+            },
+            "description": "A one-time-password template: every send from it is delivered with priority and never after it expires. Stored as `templateId`.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"login-code-{{runId}}\",\n  \"channel\": \"SMS\",\n  \"body\": \"Your login code is {{code}}. It expires in 5 minutes.\",\n  \"category\": \"OTP\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('answers 201', () => pm.response.to.have.status(201));",
+                  "const body = pm.response.json();",
+                  "pm.test('needs the code variable', () => pm.expect(body.variables).to.include('code'));",
+                  "pm.collectionVariables.set('templateId', body.id);",
+                  "pm.collectionVariables.set('templateName', body.name);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Preview",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{clientApiUrl}}/v1/templates/preview",
+              "host": [
+                "{{clientApiUrl}}"
+              ],
+              "path": [
+                "v1",
+                "templates",
+                "preview"
+              ]
+            },
+            "description": "Renders text with sample values and lists any placeholder still missing.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"body\": \"Hi {{name}}, your order {{order}} shipped.\",\n  \"variables\": {\n    \"name\": \"Ann\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('answers 200', () => pm.response.to.have.status(200));",
+                  "pm.test('reports the missing value', () => pm.expect(pm.response.json().missingVariables).to.eql(['order']));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "List templates",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{clientApiUrl}}/v1/templates",
+              "host": [
+                "{{clientApiUrl}}"
+              ],
+              "path": [
+                "v1",
+                "templates"
+              ]
+            },
+            "description": "Own templates (`OWNED`) and the platform's (`SHARED`, read-only)."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('answers 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "auth": {
+        "type": "apikey",
+        "apikey": [
+          {
+            "key": "key",
+            "value": "X-API-Key",
+            "type": "string"
+          },
+          {
+            "key": "value",
+            "value": "{{apiKey}}",
+            "type": "string"
+          },
+          {
+            "key": "in",
+            "value": "header",
+            "type": "string"
+          }
+        ]
+      }
+    },
+    {
+      "name": "5. Client · Send",
+      "description": "Every way to send. Each answer is `202 Accepted`: the request is stored durably and delivered in the background.",
+      "item": [
+        {
+          "name": "Send e-mail (inline text)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{clientApiUrl}}/v1/notifications",
+              "host": [
+                "{{clientApiUrl}}"
+              ],
+              "path": [
+                "v1",
+                "notifications"
+              ]
+            },
+            "description": "A single e-mail with its text in the request. Placeholders work in `subject` and `body`. Stored as `emailRequestId`.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"channel\": \"EMAIL\",\n  \"recipient\": \"ann@example.com\",\n  \"subject\": \"Hello {{name}}\",\n  \"body\": \"Hi {{name}}, your order {{order}} has shipped.\",\n  \"variables\": {\n    \"name\": \"Ann\",\n    \"order\": \"A-1\"\n  },\n  \"clientReference\": \"order-A-1-{{runId}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('answers 202', () => pm.response.to.have.status(202));",
+                  "pm.collectionVariables.set('emailRequestId', pm.response.json().requestId);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Send one-time password",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{clientApiUrl}}/v1/notifications",
+              "host": [
+                "{{clientApiUrl}}"
+              ],
+              "path": [
+                "v1",
+                "notifications"
+              ]
+            },
+            "description": "An OTP from the template created above, valid for 2 minutes. It goes ahead of other traffic and is dropped, not sent late, if it cannot go out in time. Stored as `otpRequestId`.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"channel\": \"SMS\",\n  \"recipient\": \"+14155550177\",\n  \"templateName\": \"{{templateName}}\",\n  \"variables\": {\n    \"code\": \"482913\"\n  },\n  \"validitySeconds\": 120\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('answers 202', () => pm.response.to.have.status(202));",
+                  "pm.collectionVariables.set('otpRequestId', pm.response.json().requestId);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Send bulk (JSON)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Idempotency-Key",
+                "value": "bulk-{{runId}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{clientApiUrl}}/v1/notifications/bulk",
+              "host": [
+                "{{clientApiUrl}}"
+              ],
+              "path": [
+                "v1",
+                "notifications",
+                "bulk"
+              ]
+            },
+            "description": "Up to 50,000 recipients, each with its own values. The `Idempotency-Key` header makes a repeat safe. The last recipient (ending 0400) is rejected by the local test provider, to show a failure. Stored as `bulkRequestId`.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"channel\": \"SMS\",\n  \"body\": \"Hi {{name}}, your parcel arrives today.\",\n  \"clientReference\": \"campaign-{{runId}}\",\n  \"recipients\": [\n    {\n      \"recipient\": \"+14155550101\",\n      \"variables\": {\n        \"name\": \"Ann\"\n      }\n    },\n    {\n      \"recipient\": \"+14155550102\",\n      \"variables\": {\n        \"name\": \"Bob\"\n      }\n    },\n    {\n      \"recipient\": \"+14155550400\",\n      \"variables\": {\n        \"name\": \"Cy\"\n      }\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('answers 202', () => pm.response.to.have.status(202));",
+                  "pm.test('is a new request', () => pm.expect(pm.response.json().idempotentReplay).to.be.false);",
+                  "pm.collectionVariables.set('bulkRequestId', pm.response.json().requestId);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Repeat bulk with the same key",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Idempotency-Key",
+                "value": "bulk-{{runId}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{clientApiUrl}}/v1/notifications/bulk",
+              "host": [
+                "{{clientApiUrl}}"
+              ],
+              "path": [
+                "v1",
+                "notifications",
+                "bulk"
+              ]
+            },
+            "description": "The same call again: it returns the original request and sends nothing twice.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"channel\": \"SMS\",\n  \"body\": \"Hi {{name}}, your parcel arrives today.\",\n  \"clientReference\": \"campaign-{{runId}}\",\n  \"recipients\": [\n    {\n      \"recipient\": \"+14155550101\",\n      \"variables\": {\n        \"name\": \"Ann\"\n      }\n    },\n    {\n      \"recipient\": \"+14155550102\",\n      \"variables\": {\n        \"name\": \"Bob\"\n      }\n    },\n    {\n      \"recipient\": \"+14155550400\",\n      \"variables\": {\n        \"name\": \"Cy\"\n      }\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('answers 200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('is a replay of the first request', () => {",
+                  "  pm.expect(body.idempotentReplay).to.be.true;",
+                  "  pm.expect(body.requestId).to.eql(pm.collectionVariables.get('bulkRequestId'));",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Send bulk (CSV upload)",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{clientApiUrl}}/v1/notifications/bulk/upload",
+              "host": [
+                "{{clientApiUrl}}"
+              ],
+              "path": [
+                "v1",
+                "notifications",
+                "bulk",
+                "upload"
+              ]
+            },
+            "description": "A CSV with a header row: `recipient` is the address, other columns become template values. In Postman, pick `postman/recipients.csv` (or your own file) for `file`.",
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "channel",
+                  "value": "SMS",
+                  "type": "text"
+                },
+                {
+                  "key": "body",
+                  "value": "Hi {{name}}, order {{orderId}} is on its way.",
+                  "type": "text"
+                },
+                {
+                  "key": "clientReference",
+                  "value": "csv-{{runId}}",
+                  "type": "text"
+                },
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": "postman/recipients.csv"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('answers 202', () => pm.response.to.have.status(202));",
+                  "pm.test('took both rows', () => pm.expect(pm.response.json().total).to.eql(2));"
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "auth": {
+        "type": "apikey",
+        "apikey": [
+          {
+            "key": "key",
+            "value": "X-API-Key",
+            "type": "string"
+          },
+          {
+            "key": "value",
+            "value": "{{apiKey}}",
+            "type": "string"
+          },
+          {
+            "key": "in",
+            "value": "header",
+            "type": "string"
+          }
+        ]
+      }
+    },
+    {
+      "name": "6. Client · Track delivery",
+      "description": "Follows what was sent. The first request waits a few seconds for delivery to finish locally.",
+      "item": [
+        {
+          "name": "Request status",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{clientApiUrl}}/v1/notifications/{{bulkRequestId}}",
+              "host": [
+                "{{clientApiUrl}}"
+              ],
+              "path": [
+                "v1",
+                "notifications",
+                "{{bulkRequestId}}"
+              ]
+            },
+            "description": "The request's status and its message counts per status. `PARTIALLY_FAILED` here: two sent, one rejected."
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "setTimeout(() => {}, 6000);"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('answers 200', () => pm.response.to.have.status(200));",
+                  "pm.test('two sent, one failed', () => { const c = pm.response.json().counts; pm.expect(c.sent).to.eql(2); pm.expect(c.failed).to.eql(1); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Failed messages",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{clientApiUrl}}/v1/notifications/{{bulkRequestId}}/messages?status=FAILED&page=0&size=50",
+              "host": [
+                "{{clientApiUrl}}"
+              ],
+              "path": [
+                "v1",
+                "notifications",
+                "{{bulkRequestId}}",
+                "messages"
+              ],
+              "query": [
+                {
+                  "key": "status",
+                  "value": "FAILED"
+                },
+                {
+                  "key": "page",
+                  "value": "0"
+                },
+                {
+                  "key": "size",
+                  "value": "50"
+                }
+              ]
+            },
+            "description": "Per-recipient messages, filterable by status and recipient, paged."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('answers 200', () => pm.response.to.have.status(200));",
+                  "pm.test('rejected by the provider', () => pm.expect(pm.response.json().items[0].errorCode).to.eql('DELIVERY_REJECTED'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Export failed recipients (CSV)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{clientApiUrl}}/v1/notifications/{{bulkRequestId}}/messages/export?status=FAILED",
+              "host": [
+                "{{clientApiUrl}}"
+              ],
+              "path": [
+                "v1",
+                "notifications",
+                "{{bulkRequestId}}",
+                "messages",
+                "export"
+              ],
+              "query": [
+                {
+                  "key": "status",
+                  "value": "FAILED"
+                }
+              ]
+            },
+            "description": "The failed recipients as CSV, ready to correct and resend."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('answers 200', () => pm.response.to.have.status(200));",
+                  "pm.test('is CSV', () => pm.expect(pm.response.headers.get('Content-Type')).to.include('text/csv'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "One-time password status",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{clientApiUrl}}/v1/notifications/{{otpRequestId}}/messages",
+              "host": [
+                "{{clientApiUrl}}"
+              ],
+              "path": [
+                "v1",
+                "notifications",
+                "{{otpRequestId}}",
+                "messages"
+              ]
+            },
+            "description": "The OTP's message, with its category and the moment it expires."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('answers 200', () => pm.response.to.have.status(200));",
+                  "pm.test('is an OTP with an expiry', () => { const m = pm.response.json().items[0]; pm.expect(m.category).to.eql('OTP'); pm.expect(m.expiresAt).to.be.a('string'); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Recent requests",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{clientApiUrl}}/v1/notifications?clientReference=campaign-{{runId}}",
+              "host": [
+                "{{clientApiUrl}}"
+              ],
+              "path": [
+                "v1",
+                "notifications"
+              ],
+              "query": [
+                {
+                  "key": "clientReference",
+                  "value": "campaign-{{runId}}"
+                }
+              ]
+            },
+            "description": "Newest first, filterable by channel and your reference."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('answers 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Summary (24 h)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{clientApiUrl}}/v1/notifications/summary?hours=24",
+              "host": [
+                "{{clientApiUrl}}"
+              ],
+              "path": [
+                "v1",
+                "notifications",
+                "summary"
+              ],
+              "query": [
+                {
+                  "key": "hours",
+                  "value": "24"
+                }
+              ]
+            },
+            "description": "Message counts per channel and status over the last N hours."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('answers 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "auth": {
+        "type": "apikey",
+        "apikey": [
+          {
+            "key": "key",
+            "value": "X-API-Key",
+            "type": "string"
+          },
+          {
+            "key": "value",
+            "value": "{{apiKey}}",
+            "type": "string"
+          },
+          {
+            "key": "in",
+            "value": "header",
+            "type": "string"
+          }
+        ]
+      }
+    },
+    {
+      "name": "7. Client · Senders, billing and privacy",
+      "description": "Sender addresses, the tenant's billing view, and its privacy tools.",
+      "item": [
+        {
+          "name": "Add sender address",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{clientApiUrl}}/v1/senders",
+              "host": [
+                "{{clientApiUrl}}"
+              ],
+              "path": [
+                "v1",
+                "senders"
+              ]
+            },
+            "description": "Registers an address to send e-mail from; a confirmation link is e-mailed to it (see Mailpit locally, http://localhost:8025).",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"orders+{{runId}}@example.com\",\n  \"displayName\": \"Example Orders\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('answers 201', () => pm.response.to.have.status(201));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Sender addresses",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{clientApiUrl}}/v1/senders",
+              "host": [
+                "{{clientApiUrl}}"
+              ],
+              "path": [
+                "v1",
+                "senders"
+              ]
+            },
+            "description": "Registered addresses and whether each is verified."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('answers 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Billing account",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{clientApiUrl}}/v1/billing/account",
+              "host": [
+                "{{clientApiUrl}}"
+              ],
+              "path": [
+                "v1",
+                "billing",
+                "account"
+              ]
+            },
+            "description": "The plan, prices (with this tenant's own OTP price), and the credit balance."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('answers 200', () => pm.response.to.have.status(200));",
+                  "pm.test('shows the OTP price', () => pm.expect(pm.response.json().rates.find(r => r.channel === 'SMS').otpUnitPrice).to.be.a('string'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Credit ledger",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{clientApiUrl}}/v1/billing/ledger",
+              "host": [
+                "{{clientApiUrl}}"
+              ],
+              "path": [
+                "v1",
+                "billing",
+                "ledger"
+              ]
+            },
+            "description": "Every top-up, reservation and refund."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('answers 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Usage this month",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{clientApiUrl}}/v1/billing/usage",
+              "host": [
+                "{{clientApiUrl}}"
+              ],
+              "path": [
+                "v1",
+                "billing",
+                "usage"
+              ]
+            },
+            "description": "What the month has cost so far (an estimate until it ends)."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('answers 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Retention policy",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{clientApiUrl}}/v1/privacy/retention",
+              "host": [
+                "{{clientApiUrl}}"
+              ],
+              "path": [
+                "v1",
+                "privacy",
+                "retention"
+              ]
+            },
+            "description": "How long recipient data, message records and idempotency keys are kept."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('answers 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Recipient activity report (CSV)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{clientApiUrl}}/v1/privacy/recipient-report",
+              "host": [
+                "{{clientApiUrl}}"
+              ],
+              "path": [
+                "v1",
+                "privacy",
+                "recipient-report"
+              ]
+            },
+            "description": "Everything sent to one person, one row per event with UTC timestamps, for answering a complaint to a data protection authority. Found by any spelling of the address, even after erasure. Never includes message text.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"recipient\": \"+1 (415) 555-0177\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('answers 200', () => pm.response.to.have.status(200));",
+                  "pm.test('lists the OTP being sent', () => pm.expect(pm.response.text()).to.include('SENT'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Erase a recipient",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{clientApiUrl}}/v1/privacy/erasure",
+              "host": [
+                "{{clientApiUrl}}"
+              ],
+              "path": [
+                "v1",
+                "privacy",
+                "erasure"
+              ]
+            },
+            "description": "Removes one recipient's address, values and error text from every finished message (e.g. after a data-protection request).",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"recipient\": \"ann@example.com\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('answers 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "auth": {
+        "type": "apikey",
+        "apikey": [
+          {
+            "key": "key",
+            "value": "X-API-Key",
+            "type": "string"
+          },
+          {
+            "key": "value",
+            "value": "{{apiKey}}",
+            "type": "string"
+          },
+          {
+            "key": "in",
+            "value": "header",
+            "type": "string"
+          }
+        ]
+      }
+    },
+    {
+      "name": "8. Client · What errors look like",
+      "description": "Deliberate mistakes, to show the error format: a stable `code`, a numbered `errorId`, `retryable`, and the `traceId` to quote to support.",
+      "item": [
+        {
+          "name": "No API key",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{clientApiUrl}}/v1/me",
+              "host": [
+                "{{clientApiUrl}}"
+              ],
+              "path": [
+                "v1",
+                "me"
+              ]
+            },
+            "description": "Refused with `401 UNAUTHORIZED` (NS-2001).",
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('answers 401', () => pm.response.to.have.status(401));",
+                  "pm.test('names the error', () => pm.expect(pm.response.json().errorId).to.eql('NS-2001'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Channel not enabled",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{clientApiUrl}}/v1/notifications",
+              "host": [
+                "{{clientApiUrl}}"
+              ],
+              "path": [
+                "v1",
+                "notifications"
+              ]
+            },
+            "description": "This tenant may not use WhatsApp: `403 CHANNEL_NOT_ALLOWED` (NS-2008).",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"channel\": \"WHATSAPP\",\n  \"recipient\": \"+14155550123\",\n  \"body\": \"Hi\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('answers 403', () => pm.response.to.have.status(403));",
+                  "pm.test('names the error', () => pm.expect(pm.response.json().code).to.eql('CHANNEL_NOT_ALLOWED'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "OTP in a bulk send",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{clientApiUrl}}/v1/notifications/bulk",
+              "host": [
+                "{{clientApiUrl}}"
+              ],
+              "path": [
+                "v1",
+                "notifications",
+                "bulk"
+              ]
+            },
+            "description": "One-time passwords are single sends only: `400 CATEGORY_NOT_ALLOWED` (NS-1005).",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"channel\": \"SMS\",\n  \"templateName\": \"{{templateName}}\",\n  \"recipients\": [\n    {\n      \"recipient\": \"+14155550101\",\n      \"variables\": {\n        \"code\": \"1\"\n      }\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('answers 400', () => pm.response.to.have.status(400));",
+                  "pm.test('names the error', () => pm.expect(pm.response.json().code).to.eql('CATEGORY_NOT_ALLOWED'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Missing template value",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{clientApiUrl}}/v1/notifications",
+              "host": [
+                "{{clientApiUrl}}"
+              ],
+              "path": [
+                "v1",
+                "notifications"
+              ]
+            },
+            "description": "Refused before anything is sent: `400 INVALID_REQUEST`, naming the value.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"channel\": \"SMS\",\n  \"recipient\": \"+14155550123\",\n  \"templateName\": \"{{templateName}}\",\n  \"variables\": {}\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('answers 400', () => pm.response.to.have.status(400));",
+                  "pm.test('names the missing value', () => pm.expect(pm.response.json().message).to.include('code'));"
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "auth": {
+        "type": "apikey",
+        "apikey": [
+          {
+            "key": "key",
+            "value": "X-API-Key",
+            "type": "string"
+          },
+          {
+            "key": "value",
+            "value": "{{apiKey}}",
+            "type": "string"
+          },
+          {
+            "key": "in",
+            "value": "header",
+            "type": "string"
+          }
+        ]
+      }
+    },
+    {
+      "name": "9. Admin · Operations",
+      "description": "What a platform operator watches day to day.",
+      "item": [
+        {
+          "name": "Dashboard summary",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{adminApiUrl}}/api/admin/dashboard/summary",
+              "host": [
+                "{{adminApiUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "dashboard",
+                "summary"
+              ]
+            },
+            "description": "Message counts per channel and status, the backlog and request totals."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('answers 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Messages of the tenant",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{adminApiUrl}}/api/admin/messages?clientId={{clientId}}&page=0&size=50",
+              "host": [
+                "{{adminApiUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "messages"
+              ],
+              "query": [
+                {
+                  "key": "clientId",
+                  "value": "{{clientId}}"
+                },
+                {
+                  "key": "page",
+                  "value": "0"
+                },
+                {
+                  "key": "size",
+                  "value": "50"
+                }
+              ]
+            },
+            "description": "Every message of one tenant, newest first, with its category, OTP expiry and error id."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('answers 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Dead letters summary",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{adminApiUrl}}/api/admin/dead-letters/summary",
+              "host": [
+                "{{adminApiUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "dead-letters",
+                "summary"
+              ]
+            },
+            "description": "Failed messages grouped by kind, channel, client and most common reason."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('answers 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Providers",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{adminApiUrl}}/api/admin/providers",
+              "host": [
+                "{{adminApiUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "providers"
+              ]
+            },
+            "description": "The SMS, e-mail, WhatsApp and push providers, in failover order per channel."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('answers 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Audit log",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{adminApiUrl}}/api/admin/audit-events",
+              "host": [
+                "{{adminApiUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "audit-events"
+              ]
+            },
+            "description": "Every change made through the admin API: who, what, when and the outcome. `ADMIN` only."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('answers 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "auth": {
+        "type": "bearer",
+        "bearer": [
+          {
+            "key": "token",
+            "value": "{{adminToken}}",
+            "type": "string"
+          }
+        ]
+      }
+    },
+    {
+      "name": "10. Clean up",
+      "description": "Removes what this run created, so it can be run again and again.",
+      "item": [
+        {
+          "name": "Delete OTP template",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{clientApiUrl}}/v1/templates/{{templateId}}",
+              "host": [
+                "{{clientApiUrl}}"
+              ],
+              "path": [
+                "v1",
+                "templates",
+                "{{templateId}}"
+              ]
+            },
+            "description": "Requests already accepted keep their text.",
+            "auth": {
+              "type": "apikey",
+              "apikey": [
+                {
+                  "key": "key",
+                  "value": "X-API-Key",
+                  "type": "string"
+                },
+                {
+                  "key": "value",
+                  "value": "{{apiKey}}",
+                  "type": "string"
+                },
+                {
+                  "key": "in",
+                  "value": "header",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('answers 204', () => pm.response.to.have.status(204));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Delete SMS rate limit",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{adminApiUrl}}/api/admin/rate-limits/{{smsLimitId}}",
+              "host": [
+                "{{adminApiUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "rate-limits",
+                "{{smsLimitId}}"
+              ]
+            },
+            "description": "",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{adminToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('answers 204', () => pm.response.to.have.status(204));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Delete API rate limit",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{adminApiUrl}}/api/admin/rate-limits/{{apiLimitId}}",
+              "host": [
+                "{{adminApiUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "rate-limits",
+                "{{apiLimitId}}"
+              ]
+            },
+            "description": "",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{adminToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('answers 204', () => pm.response.to.have.status(204));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Disable the tenant",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{adminApiUrl}}/api/admin/clients/{{clientId}}",
+              "host": [
+                "{{adminApiUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "clients",
+                "{{clientId}}"
+              ]
+            },
+            "description": "Disabling stops every call with its key at once. Clients are never deleted, so their history stays.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"postman-{{runId}}\",\n  \"status\": \"DISABLED\",\n  \"allowedChannels\": [\n    \"EMAIL\",\n    \"SMS\"\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{adminToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('answers 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Sign out",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{adminApiUrl}}/api/admin/auth/logout",
+              "host": [
+                "{{adminApiUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "auth",
+                "logout"
+              ]
+            },
+            "description": "Ends the admin session.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{adminToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('signed out', () => pm.expect(pm.response.code).to.be.oneOf([200, 204]));",
+                  "pm.collectionVariables.unset('adminToken');"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "runId",
+      "value": "",
+      "description": "Set on sign-in so names created by one run are unique."
+    },
+    {
+      "key": "adminToken",
+      "value": ""
+    },
+    {
+      "key": "clientId",
+      "value": ""
+    },
+    {
+      "key": "apiKey",
+      "value": "",
+      "description": "The tenant API key; set by \"Create client\", or paste an existing one."
+    },
+    {
+      "key": "apiLimitId",
+      "value": ""
+    },
+    {
+      "key": "smsLimitId",
+      "value": ""
+    },
+    {
+      "key": "planId",
+      "value": ""
+    },
+    {
+      "key": "templateId",
+      "value": ""
+    },
+    {
+      "key": "templateName",
+      "value": ""
+    },
+    {
+      "key": "emailRequestId",
+      "value": ""
+    },
+    {
+      "key": "otpRequestId",
+      "value": ""
+    },
+    {
+      "key": "bulkRequestId",
+      "value": ""
+    }
+  ]
+}
