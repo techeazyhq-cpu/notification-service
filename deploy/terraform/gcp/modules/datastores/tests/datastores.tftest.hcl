@@ -136,6 +136,17 @@ run "the_backup_bucket_lives_in_the_other_region_and_cannot_be_made_public" {
     condition     = one(google_storage_bucket.backups.lifecycle_rule[0].condition).age == 30
     error_message = "Dumps expire after the retention period."
   }
+  assert {
+    condition     = length(google_storage_bucket.backups.logging) == 1
+    error_message = "Every request against the backups must leave an access log."
+  }
+  assert {
+    condition = (
+      google_storage_bucket.backup_access_logs.uniform_bucket_level_access
+      && google_storage_bucket.backup_access_logs.public_access_prevention == "enforced"
+    )
+    error_message = "The access-log bucket must be as closed as the backups it records."
+  }
 }
 
 run "secrets_are_replicated_to_both_regions_and_hold_no_plain_terraform_values" {

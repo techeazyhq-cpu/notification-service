@@ -75,7 +75,7 @@ class DeadLetterTest {
         when(messages.findById(id)).thenReturn(java.util.Optional.of(message));
 
         assertThat(recorder.recordDeadLetter(id, "SMS")).isTrue();
-        verify(events).record(argThat(event -> event.type() == MessageEventType.DEAD_LETTERED
+        verify(events).append(argThat(event -> event.type() == MessageEventType.DEAD_LETTERED
                 && event.messageId().equals(id) && event.errorCode() == ErrorCode.DELIVERY_DEAD_LETTERED));
 
         assertThat(meters.get("notification.dead_letter").tag("channel", "SMS").counter().count()).isEqualTo(1.0);

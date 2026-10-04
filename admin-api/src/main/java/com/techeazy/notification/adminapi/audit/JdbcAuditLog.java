@@ -32,6 +32,9 @@ import java.util.UUID;
  */
 class JdbcAuditLog implements AuditLog {
 
+    private static final String ACTOR = "actor";
+    private static final String OUTCOME = "outcome";
+
     private static final String MATCHING = """
             WHERE (CAST(:actor AS VARCHAR) IS NULL OR actor = :actor)
               AND (CAST(:outcome AS VARCHAR) IS NULL OR outcome = :outcome)
@@ -46,7 +49,7 @@ class JdbcAuditLog implements AuditLog {
     }
 
     @Override
-    public void record(AuditEvent event) {
+    public void append(AuditEvent event) {
         jdbc.sql("""
                 INSERT INTO admin_audit_event (id, occurred_at, actor, actor_role, http_method, route, path,
                                                status_code, outcome, source_address, user_agent)
@@ -55,13 +58,13 @@ class JdbcAuditLog implements AuditLog {
                 """)
                 .param("id", event.id())
                 .param("occurredAt", Timestamp.from(event.occurredAt()))
-                .param("actor", event.actor())
+                .param(ACTOR, event.actor())
                 .param("actorRole", event.actorRole() == null ? null : event.actorRole().name())
                 .param("httpMethod", event.httpMethod())
                 .param("route", event.route())
                 .param("path", event.path())
                 .param("statusCode", event.statusCode())
-                .param("outcome", event.outcome().name())
+                .param(OUTCOME, event.outcome().name())
                 .param("sourceAddress", event.sourceAddress())
                 .param("userAgent", event.userAgent())
                 .update();
@@ -88,8 +91,8 @@ class JdbcAuditLog implements AuditLog {
 
     private static JdbcClient.StatementSpec withCriteria(JdbcClient.StatementSpec statement, AuditQuery query) {
         return statement
-                .param("actor", query.actor())
-                .param("outcome", query.outcome() == null ? null : query.outcome().name())
+                .param(ACTOR, query.actor())
+                .param(OUTCOME, query.outcome() == null ? null : query.outcome().name())
                 .param("from", query.from() == null ? null : Timestamp.from(query.from()))
                 .param("to", query.to() == null ? null : Timestamp.from(query.to()));
     }
@@ -97,9 +100,9 @@ class JdbcAuditLog implements AuditLog {
     private static AuditEvent toEvent(ResultSet row, int rowNumber) throws SQLException {
         String actorRole = row.getString("actor_role");
         return new AuditEvent(row.getObject("id", UUID.class), row.getTimestamp("occurred_at").toInstant(),
-                row.getString("actor"), actorRole == null ? null : AdminRole.valueOf(actorRole),
+                row.getString(ACTOR), actorRole == null ? null : AdminRole.valueOf(actorRole),
                 row.getString("http_method"), row.getString("route"), row.getString("path"), row.getInt("status_code"),
-                AuditOutcome.valueOf(row.getString("outcome")), row.getString("source_address"),
+                AuditOutcome.valueOf(row.getString(OUTCOME)), row.getString("source_address"),
                 row.getString("user_agent"));
     }
 }

@@ -41,6 +41,10 @@ resource "azurerm_storage_account" "backups" {
   local_user_enabled                = false
   infrastructure_encryption_enabled = true
 
+  identity {
+    type = "SystemAssigned"
+  }
+
   network_rules {
     default_action = "Deny"
     bypass         = ["AzureServices"]

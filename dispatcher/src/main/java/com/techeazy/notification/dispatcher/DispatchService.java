@@ -72,6 +72,7 @@ public class DispatchService {
      * providers rejecting recipients on one channel, is visible and alerted on its own.
      */
     public static final String DELIVERY_ERRORS = "notification.delivery.errors";
+    private static final String CHANNEL_TAG = "channel";
     private static final Duration[] DELIVERY_LATENCY_THRESHOLDS = {
             Duration.ofSeconds(10), Duration.ofSeconds(30), Duration.ofMinutes(1), Duration.ofMinutes(5)};
 
@@ -141,7 +142,7 @@ public class DispatchService {
             Instant sentAt = Instant.now();
             transactions.executeWithoutResult(status -> {
                 messages.markSent(messageId, result.providerMessageId(), sentAt);
-                events.record(MessageEvent.of(m, MessageEventType.SENT, sentAt).withAttempt(attempt)
+                events.append(MessageEvent.of(m, MessageEventType.SENT, sentAt).withAttempt(attempt)
                         .withProviderMessageId(result.providerMessageId()));
             });
             count(m.getChannel(), "sent");
@@ -164,7 +165,7 @@ public class DispatchService {
                 transactions.executeWithoutResult(status -> {
                     messages.markFailed(messageId, FailureKind.EXHAUSTED, ErrorCode.DELIVERY_ATTEMPTS_EXHAUSTED,
                             truncate("Gave up after " + attempt + " attempts: " + e.getMessage()), failedAt);
-                    events.record(MessageEvent.of(m, MessageEventType.FAILED, failedAt).withAttempt(attempt)
+                    events.append(MessageEvent.of(m, MessageEventType.FAILED, failedAt).withAttempt(attempt)
                             .withError(ErrorCode.DELIVERY_ATTEMPTS_EXHAUSTED)
                             .withDetail("Gave up after " + attempt + " attempts"));
                 });
@@ -177,7 +178,7 @@ public class DispatchService {
             transactions.executeWithoutResult(status -> {
                 messages.markFailedOrRetry(messageId, MessageStatus.RETRYING, ErrorCode.PROVIDER_TEMPORARILY_FAILING,
                         truncate(e.getMessage()), failedAt);
-                events.record(MessageEvent.of(m, MessageEventType.ATTEMPT_FAILED, failedAt).withAttempt(attempt)
+                events.append(MessageEvent.of(m, MessageEventType.ATTEMPT_FAILED, failedAt).withAttempt(attempt)
                         .withError(ErrorCode.PROVIDER_TEMPORARILY_FAILING)
                         .withDetail("Next attempt in " + backoff.toSeconds() + " s"));
             });
@@ -215,7 +216,7 @@ public class DispatchService {
         transactions.executeWithoutResult(status -> {
             messages.markFailed(m.getId(), FailureKind.EXPIRED, ErrorCode.OTP_EXPIRED,
                     "The one-time password expired at " + m.getExpiresAt() + " before it could be sent", expiredAt);
-            events.record(MessageEvent.of(m, MessageEventType.EXPIRED, expiredAt).withError(ErrorCode.OTP_EXPIRED)
+            events.append(MessageEvent.of(m, MessageEventType.EXPIRED, expiredAt).withError(ErrorCode.OTP_EXPIRED)
                     .withDetail("Valid until " + m.getExpiresAt()));
         });
         count(m.getChannel(), "failed_expired");
@@ -227,7 +228,7 @@ public class DispatchService {
         Instant failedAt = Instant.now();
         transactions.executeWithoutResult(status -> {
             messages.markFailed(m.getId(), FailureKind.PERMANENT, errorCode, truncate(cause.getMessage()), failedAt);
-            events.record(MessageEvent.of(m, MessageEventType.FAILED, failedAt).withAttempt(attempt).withError(errorCode));
+            events.append(MessageEvent.of(m, MessageEventType.FAILED, failedAt).withAttempt(attempt).withError(errorCode));
         });
         count(m.getChannel(), "failed_permanent");
         countError(metrics, m.getChannel().name(), errorCode);
@@ -256,7 +257,7 @@ public class DispatchService {
         }
         Timer.builder(DELIVERY_LATENCY)
                 .description("Time from accepting a message to its provider confirming the send")
-                .tag("channel", m.getChannel().name())
+                .tag(CHANNEL_TAG, m.getChannel().name())
                 .tag("category", m.getCategory().name())
                 .serviceLevelObjectives(DELIVERY_LATENCY_THRESHOLDS)
                 .register(metrics)
@@ -265,12 +266,12 @@ public class DispatchService {
 
     /** Counts one delivery error under {@link #DELIVERY_ERRORS}, tagged with its code and numbered error id. */
     static void countError(MeterRegistry meters, String channel, ErrorCode errorCode) {
-        meters.counter(DELIVERY_ERRORS, "channel", channel, "code", errorCode.code(), "error_id", errorCode.errorId())
+        meters.counter(DELIVERY_ERRORS, CHANNEL_TAG, channel, "code", errorCode.code(), "error_id", errorCode.errorId())
                 .increment();
     }
 
     private void count(Channel channel, String outcome) {
-        metrics.counter("notification.dispatch", "channel", channel.name(), "outcome", outcome).increment();
+        metrics.counter("notification.dispatch", CHANNEL_TAG, channel.name(), "outcome", outcome).increment();
     }
 
     private static String truncate(String s) {

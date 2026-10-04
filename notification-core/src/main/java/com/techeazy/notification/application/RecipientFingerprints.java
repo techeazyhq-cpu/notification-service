@@ -60,7 +60,7 @@ public final class RecipientFingerprints {
             return trimmed.toLowerCase(Locale.ROOT);
         }
         String digits = trimmed.replaceAll("[\\s\\-().]", "");
-        return digits.matches("\\+?[0-9]+") ? digits : trimmed;
+        return digits.matches("\\+?\\d+") ? digits : trimmed;
     }
 
     private static byte[] hmac(SecretKeySpec key, byte[] data) {

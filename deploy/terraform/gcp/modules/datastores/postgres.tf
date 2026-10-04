@@ -67,22 +67,44 @@ resource "google_sql_database_instance" "postgres" {
       query_insights_enabled = true
     }
 
-    dynamic "database_flags" {
-      for_each = {
-        log_min_duration_statement          = "1000"
-        idle_in_transaction_session_timeout = "60000"
-        log_checkpoints                     = "on"
-        log_connections                     = "on"
-        log_disconnections                  = "on"
-        log_lock_waits                      = "on"
-        log_temp_files                      = "0"
-        "cloudsql.enable_pgaudit"           = "off"
-      }
+    database_flags {
+      name  = "log_min_duration_statement"
+      value = "1000"
+    }
 
-      content {
-        name  = database_flags.key
-        value = database_flags.value
-      }
+    database_flags {
+      name  = "idle_in_transaction_session_timeout"
+      value = "60000"
+    }
+
+    database_flags {
+      name  = "log_checkpoints"
+      value = "on"
+    }
+
+    database_flags {
+      name  = "log_connections"
+      value = "on"
+    }
+
+    database_flags {
+      name  = "log_disconnections"
+      value = "on"
+    }
+
+    database_flags {
+      name  = "log_lock_waits"
+      value = "on"
+    }
+
+    database_flags {
+      name  = "log_temp_files"
+      value = "0"
+    }
+
+    database_flags {
+      name  = "cloudsql.enable_pgaudit"
+      value = "off"
     }
   }
 

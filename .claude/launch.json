@@ -1,0 +1,68 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "cm-dp-portal",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": [
+        "--dir",
+        "C:/Vasanth/workspace/TechEazyHQ/consent-manager/frontend/packages/mf-dp-portal",
+        "run",
+        "preview"
+      ],
+      "port": 5174
+    },
+    {
+      "name": "cm-df-app",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": [
+        "--dir",
+        "C:/Vasanth/workspace/TechEazyHQ/consent-manager/frontend/packages/mf-df-app",
+        "run",
+        "preview"
+      ],
+      "port": 5175
+    },
+    {
+      "name": "cm-cm-admin",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": [
+        "--dir",
+        "C:/Vasanth/workspace/TechEazyHQ/consent-manager/frontend/packages/mf-cm-admin",
+        "run",
+        "preview"
+      ],
+      "port": 5176
+    },
+    {
+      "name": "ns-admin-ui-dev",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "--prefix",
+        "C:/Vasanth/workspace/TechEazyHQ/notification-service/admin-ui",
+        "run",
+        "dev",
+        "--",
+        "--port",
+        "5183",
+        "--strictPort"
+      ],
+      "port": 5183
+    },
+    {
+      "name": "ns-client-ui-dev",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "--prefix",
+        "C:/Vasanth/workspace/TechEazyHQ/notification-service/client-ui",
+        "run",
+        "dev",
+        "--",
+        "--port",
+        "5184",
+        "--strictPort"
+      ],
+      "port": 5184
+    }
+  ]
+}

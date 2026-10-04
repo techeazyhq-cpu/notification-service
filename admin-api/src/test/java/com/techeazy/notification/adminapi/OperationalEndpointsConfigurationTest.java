@@ -75,7 +75,7 @@ class OperationalEndpointsConfigurationTest {
     /** The admin API documentation maps the whole administrative surface, so it is off unless switched on. */
     @Test
     void apiDocumentationIsServedOnlyWhereIntended() {
-        assertThat(shippedConfiguration.getProperty("springdoc.api-docs.enabled", Boolean.class)).isEqualTo(false);
-        assertThat(shippedConfiguration.getProperty("springdoc.swagger-ui.enabled", Boolean.class)).isEqualTo(false);
+        assertThat(shippedConfiguration.getProperty("springdoc.api-docs.enabled", Boolean.class)).isFalse();
+        assertThat(shippedConfiguration.getProperty("springdoc.swagger-ui.enabled", Boolean.class)).isFalse();
     }
 }

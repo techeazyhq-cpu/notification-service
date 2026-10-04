@@ -76,7 +76,7 @@ class MessageRetry {
         if (messages.requeueFailed(id, now) != 1) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "The message changed while it was being retried");
         }
-        events.record(MessageEvent.of(message, MessageEventType.REQUEUED, now)
+        events.append(MessageEvent.of(message, MessageEventType.REQUEUED, now)
                 .withDetail("Sent again by the platform operator"));
         return message;
     }

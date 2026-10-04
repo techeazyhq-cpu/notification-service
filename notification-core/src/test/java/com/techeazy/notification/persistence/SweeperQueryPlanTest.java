@@ -100,16 +100,16 @@ class SweeperQueryPlanTest {
     void theGeneralSweepReadsTheStatusIndexInOrderAndSortsNothing() throws Exception {
         List<String> plan = genericPlan("lockStale");
 
-        assertThat(plan).anyMatch(line -> line.contains("ix_message_status_updated"));
-        assertThat(plan).noneMatch(line -> line.contains("Sort"));
+        assertThat(plan).anyMatch(line -> line.contains("ix_message_status_updated"))
+                .noneMatch(line -> line.contains("Sort"));
     }
 
     @Test
     void theOneTimePasswordSweepUsesItsPartialIndexInEveryStatus() throws Exception {
         List<String> plan = genericPlan("lockStaleOtp");
 
-        assertThat(plan).anyMatch(line -> line.contains("ix_message_inflight_otp"));
-        assertThat(plan).noneMatch(line -> line.contains("Sort"));
+        assertThat(plan).anyMatch(line -> line.contains("ix_message_inflight_otp"))
+                .noneMatch(line -> line.contains("Sort"));
     }
 
     @Test
@@ -120,8 +120,7 @@ class SweeperQueryPlanTest {
                         rs.getTimestamp("updated_at").toInstant()})
                 .list();
 
-        assertThat(rows).hasSize(5);
-        assertThat(rows).allSatisfy(row -> {
+        assertThat(rows).hasSize(5).allSatisfy(row -> {
             assertThat(row[0]).isEqualTo("QUEUED");
             assertThat(row[1]).isEqualTo("OTP");
             assertThat((Instant) row[2]).isBefore(NOW.minusSeconds(60));

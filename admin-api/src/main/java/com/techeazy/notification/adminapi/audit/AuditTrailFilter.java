@@ -58,6 +58,8 @@ public class AuditTrailFilter extends OncePerRequestFilter {
     public static final String WRITE_FAILURES_METRIC = "notification.audit.write_failures";
 
     private static final Logger LOG = LoggerFactory.getLogger(AuditTrailFilter.class);
+    /** The admin API's own route prefix; a fixed part of this service, not an address to configure. */
+    @SuppressWarnings("java:S1075")
     private static final String AUDITED_PATH_PREFIX = "/api/";
     private static final String ROLE_PREFIX = "ROLE_";
     private static final Set<String> READ_ONLY_METHODS = Set.of("GET", "HEAD", "OPTIONS", "TRACE");
@@ -86,13 +88,13 @@ public class AuditTrailFilter extends OncePerRequestFilter {
         try {
             chain.doFilter(request, response);
         } catch (IOException | ServletException | RuntimeException failure) {
-            record(request, HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
+            audit(request, HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
             throw failure;
         }
-        record(request, response.getStatus());
+        audit(request, response.getStatus());
     }
 
-    private void record(HttpServletRequest request, int statusCode) {
+    private void audit(HttpServletRequest request, int statusCode) {
         Authentication session = signedInSession();
         AuditEvent event = new AuditEvent(UUID.randomUUID(), clock.instant(),
                 session == null ? claimedActor(request) : session.getName(),
@@ -105,7 +107,7 @@ public class AuditTrailFilter extends OncePerRequestFilter {
                 request.getRemoteAddr(),
                 request.getHeader(HttpHeaders.USER_AGENT));
         try {
-            auditLog.record(event);
+            auditLog.append(event);
         } catch (RuntimeException failure) {
             writeFailures.increment();
             LOG.error("Could not record the audit event for {} {}", event.httpMethod(), event.path(), failure);

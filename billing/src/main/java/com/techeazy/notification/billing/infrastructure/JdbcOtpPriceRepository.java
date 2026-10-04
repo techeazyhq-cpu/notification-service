@@ -31,6 +31,8 @@ import java.util.UUID;
 /** One row per tenant and channel with an OTP price of its own (ADR-034). */
 class JdbcOtpPriceRepository implements OtpPriceRepository {
 
+    private static final String CLIENT = "client";
+
     private final JdbcClient jdbc;
 
     JdbcOtpPriceRepository(JdbcClient jdbc) {
@@ -41,7 +43,7 @@ class JdbcOtpPriceRepository implements OtpPriceRepository {
     public OtpPrices findByClientId(UUID clientId) {
         Map<Channel, Money> prices = new EnumMap<>(Channel.class);
         jdbc.sql("SELECT channel, unit_price, currency FROM billing_account_otp_price WHERE client_id = :client")
-                .param("client", clientId)
+                .param(CLIENT, clientId)
                 .query((rs, n) -> Map.entry(Channel.valueOf(rs.getString("channel")),
                         new Money(rs.getBigDecimal("unit_price"), rs.getString("currency"))))
                 .list()
@@ -52,11 +54,11 @@ class JdbcOtpPriceRepository implements OtpPriceRepository {
     /** Deletes and inserts in the caller's transaction, so readers see the old prices or the new ones, never a mix. */
     @Override
     public void replace(UUID clientId, OtpPrices prices) {
-        jdbc.sql("DELETE FROM billing_account_otp_price WHERE client_id = :client").param("client", clientId).update();
+        jdbc.sql("DELETE FROM billing_account_otp_price WHERE client_id = :client").param(CLIENT, clientId).update();
         prices.prices().forEach((channel, price) -> jdbc.sql("""
                 INSERT INTO billing_account_otp_price (client_id, channel, unit_price, currency, updated_at)
                 VALUES (:client, :channel, :price, :currency, now())""")
-                .param("client", clientId).param("channel", channel.name())
+                .param(CLIENT, clientId).param("channel", channel.name())
                 .param("price", price.amount()).param("currency", price.currency())
                 .update());
     }

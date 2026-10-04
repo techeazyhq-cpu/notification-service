@@ -40,6 +40,7 @@ import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -64,16 +65,16 @@ class RateLimitServiceTest {
     void ordinaryMessagesLeaveAFifthOfEachBucketInReserve() {
         service.checkDelivery(clientId, Channel.SMS, MessageCategory.TRANSACTIONAL);
 
-        verify(limiter).tryAcquire(eq("client:" + clientId + ":SMS"), eq(50.0), eq(100), eq(20));
-        verify(limiter).tryAcquire(eq("global:SMS"), eq(200.0), eq(400), eq(80));
+        verify(limiter).tryAcquire("client:" + clientId + ":SMS", 50.0, 100, 20);
+        verify(limiter).tryAcquire("global:SMS", 200.0, 400, 80);
     }
 
     @Test
     void oneTimePasswordsMayUseTheReserve() {
         service.checkDelivery(clientId, Channel.SMS, MessageCategory.OTP);
 
-        verify(limiter).tryAcquire(eq("client:" + clientId + ":SMS"), eq(50.0), eq(100), eq(0));
-        verify(limiter).tryAcquire(eq("global:SMS"), eq(200.0), eq(400), eq(0));
+        verify(limiter).tryAcquire("client:" + clientId + ":SMS", 50.0, 100, 0);
+        verify(limiter).tryAcquire("global:SMS", 200.0, 400, 0);
     }
 
     @Test
@@ -83,7 +84,7 @@ class RateLimitServiceTest {
 
         smallBuckets.checkDelivery(clientId, Channel.SMS, MessageCategory.PROMOTIONAL);
 
-        verify(limiter).tryAcquire(eq("global:SMS"), eq(1.0), eq(1), eq(0));
+        verify(limiter).tryAcquire("global:SMS", 1.0, 1, 0);
     }
 
     @ParameterizedTest(name = "burst {0} at {1} keeps {2}")
@@ -116,7 +117,7 @@ class RateLimitServiceTest {
 
         halfReserved.checkDelivery(clientId, Channel.SMS, MessageCategory.TRANSACTIONAL);
 
-        verify(limiter).tryAcquire(eq("global:SMS"), eq(200.0), eq(400), eq(200));
+        verify(limiter).tryAcquire("global:SMS", 200.0, 400, 200);
     }
 
     @Test
@@ -126,7 +127,7 @@ class RateLimitServiceTest {
 
         assertThat(service.checkDelivery(clientId, Channel.SMS, MessageCategory.OTP).allowed()).isFalse();
 
-        verify(limiter, org.mockito.Mockito.never()).tryAcquire(eq("global:SMS"), anyDouble(), anyInt(), anyInt());
+        verify(limiter, never()).tryAcquire(eq("global:SMS"), anyDouble(), anyInt(), anyInt());
     }
 
     private static RateLimitPolicy policy(RateLimitScope scope, UUID clientId, double rate, int burst) {

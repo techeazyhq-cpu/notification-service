@@ -65,7 +65,7 @@ class DeadLetterRecorder {
             if (messages.markDeadLettered(messageId, MessageStatus.IN_FLIGHT, REASON, now) != 1) {
                 return false;
             }
-            messages.findById(messageId).ifPresent(message -> events.record(
+            messages.findById(messageId).ifPresent(message -> events.append(
                     MessageEvent.of(message, MessageEventType.DEAD_LETTERED, now)
                             .withError(ErrorCode.DELIVERY_DEAD_LETTERED)));
             return true;

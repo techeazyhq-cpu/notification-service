@@ -76,6 +76,28 @@ public class RetentionService {
                          ORDER BY r.created_at LIMIT :batch)
             """.formatted(FINISHED);
 
+    private static final String ERASE_RECIPIENT_MESSAGES = """
+            WITH erased AS (
+                UPDATE notification_message
+                SET recipient = :erased, variables = '{}'::jsonb, last_error = NULL, erased_at = :now
+                WHERE lower(recipient) = lower(:recipient) AND (CAST(:client AS uuid) IS NULL OR client_id = :client)
+                  AND status IN %s AND erased_at IS NULL
+                RETURNING id, client_id)
+            """.formatted(FINISHED) + RECORD_ERASURE;
+
+    private static final String COUNT_RECIPIENT_IN_FLIGHT = """
+            SELECT count(*) FROM notification_message
+            WHERE lower(recipient) = lower(:recipient) AND (CAST(:client AS uuid) IS NULL OR client_id = :client)
+              AND status NOT IN %s
+            """.formatted(FINISHED);
+
+    private static final String ERASE_RECIPIENT_REQUESTS = """
+            UPDATE notification_request r SET subject = NULL, body = :erased, erased_at = :now
+            WHERE r.erased_at IS NULL AND r.total = 1
+              AND EXISTS (SELECT 1 FROM notification_message m WHERE m.request_id = r.id AND m.recipient = :erased)
+              AND NOT EXISTS (SELECT 1 FROM notification_message m WHERE m.request_id = r.id AND m.status NOT IN %s)
+            """.formatted(FINISHED);
+
     private static final String DELETE_FINISHED_MESSAGES = """
             DELETE FROM notification_message
             WHERE id IN (SELECT id FROM notification_message WHERE status IN %s AND updated_at < :cutoff LIMIT :batch)
@@ -140,26 +162,10 @@ public class RetentionService {
      */
     public Erasure eraseRecipient(UUID clientId, String recipient, Instant now) {
         Timestamp at = Timestamp.from(now);
-        long erased = jdbc.sql("""
-                WITH erased AS (
-                    UPDATE notification_message
-                    SET recipient = :erased, variables = '{}'::jsonb, last_error = NULL, erased_at = :now
-                    WHERE lower(recipient) = lower(:recipient) AND (CAST(:client AS uuid) IS NULL OR client_id = :client)
-                      AND status IN %s AND erased_at IS NULL
-                    RETURNING id, client_id)
-                """.formatted(FINISHED) + RECORD_ERASURE).param(ERASED, PersonalData.ERASED).param("now", at)
+        long erased = jdbc.sql(ERASE_RECIPIENT_MESSAGES).param(ERASED, PersonalData.ERASED).param("now", at)
                 .param("reason", ERASED_ON_REQUEST).param("recipient", recipient).param("client", clientId).update();
-        long inFlight = jdbc.sql("""
-                SELECT count(*) FROM notification_message
-                WHERE lower(recipient) = lower(:recipient) AND (CAST(:client AS uuid) IS NULL OR client_id = :client)
-                  AND status NOT IN %s
-                """.formatted(FINISHED)).param("recipient", recipient).param("client", clientId).query(Long.class).single();
-        jdbc.sql("""
-                UPDATE notification_request r SET subject = NULL, body = :erased, erased_at = :now
-                WHERE r.erased_at IS NULL AND r.total = 1
-                  AND EXISTS (SELECT 1 FROM notification_message m WHERE m.request_id = r.id AND m.recipient = :erased)
-                  AND NOT EXISTS (SELECT 1 FROM notification_message m WHERE m.request_id = r.id AND m.status NOT IN %s)
-                """.formatted(FINISHED)).param(ERASED, PersonalData.ERASED).param("now", at).update();
+        long inFlight = jdbc.sql(COUNT_RECIPIENT_IN_FLIGHT).param("recipient", recipient).param("client", clientId).query(Long.class).single();
+        jdbc.sql(ERASE_RECIPIENT_REQUESTS).param(ERASED, PersonalData.ERASED).param("now", at).update();
         LOG.info("Erasure request for client {}: {} message(s) erased, {} still in flight", clientId, erased, inFlight);
         return new Erasure(erased, inFlight);
     }

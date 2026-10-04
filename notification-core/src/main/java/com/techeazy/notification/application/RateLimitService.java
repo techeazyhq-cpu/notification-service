@@ -108,7 +108,7 @@ public class RateLimitService {
             return 0;
         }
         int share = (int) Math.floor(burst * fraction);
-        return Math.min(burst - 1, Math.max(1, share));
+        return Math.clamp(share, 1, burst - 1);
     }
 
     private static Decision merge(Decision a, Decision b) {

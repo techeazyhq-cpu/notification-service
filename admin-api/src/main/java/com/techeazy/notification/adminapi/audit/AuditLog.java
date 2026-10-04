@@ -20,7 +20,7 @@ package com.techeazy.notification.adminapi.audit;
 /** Where audit events are kept. Events are only ever added, never changed or removed. */
 public interface AuditLog {
 
-    void record(AuditEvent event);
+    void append(AuditEvent event);
 
     AuditPage search(AuditQuery query, int page, int size);
 }

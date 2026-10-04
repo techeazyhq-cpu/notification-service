@@ -213,7 +213,8 @@ class AuditTrailFilterTest {
         };
         MockHttpServletRequest create = request("POST", "/api/admin/clients");
 
-        assertThatThrownBy(() -> filter.doFilter(create, new MockHttpServletResponse(), failing))
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        assertThatThrownBy(() -> filter.doFilter(create, response, failing))
                 .isInstanceOf(IllegalStateException.class);
 
         assertThat(auditLog.recorded()).singleElement().satisfies(event -> {
@@ -238,7 +239,7 @@ class AuditTrailFilterTest {
 
     private static final class BrokenAuditLog extends RecordingAuditLog {
         @Override
-        public void record(AuditEvent event) {
+        public void append(AuditEvent event) {
             throw new IllegalStateException("audit table unavailable");
         }
     }

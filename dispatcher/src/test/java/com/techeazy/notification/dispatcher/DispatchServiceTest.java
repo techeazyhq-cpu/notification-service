@@ -335,7 +335,7 @@ class DispatchServiceTest {
 
         service.process(id);
 
-        verify(events, never()).record(any());
+        verify(events, never()).append(any());
     }
 
     @Test
@@ -349,7 +349,7 @@ class DispatchServiceTest {
 
     private MessageEvent loggedEvent() {
         ArgumentCaptor<MessageEvent> event = ArgumentCaptor.forClass(MessageEvent.class);
-        verify(events).record(event.capture());
+        verify(events).append(event.capture());
         return event.getValue();
     }
 

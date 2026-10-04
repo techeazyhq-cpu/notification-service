@@ -49,6 +49,12 @@ public final class ProviderDestinationPolicy {
     private static final String HTTPS = "https";
     private static final String SUBDOMAIN_WILDCARD = "*.";
 
+    /**
+     * The private, loopback, link-local (including cloud metadata at 169.254.169.254), shared, benchmark, multicast and
+     * reserved ranges a provider may never be sent to. They are fixed by the IANA special-purpose registries, so they
+     * are written out rather than configured.
+     */
+    @SuppressWarnings("java:S1313")
     private static final List<AddressBlock> NON_PUBLIC_BLOCKS = Stream.of(
             "0.0.0.0/8", "10.0.0.0/8", "100.64.0.0/10", "127.0.0.0/8", "169.254.0.0/16", "172.16.0.0/12",
             "192.0.0.0/24", "192.168.0.0/16", "198.18.0.0/15", "224.0.0.0/4", "240.0.0.0/4",
@@ -157,6 +163,26 @@ public final class ProviderDestinationPolicy {
 
     /** An address block in CIDR notation, such as {@code 10.0.0.0/8} or {@code fc00::/7}. */
     private record AddressBlock(byte[] network, int prefixLength) {
+
+        @Override
+        public boolean equals(Object other) {
+            return other instanceof AddressBlock block && prefixLength == block.prefixLength
+                    && java.util.Arrays.equals(network, block.network);
+        }
+
+        @Override
+        public int hashCode() {
+            return 31 * java.util.Arrays.hashCode(network) + prefixLength;
+        }
+
+        @Override
+        public String toString() {
+            try {
+                return InetAddress.getByAddress(network).getHostAddress() + "/" + prefixLength;
+            } catch (UnknownHostException e) {
+                return java.util.Arrays.toString(network) + "/" + prefixLength;
+            }
+        }
 
         static AddressBlock parse(String cidr) {
             String[] parts = cidr.split("/");

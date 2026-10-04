@@ -46,6 +46,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.locks.LockSupport;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
@@ -236,12 +237,10 @@ class PriorityConsumersTest {
 
     /** Waits like an empty receive; an interrupt surfaces as the Pulsar client reports it. */
     private static Message<byte[]> idle() throws PulsarClientException {
-        try {
-            Thread.sleep(20);
-            return null;
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw new PulsarClientException(e);
+        LockSupport.parkNanos(TimeUnit.MILLISECONDS.toNanos(20));
+        if (Thread.currentThread().isInterrupted()) {
+            throw new PulsarClientException(new InterruptedException("receive interrupted"));
         }
+        return null;
     }
 }

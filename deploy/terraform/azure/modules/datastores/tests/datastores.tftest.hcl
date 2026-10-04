@@ -161,6 +161,10 @@ run "the_backup_account_lives_in_the_other_region_and_admits_only_identities_ove
     condition     = azurerm_storage_account.backups.blob_properties[0].versioning_enabled
     error_message = "Backups must be versioned, so an overwrite or deletion can be undone."
   }
+  assert {
+    condition     = azurerm_storage_account.backups.identity[0].type == "SystemAssigned"
+    error_message = "The backup account must have its own managed identity rather than shared keys."
+  }
 }
 
 run "secrets_live_in_a_purge_protected_rbac_vault_closed_to_the_internet" {
