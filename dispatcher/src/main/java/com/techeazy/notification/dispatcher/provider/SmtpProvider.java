@@ -61,7 +61,8 @@ public class SmtpProvider implements ChannelProvider {
             applySender(helper, from, message);
             helper.setTo(message.recipient());
             helper.setSubject(message.subject() == null ? "" : message.subject());
-            helper.setText(message.body(), Boolean.parseBoolean(s.getOrDefault(HTML, "false")));
+            boolean html = Boolean.parseBoolean(s.getOrDefault(HTML, "false"));
+            helper.setText(html ? message.htmlBody() : message.body(), html);
             sender.send(mime);
             return new SendResult(mime.getMessageID());
         } catch (MailParseException | java.io.UnsupportedEncodingException e) {
