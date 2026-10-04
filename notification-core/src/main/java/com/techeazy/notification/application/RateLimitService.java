@@ -73,6 +73,12 @@ public class RateLimitService {
                 props.getRateLimit().getPublicCatalogueBurst());
     }
 
+    /** One token per administrator sign-in attempt from {@code clientAddress}. */
+    public Decision checkAdminSignIn(String clientAddress) {
+        return limiter.tryAcquire("signin:" + clientAddress, props.getRateLimit().getAdminSignInRate(),
+                props.getRateLimit().getAdminSignInBurst());
+    }
+
     /** One token per message delivery: the client's own quota first, then the platform-wide channel cap. */
     public Decision checkDelivery(UUID clientId, Channel channel, MessageCategory category) {
         Decision worst = Decision.GRANTED;
