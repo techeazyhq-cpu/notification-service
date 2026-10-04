@@ -30,7 +30,9 @@ the addresses your operator gave you.
 - **A message** is one recipient of a request. A bulk request to 10,000 people is one request with 10,000 messages,
   each with its own status.
 - **A template** holds the text, with `{{placeholders}}` filled per recipient. `{{recipient}}` (the recipient's
-  address) is always available. You can also send without a template, giving the text in the request.
+  address) is always available. You can also send without a template, giving the text in the request. When email
+  goes out as HTML, every placeholder value is HTML-escaped (`<` becomes `&lt;`), so put markup and links in the
+  template itself, not in `variables`.
 - **Recipients** are written per channel:
 
   | Channel | Recipient | Example |
