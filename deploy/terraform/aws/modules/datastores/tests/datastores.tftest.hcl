@@ -176,6 +176,20 @@ run "the_backup_bucket_lives_in_the_other_region_and_cannot_be_made_public" {
     condition     = strcontains(aws_s3_bucket_policy.backups.policy, "aws:SecureTransport")
     error_message = "The bucket must refuse requests that are not made over TLS."
   }
+  assert {
+    condition     = aws_s3_bucket_logging.backups.target_bucket == aws_s3_bucket.backup_access_logs.id
+    error_message = "Every request against the backups must leave an access log."
+  }
+  assert {
+    condition = (
+      aws_s3_bucket_public_access_block.backup_access_logs.block_public_acls
+      && aws_s3_bucket_public_access_block.backup_access_logs.block_public_policy
+      && aws_s3_bucket_public_access_block.backup_access_logs.ignore_public_acls
+      && aws_s3_bucket_public_access_block.backup_access_logs.restrict_public_buckets
+      && strcontains(aws_s3_bucket_policy.backup_access_logs.policy, "aws:SecureTransport")
+    )
+    error_message = "The access-log bucket must be as closed as the backups it records."
+  }
 }
 
 run "keys_rotate_and_application_secrets_are_containers_without_values" {

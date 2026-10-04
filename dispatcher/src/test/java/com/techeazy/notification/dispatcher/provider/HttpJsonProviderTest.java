@@ -79,7 +79,8 @@ class HttpJsonProviderTest {
         gateway.getSettings().put("url", "http://127.0.0.1:" + redirectingGateway.getAddress().getPort() + "/send");
         Outbound message = new Outbound(UUID.randomUUID(), Channel.SMS, "+14155550123", null, "hi");
 
-        assertThatThrownBy(() -> new HttpJsonProvider(new ObjectMapper()).send(gateway, message))
+        HttpJsonProvider provider = new HttpJsonProvider(new ObjectMapper());
+        assertThatThrownBy(() -> provider.send(gateway, message))
                 .isInstanceOf(PermanentSendException.class).hasMessageContaining("HTTP 302");
         assertThat(internalHits.get()).isZero();
     }

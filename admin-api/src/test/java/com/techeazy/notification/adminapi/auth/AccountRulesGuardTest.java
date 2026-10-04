@@ -39,10 +39,11 @@ class AccountRulesGuardTest {
 
     @Test
     void relaxingEitherRuleOutsideLocalDevelopmentRefusesToStart() {
-        assertThatThrownBy(() -> AuthConfiguration.rejectRelaxedAccountRules(environmentWithProfiles(), false, true))
+        var noProfiles = environmentWithProfiles();
+        assertThatThrownBy(() -> AuthConfiguration.rejectRelaxedAccountRules(noProfiles, false, true))
                 .isInstanceOf(IllegalStateException.class).hasMessageContaining("admin.require-password-change");
-        assertThatThrownBy(() -> AuthConfiguration.rejectRelaxedAccountRules(environmentWithProfiles("prod"), true,
-                false))
+        var production = environmentWithProfiles("prod");
+        assertThatThrownBy(() -> AuthConfiguration.rejectRelaxedAccountRules(production, true, false))
                 .isInstanceOf(IllegalStateException.class).hasMessageContaining("admin.require-two-factor");
     }
 

@@ -31,6 +31,7 @@ import java.time.Duration;
 import java.util.EnumMap;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * Publishes the delivery backlog as gauges, per in-flight status: {@value #MESSAGES} (how many wait) and
@@ -49,7 +50,7 @@ class BacklogMetrics {
 
     private final BacklogReader reader;
     private final Clock clock;
-    private volatile Map<MessageStatus, BacklogSnapshot> latest = Map.of();
+    private final AtomicReference<Map<MessageStatus, BacklogSnapshot>> latest = new AtomicReference<>(Map.of());
 
     @Autowired
     BacklogMetrics(BacklogReader reader, MeterRegistry meters) {
@@ -74,7 +75,7 @@ class BacklogMetrics {
         try {
             Map<MessageStatus, BacklogSnapshot> snapshots = new EnumMap<>(MessageStatus.class);
             reader.read().forEach(snapshot -> snapshots.put(snapshot.status(), snapshot));
-            latest = snapshots;
+            latest.set(snapshots);
         } catch (RuntimeException failure) {
             LOG.warn("Could not read the delivery backlog; the backlog gauges keep their last values: {}",
                     failure.getMessage());
@@ -82,12 +83,12 @@ class BacklogMetrics {
     }
 
     private double messages(MessageStatus status) {
-        BacklogSnapshot snapshot = latest.get(status);
+        BacklogSnapshot snapshot = latest.get().get(status);
         return snapshot == null ? 0 : snapshot.messages();
     }
 
     private double oldestAgeSeconds(MessageStatus status) {
-        BacklogSnapshot snapshot = latest.get(status);
+        BacklogSnapshot snapshot = latest.get().get(status);
         return snapshot == null ? 0 : Duration.between(snapshot.oldestCreatedAt(), clock.instant()).toSeconds();
     }
 }

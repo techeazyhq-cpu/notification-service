@@ -61,6 +61,7 @@ public class DispatchConsumers {
 
     private static final Logger log = LoggerFactory.getLogger(DispatchConsumers.class);
     private static final int RECEIVE_POLL_MS = 500;
+    private static final String NAME_PREFIX = "dispatcher-";
     private static final long STOP_WAIT_MS = 5_000;
 
     private final PulsarClient client;
@@ -109,10 +110,10 @@ public class DispatchConsumers {
         for (int i = 0; i < count; i++) {
             Consumer<byte[]> created = client.newConsumer(Schema.BYTES)
                     .topic(topic)
-                    .subscriptionName("dispatcher-" + lane)
+                    .subscriptionName(NAME_PREFIX + lane)
                     .subscriptionType(SubscriptionType.Shared)
                     .subscriptionInitialPosition(SubscriptionInitialPosition.Earliest)
-                    .consumerName("dispatcher-" + lane + "-" + i)
+                    .consumerName(NAME_PREFIX + lane + "-" + i)
                     .receiverQueueSize(100)
                     .negativeAckRedeliveryDelay(5, TimeUnit.SECONDS)
                     .enableRetry(true)
@@ -124,7 +125,7 @@ public class DispatchConsumers {
                     .subscribe();
             consumers.add(created);
             forChannel.add(created);
-            Thread worker = Thread.ofPlatform().name("dispatcher-" + lane + "-" + i)
+            Thread worker = Thread.ofPlatform().name(NAME_PREFIX + lane + "-" + i)
                     .unstarted(() -> drain(created, channel));
             workers.add(worker);
             worker.start();

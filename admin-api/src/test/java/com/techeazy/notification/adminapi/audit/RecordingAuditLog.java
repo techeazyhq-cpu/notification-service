@@ -26,7 +26,7 @@ public class RecordingAuditLog implements AuditLog {
     private final List<AuditEvent> recorded = new CopyOnWriteArrayList<>();
 
     @Override
-    public void record(AuditEvent event) {
+    public void append(AuditEvent event) {
         recorded.add(event);
     }
 

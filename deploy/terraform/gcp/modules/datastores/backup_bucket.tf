@@ -30,6 +30,10 @@ resource "google_storage_bucket" "backups" {
   public_access_prevention    = "enforced"
   labels                      = var.labels
 
+  logging {
+    log_bucket = google_storage_bucket.backup_access_logs.name
+  }
+
   versioning {
     enabled = true
   }
@@ -59,4 +63,42 @@ resource "google_storage_bucket" "backups" {
   lifecycle {
     prevent_destroy = true
   }
+}
+
+resource "google_storage_bucket" "backup_access_logs" { # NOSONAR: the access-log target itself; logging it would log its own log writes
+  name                        = "${var.name}-backup-logs-${random_id.backup_bucket_suffix.hex}"
+  project                     = var.project_id
+  location                    = upper(var.disaster_recovery_region)
+  storage_class               = "STANDARD"
+  uniform_bucket_level_access = true
+  public_access_prevention    = "enforced"
+  labels                      = var.labels
+
+  versioning {
+    enabled = true
+  }
+
+  lifecycle_rule {
+    condition {
+      age = 365
+    }
+    action {
+      type = "Delete"
+    }
+  }
+
+  lifecycle_rule {
+    condition {
+      days_since_noncurrent_time = 7
+    }
+    action {
+      type = "Delete"
+    }
+  }
+}
+
+resource "google_storage_bucket_iam_member" "backup_access_log_writer" {
+  bucket = google_storage_bucket.backup_access_logs.name
+  role   = "roles/storage.objectCreator"
+  member = "group:cloud-storage-analytics@google.com"
 }

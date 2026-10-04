@@ -117,16 +117,19 @@ class IngestServiceTest {
 
     @Test
     void aValidityOutsideOneToFifteenMinutesIsRefused() {
-        assertThatThrownBy(() -> service.submit(me, single(MessageCategory.OTP, Duration.ofSeconds(30))))
+        SubmitCommand tooShort = single(MessageCategory.OTP, Duration.ofSeconds(30));
+        assertThatThrownBy(() -> service.submit(me, tooShort))
                 .isInstanceOfSatisfying(ApiException.class,
                         refused -> assertThat(refused.errorCode()).isEqualTo(ErrorCode.INVALID_REQUEST));
-        assertThatThrownBy(() -> service.submit(me, single(MessageCategory.OTP, Duration.ofMinutes(16))))
+        SubmitCommand tooLong = single(MessageCategory.OTP, Duration.ofMinutes(16));
+        assertThatThrownBy(() -> service.submit(me, tooLong))
                 .isInstanceOf(ApiException.class);
     }
 
     @Test
     void onlyOneTimePasswordsHaveAValidity() {
-        assertThatThrownBy(() -> service.submit(me, single(MessageCategory.TRANSACTIONAL, Duration.ofMinutes(2))))
+        SubmitCommand validityWithoutOtp = single(MessageCategory.TRANSACTIONAL, Duration.ofMinutes(2));
+        assertThatThrownBy(() -> service.submit(me, validityWithoutOtp))
                 .isInstanceOfSatisfying(ApiException.class,
                         refused -> assertThat(refused.errorCode()).isEqualTo(ErrorCode.INVALID_REQUEST));
     }

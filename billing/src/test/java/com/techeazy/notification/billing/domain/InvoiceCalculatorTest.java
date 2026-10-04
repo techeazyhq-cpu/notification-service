@@ -181,9 +181,11 @@ class InvoiceCalculatorTest {
 
     @Test
     void otpPricesAreNeverNegativeAndShareOneCurrency() {
-        assertThatThrownBy(() -> new OtpPrices(Map.of(Channel.SMS, usd("-0.01"))))
+        Map<Channel, Money> negative = Map.of(Channel.SMS, usd("-0.01"));
+        assertThatThrownBy(() -> new OtpPrices(negative))
                 .isInstanceOf(InvalidBillingDataException.class);
-        assertThatThrownBy(() -> new OtpPrices(Map.of(Channel.SMS, usd("0.01"), Channel.EMAIL, Money.of("0.01", "EUR"))))
+        Map<Channel, Money> mixed = Map.of(Channel.SMS, usd("0.01"), Channel.EMAIL, Money.of("0.01", "EUR"));
+        assertThatThrownBy(() -> new OtpPrices(mixed))
                 .isInstanceOf(InvalidBillingDataException.class);
     }
 }

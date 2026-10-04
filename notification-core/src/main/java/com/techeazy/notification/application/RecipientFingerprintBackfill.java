@@ -64,7 +64,8 @@ public class RecipientFingerprintBackfill {
     @Scheduled(fixedDelayString = "${notification.fingerprint-backfill.interval-ms:60000}")
     public int run() {
         int total = 0;
-        for (int round = 0; round < maxBatchesPerRun; round++) {
+        boolean more = true;
+        for (int round = 0; more && round < maxBatchesPerRun; round++) {
             List<Unfingerprinted> rows = jdbc.sql("""
                     SELECT id, recipient FROM notification_message
                     WHERE recipient_fingerprint IS NULL AND erased_at IS NULL
@@ -72,17 +73,14 @@ public class RecipientFingerprintBackfill {
                     .param("batch", batchSize)
                     .query((rs, n) -> new Unfingerprinted(rs.getObject("id", UUID.class), rs.getString("recipient")))
                     .list();
-            if (rows.isEmpty()) {
-                break;
+            if (!rows.isEmpty()) {
+                batch.batchUpdate("""
+                        UPDATE notification_message SET recipient_fingerprint = ?
+                        WHERE id = ? AND recipient_fingerprint IS NULL AND erased_at IS NULL""",
+                        rows.stream().map(row -> new Object[] {fingerprints.of(row.recipient()), row.id()}).toList());
+                total += rows.size();
             }
-            batch.batchUpdate("""
-                    UPDATE notification_message SET recipient_fingerprint = ?
-                    WHERE id = ? AND recipient_fingerprint IS NULL AND erased_at IS NULL""",
-                    rows.stream().map(row -> new Object[] {fingerprints.of(row.recipient()), row.id()}).toList());
-            total += rows.size();
-            if (rows.size() < batchSize) {
-                break;
-            }
+            more = rows.size() == batchSize;
         }
         if (total > 0) {
             log.info("Fingerprinted the recipients of {} earlier message(s)", total);

@@ -76,7 +76,8 @@ class ProviderDestinationPolicyTest {
 
     @Test
     void plainHttpToAHostNobodyVouchedForIsRefused() {
-        assertThatThrownBy(() -> publicOnly.check(ProviderType.HTTP_JSON, gateway("http://gateway.example.com/send")))
+        Map<String, String> settings = gateway("http://gateway.example.com/send");
+        assertThatThrownBy(() -> publicOnly.check(ProviderType.HTTP_JSON, settings))
                 .isInstanceOf(ProviderDestinationRefusedException.class).hasMessageContaining("https");
     }
 
@@ -87,19 +88,22 @@ class ProviderDestinationPolicyTest {
             "https://[::1]/", "https://[fd12:3456::1]/", "https://[fe80::1]/", "https://[::ffff:127.0.0.1]/",
             "https://224.0.0.1/", "https://internal.example.com/", "https://catcher/"})
     void anInternalDestinationIsRefusedWhetherWrittenAsAnAddressOrReachedThroughDns(String url) {
-        assertThatThrownBy(() -> publicOnly.check(ProviderType.HTTP_JSON, gateway(url)))
+        Map<String, String> settings = gateway(url);
+        assertThatThrownBy(() -> publicOnly.check(ProviderType.HTTP_JSON, settings))
                 .isInstanceOf(ProviderDestinationRefusedException.class).hasMessageContaining("not a public address");
     }
 
     @Test
     void aHostWithEvenOneInternalAddressIsRefused() {
-        assertThatThrownBy(() -> publicOnly.check(ProviderType.HTTP_JSON, gateway("https://rebound.example.com/")))
+        Map<String, String> settings = gateway("https://rebound.example.com/");
+        assertThatThrownBy(() -> publicOnly.check(ProviderType.HTTP_JSON, settings))
                 .isInstanceOf(ProviderDestinationRefusedException.class).hasMessageContaining("127.0.0.1");
     }
 
     @Test
     void aHostThatDoesNotResolveIsRefused() {
-        assertThatThrownBy(() -> publicOnly.check(ProviderType.HTTP_JSON, gateway("https://nowhere.example.com/")))
+        Map<String, String> settings = gateway("https://nowhere.example.com/");
+        assertThatThrownBy(() -> publicOnly.check(ProviderType.HTTP_JSON, settings))
                 .isInstanceOf(ProviderDestinationRefusedException.class).hasMessageContaining("could not be resolved");
     }
 
@@ -107,7 +111,8 @@ class ProviderDestinationPolicyTest {
     @ValueSource(strings = {"file:///etc/passwd", "ftp://gateway.example.com/", "gopher://gateway.example.com/",
             "https://user:secret@gateway.example.com/", "not a url", "https:///no-host", "/relative/path"})
     void anythingButAPlainHttpUrlIsRefused(String url) {
-        assertThatThrownBy(() -> publicOnly.check(ProviderType.HTTP_JSON, gateway(url)))
+        Map<String, String> settings = gateway(url);
+        assertThatThrownBy(() -> publicOnly.check(ProviderType.HTTP_JSON, settings))
                 .isInstanceOf(ProviderDestinationRefusedException.class);
     }
 
@@ -125,9 +130,11 @@ class ProviderDestinationPolicyTest {
 
         assertThatCode(() -> policy.check(ProviderType.HTTP_JSON, gateway("http://SMS.corp.example./send")))
                 .doesNotThrowAnyException();
-        assertThatThrownBy(() -> policy.check(ProviderType.HTTP_JSON, gateway("https://corp.example/")))
+        Map<String, String> settings = gateway("https://corp.example/");
+        assertThatThrownBy(() -> policy.check(ProviderType.HTTP_JSON, settings))
                 .isInstanceOf(ProviderDestinationRefusedException.class);
-        assertThatThrownBy(() -> policy.check(ProviderType.HTTP_JSON, gateway("https://evilcorp.example/")))
+        Map<String, String> settings2 = gateway("https://evilcorp.example/");
+        assertThatThrownBy(() -> policy.check(ProviderType.HTTP_JSON, settings2))
                 .isInstanceOf(ProviderDestinationRefusedException.class);
     }
 
@@ -135,7 +142,8 @@ class ProviderDestinationPolicyTest {
     void whenOnlyTrustedHostsAreAllowedEvenAPublicHttpsHostIsRefused() {
         ProviderDestinationPolicy trustedOnly = new ProviderDestinationPolicy(Set.of("catcher"), false, FAKE_DNS);
 
-        assertThatThrownBy(() -> trustedOnly.check(ProviderType.HTTP_JSON, gateway("https://gateway.example.com/")))
+        Map<String, String> settings = gateway("https://gateway.example.com/");
+        assertThatThrownBy(() -> trustedOnly.check(ProviderType.HTTP_JSON, settings))
                 .isInstanceOf(ProviderDestinationRefusedException.class).hasMessageContaining("trusted");
     }
 
@@ -145,9 +153,11 @@ class ProviderDestinationPolicyTest {
 
         assertThatCode(() -> policy.check(ProviderType.SMTP, smtp("smtp.example.com"))).doesNotThrowAnyException();
         assertThatCode(() -> policy.check(ProviderType.SMTP, smtp("mailpit"))).doesNotThrowAnyException();
-        assertThatThrownBy(() -> policy.check(ProviderType.SMTP, smtp("internal.example.com")))
+        Map<String, String> settings = smtp("internal.example.com");
+        assertThatThrownBy(() -> policy.check(ProviderType.SMTP, settings))
                 .isInstanceOf(ProviderDestinationRefusedException.class);
-        assertThatThrownBy(() -> policy.check(ProviderType.SMTP, smtp("169.254.169.254")))
+        Map<String, String> settings2 = smtp("169.254.169.254");
+        assertThatThrownBy(() -> policy.check(ProviderType.SMTP, settings2))
                 .isInstanceOf(ProviderDestinationRefusedException.class);
     }
 

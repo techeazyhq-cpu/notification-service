@@ -90,7 +90,7 @@ class JdbcAuditLogTest {
         String actor = uniqueActor("alice");
         AuditEvent recorded = event(actor, NOW, AuditOutcome.SUCCEEDED, 200);
 
-        auditLog.record(recorded);
+        auditLog.append(recorded);
 
         assertThat(auditLog.search(byActor(actor), 0, 10).items()).containsExactly(recorded);
     }
@@ -100,7 +100,7 @@ class JdbcAuditLogTest {
         AuditEvent anonymous = new AuditEvent(UUID.randomUUID(), NOW, null, null, "DELETE", null,
                 "/api/admin/clients/" + UUID.randomUUID(), 401, AuditOutcome.DENIED, null, null);
 
-        auditLog.record(anonymous);
+        auditLog.append(anonymous);
 
         AuditPage page = auditLog.search(new AuditQuery(null, AuditOutcome.DENIED, NOW, NOW.plusMillis(1)), 0, 200);
         assertThat(page.items()).contains(anonymous);
@@ -112,9 +112,9 @@ class JdbcAuditLogTest {
         AuditEvent oldest = event(actor, NOW.minus(Duration.ofMinutes(3)), AuditOutcome.SUCCEEDED, 200);
         AuditEvent middle = event(actor, NOW.minus(Duration.ofMinutes(2)), AuditOutcome.SUCCEEDED, 200);
         AuditEvent newest = event(actor, NOW.minus(Duration.ofMinutes(1)), AuditOutcome.SUCCEEDED, 200);
-        auditLog.record(middle);
-        auditLog.record(oldest);
-        auditLog.record(newest);
+        auditLog.append(middle);
+        auditLog.append(oldest);
+        auditLog.append(newest);
 
         AuditPage first = auditLog.search(byActor(actor), 0, 2);
         AuditPage second = auditLog.search(byActor(actor), 1, 2);
@@ -133,10 +133,10 @@ class JdbcAuditLogTest {
         AuditEvent deniedInWindow = event(actor, NOW.minus(Duration.ofMinutes(30)), AuditOutcome.DENIED, 403);
         AuditEvent succeededInWindow = event(actor, NOW.minus(Duration.ofMinutes(20)), AuditOutcome.SUCCEEDED, 200);
         AuditEvent atWindowEnd = event(actor, NOW, AuditOutcome.SUCCEEDED, 200);
-        auditLog.record(beforeWindow);
-        auditLog.record(deniedInWindow);
-        auditLog.record(succeededInWindow);
-        auditLog.record(atWindowEnd);
+        auditLog.append(beforeWindow);
+        auditLog.append(deniedInWindow);
+        auditLog.append(succeededInWindow);
+        auditLog.append(atWindowEnd);
         Instant windowStart = NOW.minus(Duration.ofHours(1));
 
         assertThat(auditLog.search(new AuditQuery(actor, null, windowStart, NOW), 0, 10).items())
@@ -149,15 +149,17 @@ class JdbcAuditLogTest {
     void recordedEventsCannotBeChangedOrRemovedEvenByTheApplication() {
         String actor = uniqueActor("tamper");
         AuditEvent recorded = event(actor, NOW, AuditOutcome.SUCCEEDED, 200);
-        auditLog.record(recorded);
+        auditLog.append(recorded);
 
-        assertThatThrownBy(() -> jdbc.sql("UPDATE admin_audit_event SET actor = 'someone-else' WHERE id = :id")
-                .param("id", recorded.id()).update())
+        var update = jdbc.sql("UPDATE admin_audit_event SET actor = 'someone-else' WHERE id = :id")
+                .param("id", recorded.id());
+        assertThatThrownBy(update::update)
                 .isInstanceOf(DataAccessException.class).rootCause().hasMessageContaining("append-only");
-        assertThatThrownBy(() -> jdbc.sql("DELETE FROM admin_audit_event WHERE id = :id")
-                .param("id", recorded.id()).update())
+        var delete = jdbc.sql("DELETE FROM admin_audit_event WHERE id = :id").param("id", recorded.id());
+        assertThatThrownBy(delete::update)
                 .isInstanceOf(DataAccessException.class).rootCause().hasMessageContaining("append-only");
-        assertThatThrownBy(() -> jdbc.sql("TRUNCATE admin_audit_event").update())
+        var truncate = jdbc.sql("TRUNCATE admin_audit_event");
+        assertThatThrownBy(truncate::update)
                 .isInstanceOf(DataAccessException.class).rootCause().hasMessageContaining("append-only");
 
         assertThat(auditLog.search(byActor(actor), 0, 10).items()).containsExactly(recorded);

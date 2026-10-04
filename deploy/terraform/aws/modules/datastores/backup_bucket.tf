@@ -114,3 +114,120 @@ resource "aws_s3_bucket_policy" "backups" {
 
   depends_on = [aws_s3_bucket_public_access_block.backups]
 }
+
+resource "aws_s3_bucket" "backup_access_logs" { # NOSONAR: the access-log target itself; logging it would log its own log writes
+  provider = aws.disaster_recovery
+
+  bucket_prefix = "${var.name}-backup-logs-"
+  tags          = var.tags
+}
+
+resource "aws_s3_bucket_public_access_block" "backup_access_logs" {
+  provider = aws.disaster_recovery
+
+  bucket                  = aws_s3_bucket.backup_access_logs.id
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+
+resource "aws_s3_bucket_ownership_controls" "backup_access_logs" {
+  provider = aws.disaster_recovery
+
+  bucket = aws_s3_bucket.backup_access_logs.id
+
+  rule {
+    object_ownership = "BucketOwnerEnforced"
+  }
+}
+
+resource "aws_s3_bucket_versioning" "backup_access_logs" {
+  provider = aws.disaster_recovery
+
+  bucket = aws_s3_bucket.backup_access_logs.id
+
+  versioning_configuration {
+    status = "Enabled"
+  }
+}
+
+# S3 server access logging cannot deliver to a bucket encrypted with a customer managed KMS key, so the log target
+# uses SSE-S3. The backups it records stay encrypted with the disaster-recovery region's KMS key.
+#trivy:ignore:AVD-AWS-0132
+resource "aws_s3_bucket_server_side_encryption_configuration" "backup_access_logs" {
+  provider = aws.disaster_recovery
+
+  bucket = aws_s3_bucket.backup_access_logs.id
+
+  rule {
+    apply_server_side_encryption_by_default {
+      sse_algorithm = "AES256"
+    }
+  }
+}
+
+resource "aws_s3_bucket_lifecycle_configuration" "backup_access_logs" {
+  provider = aws.disaster_recovery
+
+  bucket = aws_s3_bucket.backup_access_logs.id
+
+  rule {
+    id     = "expire-access-logs"
+    status = "Enabled"
+
+    filter {}
+
+    expiration {
+      days = 365
+    }
+
+    noncurrent_version_expiration {
+      noncurrent_days = 7
+    }
+  }
+
+  depends_on = [aws_s3_bucket_versioning.backup_access_logs]
+}
+
+resource "aws_s3_bucket_policy" "backup_access_logs" {
+  provider = aws.disaster_recovery
+
+  bucket = aws_s3_bucket.backup_access_logs.id
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid       = "AllowServerAccessLogsFromTheBackupBucket"
+        Effect    = "Allow"
+        Principal = { Service = "logging.s3.amazonaws.com" }
+        Action    = "s3:PutObject"
+        Resource  = "${aws_s3_bucket.backup_access_logs.arn}/*"
+        Condition = {
+          ArnLike      = { "aws:SourceArn" = aws_s3_bucket.backups.arn }
+          StringEquals = { "aws:SourceAccount" = data.aws_caller_identity.current.account_id }
+        }
+      },
+      {
+        Sid       = "DenyRequestsWithoutTls"
+        Effect    = "Deny"
+        Principal = "*"
+        Action    = "s3:*"
+        Resource  = [aws_s3_bucket.backup_access_logs.arn, "${aws_s3_bucket.backup_access_logs.arn}/*"]
+        Condition = { Bool = { "aws:SecureTransport" = "false" } }
+      },
+    ]
+  })
+
+  depends_on = [aws_s3_bucket_public_access_block.backup_access_logs]
+}
+
+resource "aws_s3_bucket_logging" "backups" {
+  provider = aws.disaster_recovery
+
+  bucket        = aws_s3_bucket.backups.id
+  target_bucket = aws_s3_bucket.backup_access_logs.id
+  target_prefix = "backups/"
+
+  depends_on = [aws_s3_bucket_policy.backup_access_logs]
+}

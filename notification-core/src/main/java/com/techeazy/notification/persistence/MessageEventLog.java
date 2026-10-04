@@ -37,7 +37,7 @@ public class MessageEventLog {
         this.jdbc = jdbc;
     }
 
-    public void record(MessageEvent event) {
+    public void append(MessageEvent event) {
         jdbc.sql("""
                 INSERT INTO message_event (message_id, client_id, event, occurred_at, attempt, error_code,
                                            provider_message_id, detail)

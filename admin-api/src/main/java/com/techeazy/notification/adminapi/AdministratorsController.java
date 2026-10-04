@@ -20,7 +20,6 @@ package com.techeazy.notification.adminapi;
 
 import com.techeazy.notification.adminapi.auth.AdminAuthService;
 import com.techeazy.notification.adminapi.auth.AdminRole;
-import com.techeazy.notification.adminapi.auth.AuthException;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;

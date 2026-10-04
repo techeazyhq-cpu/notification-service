@@ -116,12 +116,12 @@ class PulsarMessagePublisherTest {
         when(producer.newMessage()).thenReturn(message);
         when(message.sendAsync()).thenReturn(CompletableFuture.completedFuture(mock(MessageId.class)));
         UUID id = UUID.randomUUID();
-        UUID client = UUID.randomUUID();
+        UUID clientId = UUID.randomUUID();
 
-        CompletableFuture<Void> first = publisher.publish(Channel.SMS, MessageCategory.TRANSACTIONAL, id, client);
+        CompletableFuture<Void> first = publisher.publish(Channel.SMS, MessageCategory.TRANSACTIONAL, id, clientId);
 
         assertThatThrownBy(first::get).isInstanceOf(ExecutionException.class).hasRootCauseMessage("broker down");
-        assertThat(publisher.publish(Channel.SMS, MessageCategory.TRANSACTIONAL, id, client).join()).isNull();
+        assertThat(publisher.publish(Channel.SMS, MessageCategory.TRANSACTIONAL, id, clientId).join()).isNull();
         verify(builder, times(2)).createAsync();
     }
 

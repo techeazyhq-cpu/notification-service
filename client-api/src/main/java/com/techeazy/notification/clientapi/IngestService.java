@@ -88,9 +88,9 @@ public class IngestService {
         return maxBulkRecipients;
     }
 
-    /** Everything a caller supplies for one submission; {@code idempotencyKey}, {@code from} and content fields may be null. */
     /**
-     * {@code category} null means the template's category, or TRANSACTIONAL; {@code validity} applies to one-time
+     * Everything a caller supplies for one submission; {@code idempotencyKey}, {@code from} and content fields may be
+     * null. {@code category} null means the template's category, or TRANSACTIONAL; {@code validity} applies to one-time
      * passwords only and defaults to {@link MessageCategory#DEFAULT_OTP_VALIDITY} (ADR-033).
      */
     public record SubmitCommand(RequestKind kind, Channel channel, String templateName, String subject, String body,
@@ -211,8 +211,10 @@ public class IngestService {
      * validity of one to fifteen minutes; no other category has a validity (ADR-033).
      */
     private static MessageCategory resolveCategory(SubmitCommand cmd, Content content) {
-        MessageCategory category = cmd.category() != null ? cmd.category()
-                : content.templateCategory() != null ? content.templateCategory() : MessageCategory.DEFAULT;
+        MessageCategory category = cmd.category();
+        if (category == null) {
+            category = content.templateCategory() != null ? content.templateCategory() : MessageCategory.DEFAULT;
+        }
         if (category == MessageCategory.OTP && cmd.kind() == RequestKind.BULK) {
             throw new ApiException(ErrorCode.CATEGORY_NOT_ALLOWED,
                     "One-time passwords are sent one at a time; send each as a single request");

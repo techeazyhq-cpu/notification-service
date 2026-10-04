@@ -58,13 +58,16 @@ import java.util.UUID;
 @Service
 public class RecipientActivityReport {
 
+    private static final String ERROR_CODE_COLUMN = "error_code";
+    private static final String PROVIDER_MESSAGE_ID_COLUMN = "provider_message_id";
+
     static final List<String> HEADER = List.of("message_id", "request_id", "client_reference", "channel", "category",
-            "template", "sender", "recipient", "current_status", "event", "occurred_at", "attempt", "error_code",
-            "error_id", "provider_message_id", "detail", "source");
+            "template", "sender", "recipient", "current_status", "event", "occurred_at", "attempt", ERROR_CODE_COLUMN,
+            "error_id", PROVIDER_MESSAGE_ID_COLUMN, "detail", "source");
 
     private static final Logger log = LoggerFactory.getLogger(RecipientActivityReport.class);
-    private static final String LOG = "LOG";
-    private static final String RECORD = "RECORD";
+    private static final String SOURCE_LOG = "LOG";
+    private static final String SOURCE_RECORD = "RECORD";
 
     /** What was found, for the response and the log; never the address. */
     public record Summary(int messages, int rows) {}
@@ -113,17 +116,19 @@ public class RecipientActivityReport {
             csv.printRecord(HEADER);
             for (Message m : messages) {
                 csv.printRecord(row(m, new Event("ACCEPTED", m.acceptedAt(), null, null, null,
-                        "Accepted in a " + m.requestKind().toLowerCase(Locale.ROOT) + " request"), LOG));
+                        "Accepted in a " + m.requestKind().toLowerCase(Locale.ROOT) + " request"), SOURCE_LOG));
                 rows++;
                 List<Event> logged = events.getOrDefault(m.id(), List.of());
                 for (Event e : logged.isEmpty() ? fromRecord(m) : logged) {
-                    csv.printRecord(row(m, e, logged.isEmpty() ? RECORD : LOG));
+                    csv.printRecord(row(m, e, logged.isEmpty() ? SOURCE_RECORD : SOURCE_LOG));
                     rows++;
                 }
             }
         }
-        log.info("Recipient activity report for client {}: recipient fingerprint {}…, {} message(s), {} row(s)",
-                clientId, fingerprint.substring(0, 12), messages.size(), rows);
+        if (log.isInfoEnabled()) {
+            log.info("Recipient activity report for client {}: recipient fingerprint {}…, {} message(s), {} row(s)",
+                    clientId, fingerprint.substring(0, 12), messages.size(), rows);
+        }
         return new Summary(messages.size(), rows);
     }
 
@@ -140,7 +145,7 @@ public class RecipientActivityReport {
                 .param("start", Timestamp.from(start)).param("end", Timestamp.from(end))
                 .query((rs, n) -> Map.entry(rs.getObject("message_id", UUID.class), new Event(rs.getString("event"),
                         rs.getTimestamp("occurred_at").toInstant(), (Integer) rs.getObject("attempt"),
-                        rs.getString("error_code"), rs.getString("provider_message_id"), rs.getString("detail"))))
+                        rs.getString(ERROR_CODE_COLUMN), rs.getString(PROVIDER_MESSAGE_ID_COLUMN), rs.getString("detail"))))
                 .list()
                 .forEach(entry -> byMessage.computeIfAbsent(entry.getKey(), id -> new ArrayList<>()).add(entry.getValue()));
         return byMessage;
@@ -174,7 +179,7 @@ public class RecipientActivityReport {
                 rs.getString("template"), rs.getString("sender_email"),
                 recipient == null ? PersonalData.ERASED : recipient, rs.getString("status"), rs.getString("kind"),
                 rs.getTimestamp("created_at").toInstant(), sentAt == null ? null : sentAt.toInstant(),
-                rs.getTimestamp("updated_at").toInstant(), rs.getInt("attempts"), rs.getString("error_code"),
-                rs.getString("provider_message_id"));
+                rs.getTimestamp("updated_at").toInstant(), rs.getInt("attempts"), rs.getString(ERROR_CODE_COLUMN),
+                rs.getString(PROVIDER_MESSAGE_ID_COLUMN));
     }
 }

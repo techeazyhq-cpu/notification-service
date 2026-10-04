@@ -23,6 +23,7 @@ import com.techeazy.notification.billing.domain.BillingNotFoundException;
 import com.techeazy.notification.billing.domain.BillingPeriod;
 import com.techeazy.notification.billing.domain.InvalidBillingStateException;
 import com.techeazy.notification.billing.domain.Invoice;
+import com.techeazy.notification.billing.domain.InvoiceLine;
 import com.techeazy.notification.billing.domain.InvoiceLineKind;
 import com.techeazy.notification.billing.domain.InvoiceStatus;
 import com.techeazy.notification.billing.domain.Money;
@@ -222,7 +223,7 @@ class InvoiceServiceTest {
 
         Invoice invoice = f.invoiceService.generateFor(client, AUGUST);
 
-        assertThat(invoice.lines()).extracting(line -> line.kind(), line -> line.quantity(), line -> line.amount())
+        assertThat(invoice.lines()).extracting(InvoiceLine::kind, InvoiceLine::quantity, InvoiceLine::amount)
                 .containsExactly(
                         org.assertj.core.groups.Tuple.tuple(InvoiceLineKind.USAGE, 500L, usd("25.00")),
                         org.assertj.core.groups.Tuple.tuple(InvoiceLineKind.OTP_USAGE, 200L, usd("40.00")));

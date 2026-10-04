@@ -54,10 +54,10 @@ export default function AuditLog() {
             <option value="">Any</option>{AUDIT_OUTCOMES.map((outcome) => <option key={outcome}>{outcome}</option>)}
           </select>
         </label>
-        <label>From
+        <label><span>From</span>
           <input type="datetime-local" value={filters.from} onChange={(e) => set('from', e.target.value)} />
         </label>
-        <label>Until
+        <label><span>Until</span>
           <input type="datetime-local" value={filters.to} onChange={(e) => set('to', e.target.value)} />
         </label>
       </div>
