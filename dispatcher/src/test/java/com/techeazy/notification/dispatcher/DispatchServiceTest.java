@@ -347,6 +347,46 @@ class DispatchServiceTest {
         assertThat(meters.find(DispatchService.DELIVERY_ERRORS).counters()).isEmpty();
     }
 
+    @Test
+    void aSendWhoseRecordFailsIsNeitherRetriedNorCountedAsAFailedAttempt() {
+        when(providers.send(any())).thenReturn(new SendResult("prov-1"));
+        when(messages.markSent(eq(id), eq("prov-1"), any())).thenThrow(new IllegalStateException("database down"));
+
+        assertThat(service.process(id)).isInstanceOf(Outcome.Done.class);
+
+        verify(messages, never()).markFailedOrRetry(any(), any(), any(), any(), any());
+        verify(messages, never()).markFailed(any(), any(), any(), any(), any());
+        assertThat(service.unrecordedSendCount()).isEqualTo(1);
+        assertThat(meters.find(DispatchService.DELIVERY_ERRORS).counters()).isEmpty();
+    }
+
+    @Test
+    void aRedeliveredMessageWhoseSendIsStillUnrecordedIsNotSentAgain() {
+        when(providers.send(any())).thenReturn(new SendResult("prov-1"));
+        when(messages.markSent(eq(id), eq("prov-1"), any())).thenThrow(new IllegalStateException("database down"));
+        service.process(id);
+        message.setStatus(MessageStatus.QUEUED);
+
+        assertThat(service.process(id)).isInstanceOf(Outcome.Done.class);
+
+        verify(providers, times(1)).send(any());
+        verify(messages, times(1)).claim(any(), any(), any());
+    }
+
+    @Test
+    void anUnrecordedSendIsRecordedOnceTheDatabaseIsBack() {
+        when(providers.send(any())).thenReturn(new SendResult("prov-1"));
+        when(messages.markSent(eq(id), eq("prov-1"), any()))
+                .thenThrow(new IllegalStateException("database down")).thenReturn(1);
+        service.process(id);
+
+        service.recordUnrecordedSends();
+
+        verify(messages, times(2)).markSent(eq(id), eq("prov-1"), any());
+        assertThat(service.unrecordedSendCount()).isZero();
+        assertThat(loggedEvent().type()).isEqualTo(MessageEventType.SENT);
+    }
+
     private MessageEvent loggedEvent() {
         ArgumentCaptor<MessageEvent> event = ArgumentCaptor.forClass(MessageEvent.class);
         verify(events).append(event.capture());
