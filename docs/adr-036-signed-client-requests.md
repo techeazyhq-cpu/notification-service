@@ -66,7 +66,7 @@ replay protection. Others integrate from simple scripts and must not be forced i
    - With *signatures required* (`PUT …/signing-required`), an unsigned `POST`, `PUT`, `PATCH` or `DELETE` is refused.
      Reads are not, because a replayed read changes nothing.
    - The requirement can only be switched on once the client has a secret.
-   - The check runs in `ClientAuthFilter`, after the API key and the rate limit.
+   - The check runs in `ClientAuthFilter`, after the API key and before the rate limit, so a caller holding a leaked key but not the signing secret cannot spend the client's quota.
 
 4. **Freshness.** The timestamp must be within ±300 seconds of the service's clock
    (`client-api.signature-window-seconds`). Outside that, the request is refused with `SIGNATURE_EXPIRED` (NS-2013).
