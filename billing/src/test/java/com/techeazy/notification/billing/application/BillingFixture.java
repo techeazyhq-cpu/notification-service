@@ -264,6 +264,13 @@ final class BillingFixture {
             completedSent.put(referenceId, sentCount);
         }
 
+        final List<UUID> lockedAccounts = new ArrayList<>();
+
+        @Override
+        public void lockAccount(UUID clientId) {
+            lockedAccounts.add(clientId);
+        }
+
         @Override
         public boolean debitIfSufficient(UUID clientId, Money amount) {
             Money balance = balance(clientId);
@@ -342,6 +349,18 @@ final class BillingFixture {
         private record Sent(UUID clientId, Channel channel, Instant at, SentCount count) {}
 
         private final List<Sent> sent = new ArrayList<>();
+        private final Map<UUID, Map<Channel, SentCount>> inFlight = new HashMap<>();
+
+        void inFlight(UUID clientId, Channel channel, SentCount count) {
+            inFlight.computeIfAbsent(clientId, id -> new EnumMap<>(Channel.class)).merge(channel, count, SentCount::plus);
+        }
+
+        @Override
+        public Map<Channel, SentCount> inFlightByChannel(UUID clientId) {
+            Map<Channel, SentCount> counts = new EnumMap<>(Channel.class);
+            counts.putAll(inFlight.getOrDefault(clientId, Map.of()));
+            return counts;
+        }
 
         void sent(UUID clientId, Channel channel, String at, long count) {
             sent.add(new Sent(clientId, channel, Instant.parse(at), SentCount.ordinary(count)));

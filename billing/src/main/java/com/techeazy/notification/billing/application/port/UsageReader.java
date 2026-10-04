@@ -30,4 +30,10 @@ public interface UsageReader {
 
     /** Messages sent per channel, with one-time passwords counted apart from the rest (ADR-034). */
     Map<Channel, SentCount> sentByChannel(UUID clientId, Instant fromInclusive, Instant toExclusive);
+
+    /**
+     * Messages accepted but not finished yet (pending, queued, being sent or waiting for a retry), per channel. They
+     * are not billable yet, but will be once sent, so a spend cap has to count them as already committed.
+     */
+    Map<Channel, SentCount> inFlightByChannel(UUID clientId);
 }

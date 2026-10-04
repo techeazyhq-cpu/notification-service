@@ -55,7 +55,10 @@ import java.util.Map;
  *   <li>Prepaid accounts reserve the worst-case cost with one atomic conditional debit and are refused when the
  *       balance does not cover it. The reservation is settled later by {@link HoldSettlement}.</li>
  *   <li>Postpaid accounts with a monthly spend cap are refused when the projected month-to-date charge, including
- *       this request, would exceed it. The cap is soft: it counts messages already sent, not those still in flight.</li>
+ *       this request, would exceed it. The projection counts the messages sent this month and every message still
+ *       in flight, which will be charged once sent, and the account is locked for the check, so concurrent requests
+ *       are checked one after another and cannot overshoot the cap together. The cap can only be exceeded by in-flight
+ *       messages from before the month began that are sent in it.</li>
  * </ul>
  *
  * <p>Call this inside the transaction that stores the request, so a refusal or a later failure leaves nothing behind.
@@ -125,9 +128,12 @@ public class AdmissionControl {
 
     private void enforceSpendCap(BillingAccount account, Plan plan, OtpPrices tenantOtpPrices, Admission admission) {
         account.spendCap().ifPresent(cap -> {
+            credits.lockAccount(account.clientId());
             BillingPeriod period = BillingPeriod.current(clock);
             Map<Channel, SentCount> projected = new EnumMap<>(Channel.class);
             projected.putAll(usage.sentByChannel(account.clientId(), period.start(), clock.instant()));
+            usage.inFlightByChannel(account.clientId()).forEach((channel, count) ->
+                    projected.merge(channel, count, SentCount::plus));
             SentCount requested = admission.oneTimePasswords()
                     ? new SentCount(0, admission.messages()) : SentCount.ordinary(admission.messages());
             projected.merge(admission.channel(), requested, SentCount::plus);
