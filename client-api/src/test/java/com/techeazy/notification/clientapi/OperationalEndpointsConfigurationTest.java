@@ -75,7 +75,7 @@ class OperationalEndpointsConfigurationTest {
     /** Client API documentation is the published contract for API users, so it is served by default. */
     @Test
     void apiDocumentationIsServedOnlyWhereIntended() {
-        assertThat(shippedConfiguration.getProperty("springdoc.api-docs.enabled", Boolean.class)).isEqualTo(true);
-        assertThat(shippedConfiguration.getProperty("springdoc.swagger-ui.enabled", Boolean.class)).isEqualTo(true);
+        assertThat(shippedConfiguration.getProperty("springdoc.api-docs.enabled", Boolean.class)).isTrue();
+        assertThat(shippedConfiguration.getProperty("springdoc.swagger-ui.enabled", Boolean.class)).isTrue();
     }
 }

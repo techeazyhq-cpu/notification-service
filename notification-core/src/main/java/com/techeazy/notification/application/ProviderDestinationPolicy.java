@@ -166,8 +166,8 @@ public final class ProviderDestinationPolicy {
 
         @Override
         public boolean equals(Object other) {
-            return other instanceof AddressBlock block && prefixLength == block.prefixLength
-                    && java.util.Arrays.equals(network, block.network);
+            return other instanceof AddressBlock(byte[] otherNetwork, int otherPrefixLength)
+                    && prefixLength == otherPrefixLength && java.util.Arrays.equals(network, otherNetwork);
         }
 
         @Override
