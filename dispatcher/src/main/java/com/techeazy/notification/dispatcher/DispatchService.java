@@ -200,7 +200,7 @@ public class DispatchService {
         vars.put(TemplateRenderer.RECIPIENT, m.getRecipient());
         return new Outbound(m.getId(), m.getChannel(), m.getRecipient(),
                 TemplateRenderer.render(req.getSubject(), vars), TemplateRenderer.render(req.getBody(), vars),
-                req.getSenderEmail(), req.getSenderName());
+                req.getSenderEmail(), req.getSenderName(), TemplateRenderer.renderHtml(req.getBody(), vars));
     }
 
     private static boolean expired(NotificationMessage m) {

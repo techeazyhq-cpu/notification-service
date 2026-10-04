@@ -45,6 +45,34 @@ public final class TemplateRenderer {
 
     private TemplateRenderer() {}
 
+    /**
+     * Renders an HTML template: like {@link #render} but every variable value is HTML-escaped first, so a value
+     * supplied by a tenant's end user (a name, an address) cannot add markup, links or scripts to the message. The
+     * template itself is the tenant's own content and is left as written.
+     */
+    public static String renderHtml(String template, Map<String, String> variables) {
+        Map<String, String> escaped = new java.util.HashMap<>();
+        variables.forEach((name, value) -> escaped.put(name, value == null ? null : escapeHtml(value)));
+        return render(template, escaped);
+    }
+
+    /** Escapes the five characters that are significant in HTML text and attribute values. */
+    public static String escapeHtml(String text) {
+        StringBuilder out = new StringBuilder(text.length());
+        for (int i = 0; i < text.length(); i++) {
+            char c = text.charAt(i);
+            switch (c) {
+                case '&' -> out.append("&amp;");
+                case '<' -> out.append("&lt;");
+                case '>' -> out.append("&gt;");
+                case '"' -> out.append("&quot;");
+                case '\'' ->out.append("&#39;");
+                default -> out.append(c);
+            }
+        }
+        return out.toString();
+    }
+
     public static String render(String template, Map<String, String> variables) {
         if (template == null) return null;
         List<String> missing = new ArrayList<>();

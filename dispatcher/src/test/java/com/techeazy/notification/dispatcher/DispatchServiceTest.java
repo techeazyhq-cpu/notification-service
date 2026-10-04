@@ -204,6 +204,17 @@ class DispatchServiceTest {
     }
 
     @Test
+    void theHtmlBodyEscapesVariablesWhileThePlainBodyKeepsThemAsWritten() {
+        message.setVariables(Map.of("name", "<script>x</script>"));
+        when(providers.send(any())).thenReturn(new SendResult("prov-1"));
+
+        service.process(id);
+
+        verify(providers).send(argThat(o -> o.body().equals("Hi <script>x</script>")
+                && o.htmlBody().equals("Hi &lt;script&gt;x&lt;/script&gt;")));
+    }
+
+    @Test
     void terminalMessagesAreSkippedWithoutSending() {
         message.setStatus(MessageStatus.SENT);
 
