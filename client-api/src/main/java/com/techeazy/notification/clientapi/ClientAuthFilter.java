@@ -105,15 +105,15 @@ public class ClientAuthFilter extends OncePerRequestFilter {
             return;
         }
         AuthenticatedClient client = caller.get().client();
+        Admission admission = signatures.admit(req, client.id(), caller.get().signing());
+        if (!admission.admitted()) {
+            reject(res, admission.refusal(), admission.reason(), null);
+            return;
+        }
         Decision d = rateLimitTimer.record(() -> rateLimits.checkClientApi(client.id()));
         if (!d.allowed()) {
             long seconds = Math.max(1, (d.waitMillis() + 999) / 1000);
             reject(res, ErrorCode.RATE_LIMITED, "API rate limit exceeded", seconds);
-            return;
-        }
-        Admission admission = signatures.admit(req, client.id(), caller.get().signing());
-        if (!admission.admitted()) {
-            reject(res, admission.refusal(), admission.reason(), null);
             return;
         }
         admission.request().setAttribute(CLIENT_ATTRIBUTE, client);
