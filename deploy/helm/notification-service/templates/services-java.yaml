@@ -83,6 +83,8 @@ spec:
               valueFrom: {secretKeyRef: {name: {{ $root.Values.secrets.existingSecret }}, key: ADMIN_PASSWORD}}
             - name: ADMIN_TWO_FACTOR_KEY
               valueFrom: {secretKeyRef: {name: {{ $root.Values.secrets.existingSecret }}, key: ADMIN_TWO_FACTOR_KEY}}
+            - name: ADMIN_TWO_FACTOR_KEY_PREVIOUS
+              valueFrom: {secretKeyRef: {name: {{ $root.Values.secrets.existingSecret }}, key: ADMIN_TWO_FACTOR_KEY_PREVIOUS, optional: true}}
             - name: ADMIN_CORS_ORIGINS
               value: {{ $root.Values.config.adminCorsOrigins | quote }}
             - name: FORWARD_HEADERS_STRATEGY

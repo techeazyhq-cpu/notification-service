@@ -18,6 +18,7 @@
 
 package com.techeazy.notification.adminapi.auth;
 
+import com.techeazy.notification.infra.AesGcmCipher;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
 import java.nio.charset.StandardCharsets;
@@ -77,7 +78,7 @@ public class AdminAuthService {
     private final AdminUserStore users;
     private final SessionStore sessions;
     private final PasswordEncoder encoder;
-    private final SecretCipher cipher;
+    private final AesGcmCipher cipher;
     private final Totp totp;
     private final Clock clock;
     private final AuthSettings settings;
@@ -85,7 +86,7 @@ public class AdminAuthService {
     private final String decoyHash;
 
     @SuppressWarnings("java:S107")
-    AdminAuthService(AdminUserStore users, SessionStore sessions, PasswordEncoder encoder, SecretCipher cipher, Totp totp,
+    AdminAuthService(AdminUserStore users, SessionStore sessions, PasswordEncoder encoder, AesGcmCipher cipher, Totp totp,
                      Clock clock, AuthSettings settings, SecureRandom random) {
         this.users = users;
         this.sessions = sessions;

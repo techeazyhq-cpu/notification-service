@@ -54,6 +54,23 @@ public final class InsecureDefaults {
         }
     }
 
+    /** The shortest encryption key accepted outside {@code local}: 32 characters, such as {@code openssl rand -hex 16}. */
+    public static final int MINIMUM_KEY_LENGTH = 32;
+
+    /**
+     * Refuses an encryption key that is too short to be a random key outside the {@code local} profile. A key is used
+     * as given, without a slow key-derivation function, so it must be random and long, not a memorable passphrase.
+     *
+     * @throws IllegalStateException if {@code key} is shorter than {@link #MINIMUM_KEY_LENGTH} outside {@code local}
+     */
+    public static void requireStrongKey(Environment env, String property, String key) {
+        if (isLocal(env) || key == null || key.length() >= MINIMUM_KEY_LENGTH) {
+            return;
+        }
+        throw new IllegalStateException(property + " is " + key.length() + " characters long; an encryption key must be "
+                + "at least " + MINIMUM_KEY_LENGTH + " random characters, for example the output of 'openssl rand -hex 32'.");
+    }
+
     public static boolean isLocal(Environment env) {
         return Arrays.asList(env.getActiveProfiles()).contains("local");
     }

@@ -19,8 +19,10 @@
 package com.techeazy.notification.adminapi.auth;
 
 import com.techeazy.notification.config.InsecureDefaults;
+import com.techeazy.notification.infra.AesGcmCipher;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.context.annotation.Bean;
@@ -34,6 +36,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import java.security.SecureRandom;
 import java.time.Clock;
 import java.time.Duration;
+import java.util.List;
 
 /** Wires administrator authentication and creates the first administrator from configuration when none exists. */
 @Configuration
@@ -45,9 +48,30 @@ public class AuthConfiguration {
     private static final String DEFAULT_ADMIN_PASSWORD = "admin";
     private static final SecureRandom RANDOM = new SecureRandom();
 
+    /** The purpose two-factor secrets are encrypted for (ADR-037); it is bound to every stored secret. */
+    public static final String TWO_FACTOR_SECRET = "admin-totp-secret";
+    /**
+     * The bean name of that cipher. Always inject it by this name: the personal-data encryptor is an {@code AesGcmCipher}
+     * too, and {@code @Primary}, so injecting by type alone would pick the wrong key.
+     */
+    public static final String TWO_FACTOR_CIPHER = "twoFactorCipher";
+
+    /**
+     * Encrypts administrators' two-factor secrets under {@code admin.two-factor-key}; earlier keys listed in
+     * {@code admin.two-factor-key-previous} still decrypt until {@code SecretReencryption} has rewritten every secret.
+     */
+    @Bean(TWO_FACTOR_CIPHER)
+    AesGcmCipher twoFactorCipher(Environment env,
+                                 @Value("${admin.two-factor-key:" + DEFAULT_TWO_FACTOR_KEY + "}") String twoFactorKey,
+                                 @Value("${admin.two-factor-key-previous:}") List<String> previousKeys) {
+        InsecureDefaults.reject(env, "admin.two-factor-key", twoFactorKey, DEFAULT_TWO_FACTOR_KEY);
+        InsecureDefaults.requireStrongKey(env, "admin.two-factor-key", twoFactorKey);
+        return new AesGcmCipher(twoFactorKey, previousKeys, TWO_FACTOR_SECRET, RANDOM);
+    }
+
     @Bean
     AdminAuthService adminAuthService(Environment env, JdbcClient jdbc, PasswordEncoder encoder,
-                                      @Value("${admin.two-factor-key:" + DEFAULT_TWO_FACTOR_KEY + "}") String twoFactorKey,
+                                      @Qualifier(TWO_FACTOR_CIPHER) AesGcmCipher twoFactorCipher,
                                       @Value("${admin.issuer:Notification Admin}") String issuer,
                                       @Value("${admin.session-idle-minutes:30}") long idleMinutes,
                                       @Value("${admin.session-max-hours:12}") long maxHours,
@@ -55,12 +79,11 @@ public class AuthConfiguration {
                                       @Value("${admin.lockout-minutes:15}") long lockoutMinutes,
                                       @Value("${admin.require-password-change:true}") boolean requirePasswordChange,
                                       @Value("${admin.require-two-factor:true}") boolean requireTwoFactor) {
-        InsecureDefaults.reject(env, "admin.two-factor-key", twoFactorKey, DEFAULT_TWO_FACTOR_KEY);
         rejectRelaxedAccountRules(env, requirePasswordChange, requireTwoFactor);
         AuthSettings settings = new AuthSettings(issuer, Duration.ofMinutes(idleMinutes), Duration.ofHours(maxHours),
                 maxFailedAttempts, Duration.ofMinutes(lockoutMinutes), requirePasswordChange, requireTwoFactor);
         return new AdminAuthService(new JdbcAdminUserStore(jdbc), new JdbcSessionStore(jdbc), encoder,
-                new SecretCipher(twoFactorKey, RANDOM), new Totp(RANDOM), Clock.systemUTC(), settings, RANDOM);
+                twoFactorCipher, new Totp(RANDOM), Clock.systemUTC(), settings, RANDOM);
     }
 
     /**

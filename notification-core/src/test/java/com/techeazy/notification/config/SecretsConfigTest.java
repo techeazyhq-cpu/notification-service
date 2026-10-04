@@ -21,12 +21,15 @@ package com.techeazy.notification.config;
 import org.junit.jupiter.api.Test;
 import org.springframework.mock.env.MockEnvironment;
 
+import java.util.List;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class SecretsConfigTest {
 
     private static final String DEFAULT_KEY = "development-only-change-me";
+    private static final String STRONG_KEY = "0123456789abcdef0123456789abcdef";
 
     private final SecretsConfig config = new SecretsConfig();
 
@@ -40,14 +43,28 @@ class SecretsConfigTest {
     void refusesTheShippedProviderSecretsKeyOutsideLocal() {
         MockEnvironment env = new MockEnvironment();
 
-        assertThatThrownBy(() -> config.providerSecretsCipher(env, DEFAULT_KEY)).hasMessageContaining("notification.secrets-key");
+        assertThatThrownBy(() -> config.providerSecrets(env, DEFAULT_KEY, List.of())).hasMessageContaining("notification.secrets-key");
+        assertThatThrownBy(() -> config.clientSigningSecrets(env, DEFAULT_KEY, List.of())).hasMessageContaining("notification.secrets-key");
     }
 
     @Test
     void refusesTheShippedPersonalDataKeyOutsideLocal() {
         MockEnvironment env = new MockEnvironment();
 
-        assertThatThrownBy(() -> config.personalDataEncryptor(env, DEFAULT_KEY)).hasMessageContaining("notification.data-key");
+        assertThatThrownBy(() -> config.personalDataEncryptor(env, DEFAULT_KEY, List.of())).hasMessageContaining("notification.data-key");
+    }
+
+    @Test
+    void refusesAnEncryptionKeyTooShortToBeRandomOutsideLocal() {
+        MockEnvironment env = new MockEnvironment();
+
+        assertThatThrownBy(() -> config.providerSecrets(env, "short but not the default", List.of()))
+                .hasMessageContaining("notification.secrets-key").hasMessageContaining("at least 32");
+        assertThatThrownBy(() -> config.personalDataEncryptor(env, "short but not the default", List.of()))
+                .hasMessageContaining("notification.data-key");
+        assertThatThrownBy(() -> config.recipientFingerprints(env, "short but not the default"))
+                .hasMessageContaining("notification.fingerprint-key");
+        assertThat(config.providerSecrets(local(), "short", List.of())).isNotNull();
     }
 
     @Test
@@ -62,7 +79,7 @@ class SecretsConfigTest {
     void acceptsTheDefaultsInLocalAndRealValuesAnywhere() {
         assertThat(config.databaseCredentialsChecked(local(), "notification").property()).isEqualTo("spring.datasource.password");
         assertThat(config.databaseCredentialsChecked(new MockEnvironment(), "a real password").property()).isNotBlank();
-        assertThat(config.personalDataEncryptor(local(), DEFAULT_KEY).encrypt("x")).isNotBlank();
-        assertThat(config.providerSecrets(config.providerSecretsCipher(new MockEnvironment(), "a real key"))).isNotNull();
+        assertThat(config.personalDataEncryptor(local(), DEFAULT_KEY, List.of()).encrypt("x")).isNotBlank();
+        assertThat(config.providerSecrets(new MockEnvironment(), STRONG_KEY, List.of())).isNotNull();
     }
 }

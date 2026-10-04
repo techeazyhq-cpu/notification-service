@@ -31,7 +31,9 @@ imagePullSecrets: []
 
 # Secrets are never stored in this chart. Create this Secret from your secrets manager (External Secrets, Sealed
 # Secrets, Vault) with the keys DB_PASSWORD (runtime role), MIGRATION_DB_PASSWORD (schema owner),
-# SECRETS_ENCRYPTION_KEY, DATA_ENCRYPTION_KEY, ADMIN_TWO_FACTOR_KEY and ADMIN_PASSWORD.
+# SECRETS_ENCRYPTION_KEY, DATA_ENCRYPTION_KEY, ADMIN_TWO_FACTOR_KEY and ADMIN_PASSWORD. During a key rotation
+# (ADR-037) it may also hold SECRETS_ENCRYPTION_KEY_PREVIOUS, DATA_ENCRYPTION_KEY_PREVIOUS,
+# ADMIN_TWO_FACTOR_KEY_PREVIOUS and FINGERPRINT_KEY; all four are optional.
 secrets:
   existingSecret: notification-secrets
 

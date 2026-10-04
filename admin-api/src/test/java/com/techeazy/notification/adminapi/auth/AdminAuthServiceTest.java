@@ -18,6 +18,7 @@
 
 package com.techeazy.notification.adminapi.auth;
 
+import com.techeazy.notification.infra.AesGcmCipher;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpStatus;
@@ -61,7 +62,7 @@ class AdminAuthServiceTest {
 
     private AdminAuthService serviceRequiring(boolean requirePasswordChange, boolean requireTwoFactor) {
         return new AdminAuthService(users, sessions, PasswordEncoderFactories.createDelegatingPasswordEncoder(),
-                new SecretCipher("test-key", new SecureRandom()), totp, clock,
+                new AesGcmCipher("test-key", new SecureRandom()), totp, clock,
                 settings(requirePasswordChange, requireTwoFactor), new SecureRandom());
     }
 
@@ -159,7 +160,7 @@ class AdminAuthServiceTest {
     void bootstrapRunsTheGivenCheckOnlyWhenAboutToCreateTheFirstAdministrator() {
         InMemoryStores.Users emptyUsers = new InMemoryStores.Users();
         AdminAuthService fresh = new AdminAuthService(emptyUsers, new InMemoryStores.Sessions(emptyUsers),
-                PasswordEncoderFactories.createDelegatingPasswordEncoder(), new SecretCipher("test-key", new SecureRandom()),
+                PasswordEncoderFactories.createDelegatingPasswordEncoder(), new AesGcmCipher("test-key", new SecureRandom()),
                 totp, clock, settings(false, false),
                 new SecureRandom());
 

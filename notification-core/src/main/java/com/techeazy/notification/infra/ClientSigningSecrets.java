@@ -56,4 +56,14 @@ public final class ClientSigningSecrets {
     public String decryptForUse(String stored) {
         return cipher.decrypt(stored);
     }
+
+    /** Whether {@code stored} was written in an earlier format or under a previous key. */
+    public boolean needsReencryption(String stored) {
+        return cipher.needsReencryption(stored);
+    }
+
+    /** {@code stored} encrypted again under the current key. */
+    public String reencrypt(String stored) {
+        return cipher.encrypt(cipher.decrypt(stored));
+    }
 }
