@@ -464,6 +464,9 @@ curl -X POST "$CLIENT_API/v1/notifications/bulk" -H "X-API-Key: $API_KEY" -H "Co
 ```
 
 - A repeat with a key already used returns the original request (`"idempotentReplay": true`) and sends nothing again.
+- The repeat must be the same request: same content, recipients, variables and options (the order of variables does
+  not matter). A different request with a key already used is refused with 422 `IDEMPOTENCY_KEY_REUSED` (NS-3009)
+  and nothing is sent, so a bug that reuses keys shows up instead of silently dropping messages.
 - Use a new key for every distinct send, such as your order or campaign id.
 - Keys are remembered for 7 days (see [Privacy](#privacy-and-data-retention)).
 

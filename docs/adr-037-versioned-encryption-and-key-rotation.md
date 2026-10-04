@@ -32,7 +32,7 @@ Before this decision, all three used one format: base64 of the IV and ciphertext
    - Provider secrets still stored in plaintext from before ADR-017 are encrypted too.
    - Each row is replaced only if it still holds what was read, so several instances, or an administrator's edit in between, never lose a change.
    - Message variables are not rewritten: they are erased after the personal-data retention period (ADR-009). A previous data key only has to stay configured that long.
-5. **Fingerprints keep their own key.** Recipient fingerprints (ADR-035) are a keyed HMAC used for lookups, so rotating their key would orphan every existing fingerprint. They now use `FINGERPRINT_KEY`, which defaults to `DATA_ENCRYPTION_KEY`, so a data-key rotation can pin it to the old value.
+5. **Fingerprints keep their own key.** Recipient fingerprints (ADR-035) and idempotency-payload fingerprints are keyed HMACs compared against stored values, so rotating their key would orphan every existing fingerprint. They now use `FINGERPRINT_KEY`, which defaults to `DATA_ENCRYPTION_KEY`, so a data-key rotation can pin it to the old value.
 6. **Minimum strength.** Outside the `local` profile every encryption key must be at least 32 characters. The documented `openssl rand -hex 32` gives 64.
 7. **One implementation.** `AesGcmCipher` in notification-core serves all four purposes, and the admin API's copy is removed.
 

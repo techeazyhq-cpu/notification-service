@@ -110,7 +110,7 @@ public class RetentionService {
             """;
 
     private static final String CLEAR_IDEMPOTENCY_KEYS = """
-            UPDATE notification_request SET idempotency_key = NULL
+            UPDATE notification_request SET idempotency_key = NULL, payload_fingerprint = NULL
             WHERE id IN (SELECT id FROM notification_request WHERE idempotency_key IS NOT NULL AND created_at < :cutoff LIMIT :batch)
             """;
 

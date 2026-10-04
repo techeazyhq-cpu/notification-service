@@ -18,6 +18,7 @@
 
 package com.techeazy.notification.config;
 
+import com.techeazy.notification.application.PayloadFingerprints;
 import com.techeazy.notification.application.RecipientFingerprints;
 import com.techeazy.notification.domain.FieldEncryptor;
 import com.techeazy.notification.infra.AesGcmCipher;
@@ -54,8 +55,9 @@ public class SecretsConfig {
     }
 
     /**
-     * Recipient fingerprints are keyed by {@code notification.fingerprint-key}, which defaults to the data key. It is
-     * separate so the data key can be rotated: set it to the old data key first, and existing fingerprints still match.
+     * Recipient and idempotency-payload fingerprints are keyed by {@code notification.fingerprint-key}, which defaults to
+     * the data key. It is separate so the data key can be rotated: set it to the old data key first, and existing
+     * fingerprints still match.
      */
     @Bean
     RecipientFingerprints recipientFingerprints(Environment env,
@@ -64,6 +66,15 @@ public class SecretsConfig {
         InsecureDefaults.reject(env, "notification.fingerprint-key", fingerprintKey, DEFAULT_SECRETS_KEY);
         InsecureDefaults.requireStrongKey(env, "notification.fingerprint-key", fingerprintKey);
         return new RecipientFingerprints(fingerprintKey);
+    }
+
+    @Bean
+    PayloadFingerprints payloadFingerprints(Environment env,
+                                            @Value("${notification.fingerprint-key:${notification.data-key:"
+                                                    + DEFAULT_SECRETS_KEY + "}}") String fingerprintKey) {
+        InsecureDefaults.reject(env, "notification.fingerprint-key", fingerprintKey, DEFAULT_SECRETS_KEY);
+        InsecureDefaults.requireStrongKey(env, "notification.fingerprint-key", fingerprintKey);
+        return new PayloadFingerprints(fingerprintKey);
     }
 
     @Bean

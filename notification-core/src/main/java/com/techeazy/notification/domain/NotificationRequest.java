@@ -45,6 +45,8 @@ public class NotificationRequest {
     private String body;
     private int total;
     private String idempotencyKey;
+    /** Keyed fingerprint of the payload sent with the idempotency key; null without a key or for older requests. */
+    private String payloadFingerprint;
     private String clientReference;
     private String senderEmail;
     private String senderName;
