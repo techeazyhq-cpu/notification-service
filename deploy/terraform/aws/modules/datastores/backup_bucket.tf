@@ -152,6 +152,9 @@ resource "aws_s3_bucket_versioning" "backup_access_logs" {
   }
 }
 
+# S3 server access logging cannot deliver to a bucket encrypted with a customer managed KMS key, so the log target
+# uses SSE-S3. The backups it records stay encrypted with the disaster-recovery region's KMS key.
+#trivy:ignore:AVD-AWS-0132
 resource "aws_s3_bucket_server_side_encryption_configuration" "backup_access_logs" {
   provider = aws.disaster_recovery
 
