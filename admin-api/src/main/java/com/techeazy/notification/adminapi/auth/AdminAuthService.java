@@ -185,10 +185,9 @@ public class AdminAuthService {
 
     public void changeRole(UUID targetId, AdminRole role) {
         AdminUser target = users.findById(targetId).orElseThrow(() -> AuthException.notFound("No such administrator"));
-        if (target.role() == AdminRole.ADMIN && role != AdminRole.ADMIN && countAdmins() <= 1) {
+        if (!users.updateRoleKeepingAnAdmin(target.id(), role)) {
             throw AuthException.conflict("There must be at least one administrator");
         }
-        users.updateRole(targetId, role);
     }
 
     public void deleteAdmin(String actingUsername, UUID targetId) {
@@ -196,14 +195,9 @@ public class AdminAuthService {
         if (target.username().equals(actingUsername)) {
             throw AuthException.conflict("You cannot delete your own account");
         }
-        if (target.role() == AdminRole.ADMIN && countAdmins() <= 1) {
+        if (!users.deleteKeepingAnAdmin(target.id())) {
             throw AuthException.conflict("There must be at least one administrator");
         }
-        users.delete(targetId);
-    }
-
-    private long countAdmins() {
-        return users.findAll().stream().filter(u -> u.role() == AdminRole.ADMIN).count();
     }
 
     void changePassword(String username, String currentPassword, String newPassword, String currentTokenHash) {
