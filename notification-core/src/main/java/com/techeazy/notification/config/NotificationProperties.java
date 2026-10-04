@@ -82,6 +82,13 @@ public class NotificationProperties {
          */
         private double publicCatalogueRate = 20;
         private int publicCatalogueBurst = 100;
+        /**
+         * Administrator sign-in attempts per second from one network address, across all instances. With the burst,
+         * this allows a person to retype a password a few times but stops password guessing and spraying across
+         * accounts, and makes locking an administrator out from one address slow.
+         */
+        private double adminSignInRate = 0.1;
+        private int adminSignInBurst = 10;
     }
 
     @Getter @Setter

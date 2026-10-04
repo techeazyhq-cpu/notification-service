@@ -44,6 +44,19 @@ class TemplateRendererTest {
     }
 
     @Test
+    void htmlRenderingEscapesVariableValuesButNotTheTemplate() {
+        assertThat(TemplateRenderer.renderHtml("<p>Hi <b>{{name}}</b></p>",
+                Map.of("name", "<a href=\"https://evil.example\">Ann</a> & 'co'")))
+                .isEqualTo("<p>Hi <b>&lt;a href=&quot;https://evil.example&quot;&gt;Ann&lt;/a&gt; &amp; &#39;co&#39;</b></p>");
+    }
+
+    @Test
+    void htmlRenderingStillFailsOnMissingVariables() {
+        assertThatThrownBy(() -> TemplateRenderer.renderHtml("Hi {{name}}", Map.of()))
+                .isInstanceOf(TemplateRenderer.MissingVariableException.class);
+    }
+
+    @Test
     void missingVariablesFailInsteadOfRenderingBlank() {
         assertThatThrownBy(() -> TemplateRenderer.render("Hi {{name}} {{code}}", Map.of("code", "1")))
                 .isInstanceOf(TemplateRenderer.MissingVariableException.class)

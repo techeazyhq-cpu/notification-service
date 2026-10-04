@@ -34,14 +34,18 @@ import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionOperations;
 
 import java.time.Duration;
 import java.time.Instant;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Processes one message id delivered by the broker. Safe under redelivery: the atomic claim
@@ -84,6 +88,7 @@ public class DispatchService {
     private final MeterRegistry metrics;
     private final MessageEventLog events;
     private final TransactionOperations transactions;
+    private final Map<UUID, SentDelivery> unrecordedSends = new ConcurrentHashMap<>();
 
     /**
      * {@code events} and {@code transactions} record each outcome in the event log in the same transaction as the
@@ -105,6 +110,10 @@ public class DispatchService {
     }
 
     public Outcome process(UUID messageId) {
+        Optional<Outcome> alreadySent = recordPendingSend(messageId);
+        if (alreadySent.isPresent()) {
+            return alreadySent.get();
+        }
         NotificationMessage m = messages.findById(messageId).orElse(null);
         if (m == null) {
             log.warn("Message {} not found; dropping broker message", messageId);
@@ -136,18 +145,9 @@ public class DispatchService {
         }
         int attempt = m.getAttempts() + 1;
 
+        SendResult result;
         try {
-            Outbound outbound = render(m);
-            SendResult result = providers.send(outbound);
-            Instant sentAt = Instant.now();
-            transactions.executeWithoutResult(status -> {
-                messages.markSent(messageId, result.providerMessageId(), sentAt);
-                events.append(MessageEvent.of(m, MessageEventType.SENT, sentAt).withAttempt(attempt)
-                        .withProviderMessageId(result.providerMessageId()));
-            });
-            count(m.getChannel(), "sent");
-            recordDeliveryLatency(m, sentAt);
-            return new Outcome.Done();
+            result = providers.send(render(m));
         } catch (ProviderRegistry.ProvidersUnavailableException e) {
             // Circuit opened between the availability check and the send: undo the claim, do not count the attempt.
             messages.release(messageId, Instant.now());
@@ -186,6 +186,76 @@ public class DispatchService {
             countError(metrics, m.getChannel().name(), ErrorCode.PROVIDER_TEMPORARILY_FAILING);
             return new Outcome.Retry(backoff);
         }
+        return recordSent(new SentDelivery(m, attempt, result.providerMessageId(), Instant.now()));
+    }
+
+    /**
+     * Records a send the provider has already accepted. A failure here is never treated as a failed delivery: the
+     * message is not retried (which would send it twice) but kept in {@link #unrecordedSends} until
+     * {@link #recordUnrecordedSends()} manages to write it, and the broker message is acknowledged.
+     */
+    private Outcome recordSent(SentDelivery delivery) {
+        NotificationMessage m = delivery.message();
+        count(m.getChannel(), "sent");
+        recordDeliveryLatency(m, delivery.sentAt());
+        try {
+            writeSent(delivery);
+        } catch (RuntimeException e) {
+            unrecordedSends.put(m.getId(), delivery);
+            count(m.getChannel(), "sent_unrecorded");
+            log.error("Message {} was accepted by the provider (id {}) but recording it failed; the record will be "
+                    + "retried, the send will not", m.getId(), delivery.providerMessageId(), e);
+        }
+        return new Outcome.Done();
+    }
+
+    /**
+     * Retries writing the sends that were accepted by a provider but could not be recorded, for example during a
+     * database failover. Until a send is recorded, a redelivery of its message is acknowledged without sending.
+     */
+    @Scheduled(fixedDelayString = "${dispatcher.unrecorded-send-retry-ms:2000}")
+    void recordUnrecordedSends() {
+        for (SentDelivery delivery : List.copyOf(unrecordedSends.values())) {
+            try {
+                writeSent(delivery);
+                unrecordedSends.remove(delivery.message().getId(), delivery);
+                log.info("Recorded the earlier send of message {}", delivery.message().getId());
+            } catch (RuntimeException e) {
+                log.warn("Still cannot record the send of message {}: {}", delivery.message().getId(), e.toString());
+                return;
+            }
+        }
+    }
+
+    int unrecordedSendCount() {
+        return unrecordedSends.size();
+    }
+
+    private void writeSent(SentDelivery delivery) {
+        NotificationMessage m = delivery.message();
+        transactions.executeWithoutResult(status -> {
+            messages.markSent(m.getId(), delivery.providerMessageId(), delivery.sentAt());
+            events.append(MessageEvent.of(m, MessageEventType.SENT, delivery.sentAt()).withAttempt(delivery.attempt())
+                    .withProviderMessageId(delivery.providerMessageId()));
+        });
+    }
+
+    private Optional<Outcome> recordPendingSend(UUID messageId) {
+        SentDelivery pending = unrecordedSends.get(messageId);
+        if (pending == null) {
+            return Optional.empty();
+        }
+        try {
+            writeSent(pending);
+            unrecordedSends.remove(messageId, pending);
+        } catch (RuntimeException e) {
+            log.warn("Message {} was already sent; its record is still pending: {}", messageId, e.toString());
+        }
+        return Optional.of(new Outcome.Done());
+    }
+
+    /** A send the provider accepted, kept until it is recorded. */
+    private record SentDelivery(NotificationMessage message, int attempt, String providerMessageId, Instant sentAt) {
     }
 
     private Outbound render(NotificationMessage m) {
@@ -200,7 +270,7 @@ public class DispatchService {
         vars.put(TemplateRenderer.RECIPIENT, m.getRecipient());
         return new Outbound(m.getId(), m.getChannel(), m.getRecipient(),
                 TemplateRenderer.render(req.getSubject(), vars), TemplateRenderer.render(req.getBody(), vars),
-                req.getSenderEmail(), req.getSenderName());
+                req.getSenderEmail(), req.getSenderName(), TemplateRenderer.renderHtml(req.getBody(), vars));
     }
 
     private static boolean expired(NotificationMessage m) {

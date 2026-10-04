@@ -16,7 +16,7 @@ The Admin API accepted HTTP Basic for one user whose name and password came from
 5. **Recovery codes.** Turning two-factor on returns 10 one-time codes, shown once and stored only as hashes. Any one of them can be entered instead of a code, and they can be regenerated.
 6. **Sensitive changes need re-authentication.** Turning two-factor off or generating new recovery codes needs the password and a valid code; changing the password needs the current one.
 7. **Secrets at rest.** The TOTP secret is encrypted with AES-256-GCM using a key derived from `admin.two-factor-key` (`ADMIN_TWO_FACTOR_KEY`), so a database copy alone cannot produce codes. The service logs a warning while the development default is in use.
-8. **Guessing limits.** After 5 wrong passwords or codes (`admin.max-failed-attempts`) an account is locked for 15 minutes (`admin.lockout-minutes`); asking for the code is not a failure. Unknown users and wrong passwords give the same answer and take similar time.
+8. **Guessing limits.** After 5 wrong passwords or codes (`admin.max-failed-attempts`) an account is locked for 15 minutes (`admin.lockout-minutes`); asking for the code is not a failure. Unknown users and wrong passwords give the same answer and take similar time. On top of that, sign-in attempts are rate-limited per network address across all instances (`notification.rate-limit.admin-sign-in-rate`, default 0.1 per second, burst `admin-sign-in-burst` 10); beyond it the login answers 429 `RATE_LIMITED` with `Retry-After`, and the refusal is audited. The address is the caller's only behind a trusted proxy with `server.forward-headers-strategy=native` (the Helm chart sets it when network policies are on).
 9. **Stable error codes:** `INVALID_CREDENTIALS`, `OTP_REQUIRED` (401), `ACCOUNT_LOCKED` (429), `REAUTHENTICATION_FAILED` (403, so the UI does not treat it as a lost session), `INVALID_REQUEST`, `INVALID_STATE`.
 
 ## Options considered
@@ -32,7 +32,8 @@ Positive: password can be changed in the UI; optional second factor with recover
 
 Negative / accepted:
 - There is still only one administrator account and no UI to create more, and no roles. Adding users and roles is the next step, ideally through OIDC.
-- Lockout is per account, so someone who knows the user name can keep the account locked (a denial of service); there is no per-IP limit yet.
+- Lockout is per account, so someone who knows the user name can keep the account locked (a denial of service). The per-address limit makes that slow from one address, but many addresses can still do it.
+- `OTP_REQUIRED` is only answered after a correct password, so it confirms the password of an account with two-factor enabled. That is kept deliberately: answering it before checking the password would reveal which user names exist. The second factor, the lockout and the per-address limit bound the risk.
 - If the only device is lost and the recovery codes are gone, recovery needs database access (delete the row to re-seed from configuration, or clear the two-factor columns).
 - Changing `ADMIN_TWO_FACTOR_KEY` makes stored secrets unreadable, so two-factor must be reset.
 - Tokens live in `sessionStorage`, so a cross-site scripting flaw in the admin UI could read one. The UI has no user-supplied HTML rendering, but this is the same exposure as before.

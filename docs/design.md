@@ -246,7 +246,7 @@ PostgreSQL, schema owned by the `db-migration` job (Liquibase changesets in `db-
 
 | Risk | L | I | Mitigation |
 |---|---|---|---|
-| Duplicate sends after worker crash mid-send | M | M | Atomic claim + 5-min reclaim; documented at-least-once; provider idempotency keys where supported |
+| Duplicate sends after worker crash mid-send | M | M | Atomic claim + 5-min reclaim; documented at-least-once; provider idempotency keys where supported. A send the provider accepted is never retried because recording it failed: the worker keeps the record in memory, retries the write every 2 s and acknowledges redeliveries without sending |
 | Hot Postgres under large bulk | M | H | JDBC batching; derived request status; partition `notification_message` by month and add retention before production |
 | Slow provider stalls a consumer thread | M | M | Timeouts (5 s connect / 10 s read); consumers per channel are independent; scale `consumers-per-channel` |
 | Rate limiter outage | L | M | Fails open; alert on Redis errors |
