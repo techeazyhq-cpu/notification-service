@@ -30,7 +30,11 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
-/** An API consumer (a calling application). Only the SHA-256 of its API key is stored. */
+/**
+ * An API consumer (a calling application). Only the SHA-256 of its API key is stored. Its request-signing secret, if
+ * it has one, is stored encrypted, and {@code signingRequired} makes every state-changing request need a signature
+ * (ADR-036).
+ */
 @Entity
 @Table(name = "client")
 @Getter @Setter @NoArgsConstructor
@@ -41,6 +45,8 @@ public class Client {
     private String apiKeyPrefix;
     @Enumerated(EnumType.STRING) private ClientStatus status;
     private String allowedChannels;
+    private String signingSecret;
+    private boolean signingRequired;
     private Instant createdAt;
     private Instant updatedAt;
 

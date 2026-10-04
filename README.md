@@ -217,6 +217,17 @@ person's data was erased.
 - **API:** `POST /v1/privacy/recipient-report`.
 - See ADR-035.
 
+## Signed requests
+
+A tenant can sign its client API requests against replay and tampering. The signature is an HMAC-SHA256 over the
+method, path, query and exact body bytes, bound to a timestamp and a single-use nonce. A captured request sent again is
+refused.
+- **Setup:** an administrator issues the tenant a signing secret, and can then require signatures for every request
+  that changes something (**Admin console → Clients**).
+- **Client console:** signs for the tenant when the secret is entered at sign-in.
+- **Details:** the format, and code in shell, Python, Node.js and Java, are in the
+  [client guide](docs/client-guide.md#signed-requests-protection-against-replay). See ADR-036.
+
 ## Error codes
 
 Every error from the client and admin APIs carries a stable `code` (what programs branch on), a numbered `errorId`

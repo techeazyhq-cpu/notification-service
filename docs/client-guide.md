@@ -19,6 +19,8 @@ the addresses your operator gave you.
 - **An API key,** starting with `ntf_`. It identifies your organisation on every call and is your sign-in for the
   console. Treat it like a password: keep it in a secrets store, never in source code, e-mail or chat. If it may have
   leaked, ask the operator to rotate it. The old key then stops working within 30 seconds.
+- **A signing secret,** starting with `nss_`, if your organisation signs its requests against replay (see
+  [Signed requests](#signed-requests-protection-against-replay)). Keep it as safely as the API key.
 - **The channels you may use:** some of `EMAIL`, `SMS`, `WHATSAPP` and `PUSH`.
 - **Your limits and prices,** which you can look up at any time in the console under **Billing**.
 
@@ -67,7 +69,8 @@ the addresses your operator gave you.
 
 ### Sign in and out
 
-Open the console and paste your API key into **API key**, then **Sign in**. The key is kept only in that browser tab:
+Open the console and paste your API key into **API key**, and your signing secret, if you have one, into
+**Signing secret**. Then **Sign in**. The key is kept only in that browser tab:
 closing the tab signs you out. **Sign out** in the top bar signs you out at once.
 
 The pages you see depend on your access. **Sender addresses**, for example, appears only if you may send e-mail.
@@ -204,6 +207,176 @@ curl "$CLIENT_API/v1/me" -H "X-API-Key: $API_KEY"
 ```
 
 `GET /v1/me` returns your organisation's id, name and allowed channels. It's a good first call to check a new key.
+
+### Signed requests (protection against replay)
+
+Your operator can give your organisation a **signing secret** (starting `nss_`). With it you sign each request, and
+the platform then refuses:
+
+- a captured request that is sent again;
+- a request changed on the way;
+- a request whose timestamp is more than 5 minutes from the platform's clock.
+
+Signing is optional until your operator **requires** it. From then on, every `POST`, `PUT` and `DELETE` must be signed,
+or it is refused with `401 SIGNATURE_REQUIRED`. Reads (`GET`) never need a signature. Keep the secret as safely as the
+API key; it is shown only once when issued. The design is in [ADR-036](adr-036-signed-client-requests.md).
+
+Send three headers with the API key:
+
+| Header | Value |
+|---|---|
+| `X-Signature-Timestamp` | The current time in Unix seconds, such as `1767225600` |
+| `X-Signature-Nonce` | A new random value for **every** request, 16–64 letters, digits, `-` or `_`, such as 32 hex characters |
+| `X-Signature` | The lower-case hex HMAC-SHA256 of the text below, keyed by your signing secret |
+
+The signed text is these seven lines joined by a line feed (`\n`), with no line feed at the end:
+
+```text
+NS1-HMAC-SHA256
+<the X-Signature-Timestamp value>
+<the X-Signature-Nonce value>
+<the HTTP method in capitals, such as POST>
+<the path exactly as sent, such as /v1/notifications>
+<the query string exactly as sent, without the "?"; an empty line if there is none>
+<the lower-case hex SHA-256 of the exact body bytes; of no bytes if there is no body>
+```
+
+Sign the bytes you actually send. Serialise your JSON once, sign that text, and send the same text: re-serialising
+after signing can change spacing or field order, and the signature then fails with `SIGNATURE_INVALID`. A CSV upload
+is signed over the whole `multipart/form-data` body, boundaries included, so build the body before signing it.
+
+**Check your implementation** against this example: secret `nss_test`, timestamp `1767225600`, nonce
+`0123456789abcdef`, `POST /v1/notifications` with the body `{"channel":"SMS"}`. It must give the signature
+`2295ae2e9e31c56816963cbcc04632396fa6471d25a8cb667f9003711e053503`.
+
+**Shell** (bash, `openssl` and `curl`):
+
+```bash
+# Signs and sends one request. Usage: signed_curl METHOD PATH[?QUERY] [BODY_FILE]
+signed_curl() {
+  local method=$1 target=$2 body_file=${3:-/dev/null}
+  local path=${target%%\?*} query=""
+  [[ $target == *\?* ]] && query=${target#*\?}
+  local timestamp nonce body_hash canonical signature
+  timestamp=$(date +%s)
+  nonce=$(openssl rand -hex 16)
+  body_hash=$(openssl dgst -sha256 -r < "$body_file" | cut -d' ' -f1)
+  canonical=$(printf 'NS1-HMAC-SHA256\n%s\n%s\n%s\n%s\n%s\n%s' \
+    "$timestamp" "$nonce" "$method" "$path" "$query" "$body_hash")
+  signature=$(printf '%s' "$canonical" | openssl dgst -sha256 -hmac "$SIGNING_SECRET" -r | cut -d' ' -f1)
+  curl -sS -X "$method" "$CLIENT_API$target" -H "X-API-Key: $API_KEY" \
+    -H "X-Signature-Timestamp: $timestamp" -H "X-Signature-Nonce: $nonce" -H "X-Signature: $signature" \
+    -H "Content-Type: application/json" --data-binary @"$body_file"
+}
+
+signed_curl POST /v1/notifications message.json
+```
+
+**Python:**
+
+```python
+import hashlib
+import hmac
+import os
+import time
+from urllib.parse import urlsplit
+
+
+def signature_headers(secret: str, method: str, url: str, body: bytes = b"") -> dict:
+    """Headers that sign one request; `body` must be the exact bytes you send."""
+    parts = urlsplit(url)
+    timestamp = str(int(time.time()))
+    nonce = os.urandom(16).hex()
+    canonical = "\n".join(["NS1-HMAC-SHA256", timestamp, nonce, method.upper(), parts.path, parts.query,
+                           hashlib.sha256(body).hexdigest()])
+    signature = hmac.new(secret.encode(), canonical.encode(), hashlib.sha256).hexdigest()
+    return {"X-Signature-Timestamp": timestamp, "X-Signature-Nonce": nonce, "X-Signature": signature}
+
+
+body = json.dumps(payload).encode()
+requests.post(url, data=body, headers={"X-API-Key": api_key, "Content-Type": "application/json",
+                                       **signature_headers(signing_secret, "POST", url, body)})
+```
+
+**Node.js** (18 or later):
+
+```js
+import { createHash, createHmac, randomBytes } from 'node:crypto';
+
+/** Headers that sign one request; `body` must be the exact bytes (or string) you send. */
+export function signatureHeaders(secret, method, url, body = '') {
+  const { pathname, search } = new URL(url);
+  const timestamp = Math.floor(Date.now() / 1000).toString();
+  const nonce = randomBytes(16).toString('hex');
+  const canonical = ['NS1-HMAC-SHA256', timestamp, nonce, method.toUpperCase(), pathname, search.slice(1),
+    createHash('sha256').update(body).digest('hex')].join('\n');
+  const signature = createHmac('sha256', secret).update(canonical).digest('hex');
+  return { 'X-Signature-Timestamp': timestamp, 'X-Signature-Nonce': nonce, 'X-Signature': signature };
+}
+
+const body = JSON.stringify(payload);
+await fetch(url, {
+  method: 'POST', body,
+  headers: { 'X-API-Key': apiKey, 'Content-Type': 'application/json', ...signatureHeaders(signingSecret, 'POST', url, body) },
+});
+```
+
+**Java** (17 or later):
+
+```java
+import javax.crypto.Mac;
+import javax.crypto.spec.SecretKeySpec;
+import java.net.URI;
+import java.nio.charset.StandardCharsets;
+import java.security.GeneralSecurityException;
+import java.security.MessageDigest;
+import java.security.SecureRandom;
+import java.time.Instant;
+import java.util.HexFormat;
+import java.util.Locale;
+import java.util.Map;
+
+/** Headers that sign one request; {@code body} must be the exact bytes you send. */
+final class RequestSigner {
+
+    private static final SecureRandom RANDOM = new SecureRandom();
+    private static final HexFormat HEX = HexFormat.of();
+
+    static Map<String, String> signatureHeaders(String secret, String method, URI uri, byte[] body)
+            throws GeneralSecurityException {
+        String timestamp = Long.toString(Instant.now().getEpochSecond());
+        byte[] random = new byte[16];
+        RANDOM.nextBytes(random);
+        String nonce = HEX.formatHex(random);
+        String canonical = String.join("\n", "NS1-HMAC-SHA256", timestamp, nonce, method.toUpperCase(Locale.ROOT),
+                uri.getRawPath(), uri.getRawQuery() == null ? "" : uri.getRawQuery(),
+                HEX.formatHex(MessageDigest.getInstance("SHA-256").digest(body)));
+        Mac mac = Mac.getInstance("HmacSHA256");
+        mac.init(new SecretKeySpec(secret.getBytes(StandardCharsets.UTF_8), "HmacSHA256"));
+        String signature = HEX.formatHex(mac.doFinal(canonical.getBytes(StandardCharsets.UTF_8)));
+        return Map.of("X-Signature-Timestamp", timestamp, "X-Signature-Nonce", nonce, "X-Signature", signature);
+    }
+}
+```
+
+What can go wrong:
+
+| Error | Why | What to do |
+|---|---|---|
+| `401 SIGNATURE_REQUIRED` (NS-2011) | Signatures are required and the request was unsigned | Sign every request that changes something |
+| `401 SIGNATURE_INVALID` (NS-2012) | A header is missing or malformed, you have no secret, or the signature doesn't match | Compare your signed text with the format above, line by line; check the secret is the current one |
+| `401 SIGNATURE_EXPIRED` (NS-2013) | Your timestamp is more than 5 minutes from the platform's clock | Sign when you send; keep your clock synchronised (NTP) |
+| `409 REQUEST_REPLAYED` (NS-2014) | This nonce was already used | Use a new nonce, and therefore a new signature, for every attempt |
+
+**Retries:** sign every attempt afresh, with a new timestamp and nonce, and keep the same `Idempotency-Key`. The
+platform then returns the original request rather than sending twice.
+
+**In the console:** if your organisation has a signing secret, paste it under **Signing secret** when you sign in.
+Everything you change in the console and the API playground is then signed for you. Leave the field empty if you have
+no secret.
+
+**When the secret changes:** a new secret replaces the old one, and requests signed with the old one are refused
+within 30 seconds. Agree a moment with your operator, and switch your configuration at that moment.
 
 ### Send to one recipient
 
@@ -403,7 +576,8 @@ curl -X POST "$CLIENT_API/v1/privacy/recipient-report" -H "X-API-Key: $API_KEY" 
 
 ### A minimal integration checklist
 
-1. Keep the API key in your secrets store, and send it as `X-API-Key`.
+1. Keep the API key in your secrets store, and send it as `X-API-Key`. If you have a signing secret, sign every
+   request that changes something, with a new nonce each time.
 2. Create your templates, with the OTP category for codes.
 3. Send with an `Idempotency-Key` and your own `clientReference`.
 4. On `202`, store the `requestId`, then poll it until it is no longer `PROCESSING`.

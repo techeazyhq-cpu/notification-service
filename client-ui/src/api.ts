@@ -16,7 +16,10 @@
  * @author Vasantha Kumar <vasantha.kumar@hotmail.com>
  */
 
+import { signatureHeaders } from './signing';
+
 const KEY = 'notification-client-api-key';
+const SIGNING_SECRET = 'notification-client-signing-secret';
 
 export const CHANNELS = ['EMAIL', 'SMS', 'WHATSAPP', 'PUSH'] as const;
 export type Channel = (typeof CHANNELS)[number];
@@ -33,12 +36,30 @@ export const MESSAGE_STATUSES = ['PENDING', 'QUEUED', 'PROCESSING', 'RETRYING', 
 export type MessageStatus = (typeof MESSAGE_STATUSES)[number];
 export type RequestStatus = 'PROCESSING' | 'COMPLETED' | 'PARTIALLY_FAILED' | 'FAILED';
 
-/** The API key lives in sessionStorage only: it disappears when the tab closes. */
+/**
+ * The API key, and the signing secret if the client has one, live in sessionStorage only: they disappear when the tab
+ * closes. With a signing secret every request that changes something is signed (ADR-036).
+ */
 export const session = {
   get: () => sessionStorage.getItem(KEY),
-  set: (apiKey: string) => sessionStorage.setItem(KEY, apiKey),
-  clear: () => sessionStorage.removeItem(KEY),
+  signingSecret: () => sessionStorage.getItem(SIGNING_SECRET),
+  set: (apiKey: string, signingSecret?: string) => {
+    sessionStorage.setItem(KEY, apiKey);
+    if (signingSecret) sessionStorage.setItem(SIGNING_SECRET, signingSecret);
+    else sessionStorage.removeItem(SIGNING_SECRET);
+  },
+  clear: () => {
+    sessionStorage.removeItem(KEY);
+    sessionStorage.removeItem(SIGNING_SECRET);
+  },
 };
+
+/** Signature headers for a request that changes something, when the client signs; none otherwise. */
+export async function signingHeaders(method: string, url: string, body?: Uint8Array<ArrayBuffer>): Promise<Record<string, string>> {
+  const secret = session.signingSecret();
+  if (!secret || method === 'GET') return {};
+  return signatureHeaders(secret, method, url, body);
+}
 
 export class ApiError extends Error {
   constructor(public readonly status: number, message: string) {
@@ -47,14 +68,16 @@ export class ApiError extends Error {
 }
 
 async function request(path: string, init: { method?: string; body?: unknown } = {}): Promise<Response> {
-  const headers: Record<string, string> = { 'X-API-Key': session.get() ?? '' };
-  if (init.body !== undefined) headers['Content-Type'] = 'application/json';
-  const res = await fetch(path, {
-    method: init.method ?? 'GET',
-    headers,
-    body: init.body === undefined ? undefined : JSON.stringify(init.body),
-  });
+  const method = init.method ?? 'GET';
+  const body = init.body === undefined ? undefined : new TextEncoder().encode(JSON.stringify(init.body));
+  const headers: Record<string, string> = { 'X-API-Key': session.get() ?? '', ...(await signingHeaders(method, path, body)) };
+  if (body !== undefined) headers['Content-Type'] = 'application/json';
+  const res = await fetch(path, { method, headers, body });
   if (res.status === 401) {
+    const refusal = await res.json().catch(() => ({}));
+    if (String(refusal.code ?? '').startsWith('SIGNATURE_')) {
+      throw new ApiError(401, `${refusal.message} (${refusal.errorId})`);
+    }
     session.clear();
     window.dispatchEvent(new Event('auth-lost'));
     throw new ApiError(401, 'Your API key is not valid or has been disabled');

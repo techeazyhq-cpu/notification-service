@@ -23,6 +23,8 @@ import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import com.techeazy.notification.application.ApiKeys;
 import com.techeazy.notification.application.RateLimitService;
+import com.techeazy.notification.clientapi.RequestSignatureGate.Admission;
+import com.techeazy.notification.clientapi.RequestSignatureGate.SigningPolicy;
 import com.techeazy.notification.domain.Client;
 import com.techeazy.notification.error.ErrorBody;
 import com.techeazy.notification.error.ErrorCode;
@@ -43,7 +45,11 @@ import java.io.IOException;
 import java.time.Duration;
 import java.util.Optional;
 
-/** Authenticates {@code X-API-Key} and applies the client's API rate limit before any controller runs. */
+/**
+ * Authenticates {@code X-API-Key}, applies the client's API rate limit and checks the request's signature
+ * ({@link RequestSignatureGate}, ADR-036) before any controller runs. A client's settings are cached for 30 seconds,
+ * so a rotated key, a new signing secret or a change to whether signatures are required takes up to that long.
+ */
 @Component
 public class ClientAuthFilter extends OncePerRequestFilter {
 
@@ -57,12 +63,17 @@ public class ClientAuthFilter extends OncePerRequestFilter {
     private final TraceIdSource traceIds;
     private final Timer authTimer;
     private final Timer rateLimitTimer;
-    private final Cache<String, Optional<AuthenticatedClient>> cache = Caffeine.newBuilder()
+    /** The authenticated client together with its signing policy, which stays out of the request attribute. */
+    private record Caller(AuthenticatedClient client, SigningPolicy signing) {
+    }
+
+    private final RequestSignatureGate signatures;
+    private final Cache<String, Optional<Caller>> cache = Caffeine.newBuilder()
             .expireAfterWrite(Duration.ofSeconds(30)).maximumSize(10_000).build();
 
     public ClientAuthFilter(ClientRepository clients, RateLimitService rateLimits, ObjectMapper mapper,
-            MeterRegistry meters,
-                            TraceIdSource traceIds) {
+                            MeterRegistry meters, TraceIdSource traceIds, RequestSignatureGate signatures) {
+        this.signatures = signatures;
         this.traceIds = traceIds;
         this.clients = clients;
         this.rateLimits = rateLimits;
@@ -86,24 +97,31 @@ public class ClientAuthFilter extends OncePerRequestFilter {
             reject(res, ErrorCode.UNAUTHORIZED, "Missing X-API-Key header", null);
             return;
         }
-        Optional<AuthenticatedClient> client = authTimer.record(() -> cache.get(ApiKeys.hash(key), this::lookup));
-        if (client.isEmpty()) {
+        Optional<Caller> caller = authTimer.record(() -> cache.get(ApiKeys.hash(key), this::lookup));
+        if (caller.isEmpty()) {
             reject(res, ErrorCode.UNAUTHORIZED, "Invalid or disabled API key", null);
             return;
         }
-        Decision d = rateLimitTimer.record(() -> rateLimits.checkClientApi(client.get().id()));
+        AuthenticatedClient client = caller.get().client();
+        Decision d = rateLimitTimer.record(() -> rateLimits.checkClientApi(client.id()));
         if (!d.allowed()) {
             long seconds = Math.max(1, (d.waitMillis() + 999) / 1000);
             reject(res, ErrorCode.RATE_LIMITED, "API rate limit exceeded", seconds);
             return;
         }
-        req.setAttribute(CLIENT_ATTRIBUTE, client.get());
-        chain.doFilter(req, res);
+        Admission admission = signatures.admit(req, client.id(), caller.get().signing());
+        if (!admission.admitted()) {
+            reject(res, admission.refusal(), admission.reason(), null);
+            return;
+        }
+        admission.request().setAttribute(CLIENT_ATTRIBUTE, client);
+        chain.doFilter(admission.request(), res);
     }
 
     /** Only ACTIVE clients are cached as authenticated; a disabled client resolves to empty (401). */
-    private Optional<AuthenticatedClient> lookup(String keyHash) {
-        return clients.findByApiKeyHash(keyHash).filter(Client::isActive).map(AuthenticatedClient::from);
+    private Optional<Caller> lookup(String keyHash) {
+        return clients.findByApiKeyHash(keyHash).filter(Client::isActive).map(c -> new Caller(AuthenticatedClient.from(c),
+                new SigningPolicy(c.getSigningSecret(), c.isSigningRequired())));
     }
 
     private void reject(HttpServletResponse res, ErrorCode errorCode, String message, Long retryAfter)

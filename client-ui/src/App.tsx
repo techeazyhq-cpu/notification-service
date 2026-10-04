@@ -30,13 +30,14 @@ import InvoiceView from './pages/InvoiceView';
 
 function Login({ onDone }: Readonly<{ onDone: () => void }>) {
   const [apiKey, setApiKey] = useState('');
+  const [signingSecret, setSigningSecret] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
 
   async function submit(e: React.SubmitEvent<HTMLFormElement>) {
     e.preventDefault();
     setBusy(true);
-    session.set(apiKey.trim());
+    session.set(apiKey.trim(), signingSecret.trim());
     try {
       await api<Me>('/v1/me');
       onDone();
@@ -55,6 +56,10 @@ function Login({ onDone }: Readonly<{ onDone: () => void }>) {
       <label><span>API key</span>
         <input type="password" value={apiKey} onChange={(e) => setApiKey(e.target.value)} autoComplete="off" required />
       </label>
+      <label><span>Signing secret (optional)</span>
+        <input type="password" value={signingSecret} onChange={(e) => setSigningSecret(e.target.value)} autoComplete="off" />
+      </label>
+      <p className="muted">Only if your administrator issued one: changes you make here are then signed with it.</p>
       {error && <p className="error" role="alert">{error}</p>}
       <button type="submit" className="primary" disabled={busy || !apiKey.trim()}>Sign in</button>
     </form>
