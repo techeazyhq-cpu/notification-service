@@ -150,7 +150,7 @@ All thresholds are configurable (`dispatcher.circuit-breaker.*`, env `CB_*`), an
 
 ## 4. API contract (Client API)
 
-OpenAPI is served at `/v3/api-docs`, Swagger UI at `/swagger-ui.html`. All calls need `X-API-Key`.
+OpenAPI is served at `/v3/api-docs`, Swagger UI at `/swagger-ui.html`. All calls need `X-API-Key`. A tenant may also sign its requests (HMAC-SHA256 over method, path, query and body, with a timestamp and a single-use nonce in `X-Signature-*` headers); an administrator can make signatures required for every state-changing call (ADR-036, client guide *Signed requests*).
 
 | Method | Path | Purpose |
 |---|---|---|
@@ -218,11 +218,11 @@ Settings: `billing.payment-terms-days`, `billing.settlement.*` and `billing.invo
 
 `client-ui` is a read-only SPA for API clients (audience and sign-in differ from the admin UI, so it is a separate app). It signs in with the client's own API key and uses only the Client API: `GET /v1/me`, `/v1/notifications` (filters: channel, clientReference), `/v1/notifications/summary`, `/v1/notifications/{id}`, `/{id}/messages` (filters: status, recipient) and `/{id}/messages/export` (CSV, optional status). It polls every 3-5 s and stops polling a request once it reaches a final status. CORS for a separately hosted UI is a servlet filter ordered before API-key authentication (`client-api.cors-origins`), so preflight requests and 401/429 responses are handled correctly.
 
-Known limitation: the browser holds a key that can also *send*. It is kept in `sessionStorage` only, but a read-only credential (portal tokens or OIDC users mapped to a client) is the proper fix and is listed in the next steps.
+Known limitation: the browser holds a key that can also *send*. It, and the client's signing secret if one is entered, are held only in the page's memory and never written to browser storage (reloading signs out), and every write the console makes is signed when a secret is present (ADR-036). A read-only credential (portal tokens or OIDC users mapped to a client) remains the proper fix and is listed in the next steps.
 
 ## 5. Data
 
-PostgreSQL, schema owned by the `db-migration` job (Liquibase changesets in `db-migration/src/main/resources/db/changelog/`, see ADR-003): `client`, `template`, `provider_config`, `rate_limit_policy`, `notification_request`, `notification_message`, and for billing `billing_plan`, `billing_plan_rate`, `billing_account`, `credit_ledger_entry`, `credit_hold`, `invoice`, `invoice_line`, `invoice_payment`. The job runs before the services, can preview (`update-sql`), validate and roll back, and the services only validate the schema at start-up. Notable choices: UUID primary keys assigned by the app (JDBC batching without a round trip); partial unique index for idempotency keys; indexes on `(request_id, status)` for status counts and `(status, updated_at)` for the sweeper. API keys are stored only as SHA-256 hashes (keys are 256-bit random, so an unsalted hash suffices for lookup).
+PostgreSQL, schema owned by the `db-migration` job (Liquibase changesets in `db-migration/src/main/resources/db/changelog/`, see ADR-003): `client`, `template`, `provider_config`, `rate_limit_policy`, `notification_request`, `notification_message`, and for billing `billing_plan`, `billing_plan_rate`, `billing_account`, `credit_ledger_entry`, `credit_hold`, `invoice`, `invoice_line`, `invoice_payment`. The job runs before the services, can preview (`update-sql`), validate and roll back, and the services only validate the schema at start-up. Notable choices: UUID primary keys assigned by the app (JDBC batching without a round trip); partial unique index for idempotency keys; indexes on `(request_id, status)` for status counts and `(status, updated_at)` for the sweeper. API keys are stored only as SHA-256 hashes (keys are 256-bit random, so an unsalted hash suffices for lookup). Request-signing secrets must be recomputed, so they are stored encrypted with the credentials key instead, and `api_request_nonce` remembers each signed request's nonce until its timestamp leaves the 5-minute window (ADR-036).
 
 ## 6. Cross-cutting
 
