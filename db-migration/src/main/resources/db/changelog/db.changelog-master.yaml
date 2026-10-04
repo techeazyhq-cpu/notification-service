@@ -55,5 +55,6 @@ databaseChangeLog:
   - include:
       file: db/changelog/changes/019-signed-requests.sql
   - include:
-      file: db/changelog/changes/021-inflight-usage-index.sql
       file: db/changelog/changes/020-idempotency-payload-fingerprint.sql
+  - include:
+      file: db/changelog/changes/021-inflight-usage-index.sql

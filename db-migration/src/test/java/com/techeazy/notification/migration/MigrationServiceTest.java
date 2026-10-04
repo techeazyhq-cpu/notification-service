@@ -61,7 +61,7 @@ class MigrationServiceTest {
                     "009-admin-roles", "010-admin-audit-log", "011-message-error-code",
                     "012-message-category", "013-otp-sweep-index", "014-billing-otp-price",
                     "015-sent-usage-by-category", "016-message-event-log", "017-recipient-fingerprint-index",
-                    "018-fingerprint-backfill-index", "019-signed-requests", "020-idempotency-payload-fingerprint");
+                    "018-fingerprint-backfill-index", "019-signed-requests", "020-idempotency-payload-fingerprint", "021-inflight-usage-index");
     private static final String NOT_COMPARED = "('databasechangelog','databasechangeloglock','flyway_schema_history',"
             + "'billing_plan','billing_plan_rate','billing_account','credit_ledger_entry','credit_hold','invoice','invoice_line','invoice_payment','admin_user','admin_recovery_code','admin_session','client_sender','admin_audit_event','billing_account_otp_price','message_event','api_request_nonce')";
     private static final List<String> BILLING_TABLES =
@@ -394,6 +394,20 @@ class MigrationServiceTest {
 
         assertThat(query(db, "select column_name from information_schema.columns where table_name = 'notification_request' "
                 + "and column_name = 'payload_fingerprint'")).isEmpty();
+    }
+
+    @Test
+    void theInFlightUsageIndexIsBuiltValidAndRollsBackCleanly() throws Exception {
+        String db = newDatabase();
+        MigrationService service = service(db, true);
+        service.update();
+
+        assertThat(query(db, "select i.indisvalid::text from pg_index i join pg_class c on c.oid = i.indexrelid "
+                + "where c.relname = 'ix_message_inflight_usage'")).containsExactly("true");
+
+        undoFrom(service, "021-inflight-usage-index");
+
+        assertThat(query(db, "select indexname from pg_indexes where indexname = 'ix_message_inflight_usage'")).isEmpty();
     }
 
     @Test
