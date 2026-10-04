@@ -27,14 +27,13 @@ import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionOperations;
 
 import java.time.Duration;
 import java.time.Instant;
-import java.util.HashSet;
 import java.util.List;
-import java.util.Set;
 import java.util.UUID;
+import java.util.function.Supplier;
 
 /**
  * Recovers messages that fell between database commit and broker publish (PENDING), and messages
@@ -45,6 +44,12 @@ import java.util.UUID;
  * <p>One-time passwords are swept first, with thresholds of seconds rather than minutes, because the general
  * thresholds are longer than their validity: a lost one would otherwise only be recovered after it expired
  * (ADR-033).
+ *
+ * <p>Each batch is taken in a short transaction of its own: the stale rows are locked ({@code SKIP LOCKED}, so
+ * several sweepers never take the same rows), set back to PENDING with a fresh {@code updated_at}, which keeps other
+ * sweepers away from them, and committed. Only then are they published, so no database connection or row lock is held
+ * while waiting for the broker. Published rows are marked QUEUED afterwards unless a worker already moved them on;
+ * rows that failed to publish stay PENDING and are swept again.
  */
 @Component
 @ConditionalOnProperty(prefix = "notification.sweeper", name = "enabled", havingValue = "true")
@@ -55,54 +60,61 @@ public class OutboxSweeper {
     private final NotificationMessageRepository messages;
     private final OutboxPublisher outbox;
     private final NotificationProperties props;
+    private final TransactionOperations transactions;
 
-    public OutboxSweeper(NotificationMessageRepository messages, OutboxPublisher outbox, NotificationProperties props) {
+    public OutboxSweeper(NotificationMessageRepository messages, OutboxPublisher outbox, NotificationProperties props,
+                         TransactionOperations transactions) {
         this.messages = messages;
         this.outbox = outbox;
         this.props = props;
+        this.transactions = transactions;
     }
 
     @Scheduled(fixedDelayString = "${notification.sweeper.interval-ms:10000}")
-    @Transactional
     public void sweep() {
         var cfg = props.getSweeper();
         Instant now = Instant.now();
         sweepOneTimePasswords(cfg, now);
-        republish(messages.lockStale(MessageStatus.PENDING.name(), now.minus(Duration.ofSeconds(cfg.getPendingAgeSeconds())),
-                cfg.getBatchSize()), "pending");
-        republish(messages.lockStale(MessageStatus.PROCESSING.name(), now.minus(Duration.ofSeconds(cfg.getProcessingTimeoutSeconds())),
-                cfg.getBatchSize()), "stuck processing");
-        republish(messages.lockStale(MessageStatus.QUEUED.name(), now.minus(Duration.ofSeconds(cfg.getQueuedTimeoutSeconds())),
-                cfg.getBatchSize()), "queued but never delivered");
-        republish(messages.lockStale(MessageStatus.RETRYING.name(),
+        republish(() -> messages.lockStale(MessageStatus.PENDING.name(),
+                now.minus(Duration.ofSeconds(cfg.getPendingAgeSeconds())), cfg.getBatchSize()), "pending");
+        republish(() -> messages.lockStale(MessageStatus.PROCESSING.name(),
+                now.minus(Duration.ofSeconds(cfg.getProcessingTimeoutSeconds())), cfg.getBatchSize()), "stuck processing");
+        republish(() -> messages.lockStale(MessageStatus.QUEUED.name(),
+                now.minus(Duration.ofSeconds(cfg.getQueuedTimeoutSeconds())), cfg.getBatchSize()),
+                "queued but never delivered");
+        republish(() -> messages.lockStale(MessageStatus.RETRYING.name(),
                 now.minus(Duration.ofSeconds(cfg.getRetryingTimeoutSeconds())), cfg.getBatchSize()),
                 "retry never redelivered");
     }
 
     private void sweepOneTimePasswords(NotificationProperties.Sweeper cfg, Instant now) {
         var otp = cfg.getOtp();
-        republish(messages.lockStaleOtp(MessageStatus.PENDING.name(),
+        republish(() -> messages.lockStaleOtp(MessageStatus.PENDING.name(),
                 now.minus(Duration.ofSeconds(otp.getPendingAgeSeconds())), cfg.getBatchSize()), "pending OTP");
-        republish(messages.lockStaleOtp(MessageStatus.PROCESSING.name(),
+        republish(() -> messages.lockStaleOtp(MessageStatus.PROCESSING.name(),
                 now.minus(Duration.ofSeconds(otp.getProcessingTimeoutSeconds())), cfg.getBatchSize()),
                 "stuck processing OTP");
-        republish(messages.lockStaleOtp(MessageStatus.QUEUED.name(),
+        republish(() -> messages.lockStaleOtp(MessageStatus.QUEUED.name(),
                 now.minus(Duration.ofSeconds(otp.getQueuedTimeoutSeconds())), cfg.getBatchSize()),
                 "queued but never delivered OTP");
-        republish(messages.lockStaleOtp(MessageStatus.RETRYING.name(),
+        republish(() -> messages.lockStaleOtp(MessageStatus.RETRYING.name(),
                 now.minus(Duration.ofSeconds(otp.getRetryingTimeoutSeconds())), cfg.getBatchSize()),
                 "retry never redelivered OTP");
     }
 
-    private void republish(List<NotificationMessage> stale, String what) {
-        if (stale.isEmpty()) return;
-        Set<UUID> ok = new HashSet<>(outbox.publishOnly(stale));
-        Instant now = Instant.now();
-        for (NotificationMessage m : stale) {
-            if (ok.contains(m.getId())) m.setStatus(MessageStatus.QUEUED);
-            else m.setStatus(MessageStatus.PENDING);
-            m.setUpdatedAt(now);
+    private void republish(Supplier<List<NotificationMessage>> lockStale, String what) {
+        List<NotificationMessage> stale = transactions.execute(status -> {
+            List<NotificationMessage> locked = lockStale.get();
+            if (!locked.isEmpty()) {
+                messages.releaseForRepublish(locked.stream().map(NotificationMessage::getId).toList(), Instant.now());
+            }
+            return locked;
+        });
+        if (stale == null || stale.isEmpty()) return;
+        List<UUID> published = outbox.publishOnly(stale);
+        if (!published.isEmpty()) {
+            messages.markQueued(published, Instant.now());
         }
-        log.info("Sweeper republished {}/{} {} messages", ok.size(), stale.size(), what);
+        log.info("Sweeper republished {}/{} {} messages", published.size(), stale.size(), what);
     }
 }

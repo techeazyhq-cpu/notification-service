@@ -104,7 +104,7 @@ A draw.io version of this view is in [`container.drawio`](container.drawio).
 2. `IngestService` validates channel permission, content (template or inline), recipients (E.164 / email / token), idempotency key.
 3. One DB transaction inserts the request and every message as `PENDING` (JDBC-batched).
 4. After commit, ids are published to `persistent://public/default/notification-<channel>`, keyed by client id; confirmed ones flip to `QUEUED`. Publish failures leave rows `PENDING`.
-5. Response `202` with `requestId`. The `OutboxSweeper` republishes `PENDING` rows older than 30 s and `PROCESSING` rows older than 5 min (crashed worker).
+5. Response `202` with `requestId`. The `OutboxSweeper` republishes `PENDING` rows older than 30 s and `PROCESSING` rows older than 5 min (crashed worker). Each batch is locked and handed back to `PENDING` in a short transaction of its own, and only published after it commits, so no connection or row lock is held while waiting for the broker.
 6. Dispatcher consumer: load message → check rate limit (blocks up to 60 s as backpressure, then hands the message back) → atomic `claim` (`UPDATE … WHERE status IN (PENDING,QUEUED,RETRYING)`) → render → provider(s) in priority order → `SENT`.
 7. Transient error → `RETRYING` + Pulsar `reconsumeLater` with exponential backoff (5 s × 2ⁿ, cap 5 min). After 5 attempts or on a permanent error → `FAILED`. Unexpected exceptions are negative-acked and end in the Pulsar dead-letter topic after `maxAttempts + 2` redeliveries.
 
