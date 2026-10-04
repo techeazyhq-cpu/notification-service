@@ -99,6 +99,11 @@ Every change made through the admin API is recorded in an append-only audit log:
 ## API playground
 
 The client UI has an **API playground** for trying the Client API from the browser: pick an endpoint, edit the path, query and JSON body, send it with your own key, and see the status, timing and response. Sending endpoints are real (they deliver messages and may be billed) and ask for confirmation; "Copy as curl" gives the same call for your own code with `$API_KEY` as the key. The full reference is at `/swagger-ui.html` (also served through the client UI). Integrating from your own system needs only the API key and `X-API-Key`; the UI is optional.
+## Onboarding a tenant
+
+Step by step, from creating the client and its API key through rate limits, billing, credit and OTP prices to the
+tenant's first delivered message: [docs/tenant-onboarding.md](docs/tenant-onboarding.md).
+
 ## Sending from your own address
 
 In the client UI open **Sender addresses**, add an address and open the link that is e-mailed to it. A confirmed address can be the default, or be chosen per request with `"from": "orders@acme.com"`. Requests naming an unconfirmed address get `422 SENDER_NOT_VERIFIED`. Set `CLIENT_API_PUBLIC_BASE_URL` to the public URL of the client API so the link in the e-mail works. See ADR-007.
