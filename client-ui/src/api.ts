@@ -18,8 +18,8 @@
 
 import { signatureHeaders } from './signing';
 
-const KEY = 'notification-client-api-key';
-const SIGNING_SECRET = 'notification-client-signing-secret';
+/** Where earlier versions kept the credentials in sessionStorage; removed on load so nothing lingers there. */
+const LEGACY_STORAGE_KEYS = ['notification-client-api-key', 'notification-client-signing-secret'];
 
 export const CHANNELS = ['EMAIL', 'SMS', 'WHATSAPP', 'PUSH'] as const;
 export type Channel = (typeof CHANNELS)[number];
@@ -36,21 +36,25 @@ export const MESSAGE_STATUSES = ['PENDING', 'QUEUED', 'PROCESSING', 'RETRYING', 
 export type MessageStatus = (typeof MESSAGE_STATUSES)[number];
 export type RequestStatus = 'PROCESSING' | 'COMPLETED' | 'PARTIALLY_FAILED' | 'FAILED';
 
+interface Credentials { apiKey: string; signingSecret: string | null }
+
+let credentials: Credentials | null = null;
+
+for (const key of LEGACY_STORAGE_KEYS) sessionStorage.removeItem(key);
+
 /**
- * The API key, and the signing secret if the client has one, live in sessionStorage only: they disappear when the tab
- * closes. With a signing secret every request that changes something is signed (ADR-036).
+ * The API key, and the signing secret if the client has one, are held only in this page's memory and never written to
+ * browser storage, so no other script, tab or later visitor can read them back. Reloading or closing the tab signs
+ * out. With a signing secret every request that changes something is signed (ADR-036).
  */
 export const session = {
-  get: () => sessionStorage.getItem(KEY),
-  signingSecret: () => sessionStorage.getItem(SIGNING_SECRET),
+  get: () => credentials?.apiKey ?? null,
+  signingSecret: () => credentials?.signingSecret ?? null,
   set: (apiKey: string, signingSecret?: string) => {
-    sessionStorage.setItem(KEY, apiKey);
-    if (signingSecret) sessionStorage.setItem(SIGNING_SECRET, signingSecret);
-    else sessionStorage.removeItem(SIGNING_SECRET);
+    credentials = { apiKey, signingSecret: signingSecret || null };
   },
   clear: () => {
-    sessionStorage.removeItem(KEY);
-    sessionStorage.removeItem(SIGNING_SECRET);
+    credentials = null;
   },
 };
 

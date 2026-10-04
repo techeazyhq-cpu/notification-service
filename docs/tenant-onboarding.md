@@ -194,7 +194,8 @@ Give the tenant's named contact:
 - **The API key,** through a channel meant for secrets, such as a password manager share or a one-time secret link.
   Never send it in e-mail or chat. It is what authenticates every call, as the `X-API-Key` header.
 - **The client console address.** They sign in there with the API key. It shows their requests, templates, sender
-  addresses, billing and an API playground. The key is kept in the browser tab only and is gone when the tab closes.
+  addresses, billing and an API playground. The key is held only in the open page, never saved in the browser,
+  and is gone when the page is reloaded or the tab closed.
 - **The client API address and its reference** (`/swagger-ui.html`), and the
   [error code dictionary](error-codes.md), which the API also serves at `GET /v1/errors`.
 - **The [client guide](client-guide.md),** which walks their team through the console and the API.

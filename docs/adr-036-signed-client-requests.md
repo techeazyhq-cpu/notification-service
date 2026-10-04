@@ -100,9 +100,10 @@ replay protection. Others integrate from simple scripts and must not be forced i
    by parsing the remembered bytes with Tomcat's own multipart parser. This ties that class to embedded Tomcat, the only
    container the services run on. Unsigned requests are untouched.
 
-9. **The client console signs too.** At sign-in a tenant may also paste its signing secret. It is kept in
-   `sessionStorage` beside the API key, and every write the console or its API playground makes is signed with Web
-   Crypto. CSV uploads are built byte by byte, so the bytes signed are the bytes sent.
+9. **The client console signs too.** At sign-in a tenant may also paste its signing secret. Like the API key, it is
+   held only in the page's memory and never written to browser storage, so reloading the page signs out. Every write
+   the console or its API playground makes is signed with Web Crypto. CSV uploads are built byte by byte, so the bytes
+   signed are the bytes sent.
 
 ## Options considered
 
@@ -143,8 +144,8 @@ replay protection. Others integrate from simple scripts and must not be forced i
 - **Rotation is immediate.** Issuing a new secret makes requests signed with the old one fail within the client API's
   30-second cache. To rotate without errors, the client stops signing, the administrator makes signing optional, then
   issues the new secret. Accepting the previous secret for a grace period is left for a later change.
-- **Shared exposure in the console.** The console holds the signing secret in the same browser tab as the API key, so
-  anyone who can read that tab has both. Signing in the console protects against replay of captured traffic, not
+- **Shared exposure in the console.** The console holds the signing secret in the same page as the API key, so
+  script running in that page could use both. Signing in the console protects against replay of captured traffic, not
   against a compromised browser.
 - **Container coupling.** Multipart verification depends on embedded Tomcat's parser classes. A move to another
   servlet container must replace `CachedBodyRequest`'s multipart parsing. `CachedBodyRequestTest` runs Spring's

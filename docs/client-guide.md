@@ -70,8 +70,8 @@ the addresses your operator gave you.
 ### Sign in and out
 
 Open the console and paste your API key into **API key**, and your signing secret, if you have one, into
-**Signing secret**. Then **Sign in**. The key is kept only in that browser tab:
-closing the tab signs you out. **Sign out** in the top bar signs you out at once.
+**Signing secret**. Then **Sign in**. Both are kept only in the open page, never saved in the browser:
+reloading the page or closing the tab signs you out. **Sign out** in the top bar signs you out at once.
 
 The pages you see depend on your access. **Sender addresses**, for example, appears only if you may send e-mail.
 
