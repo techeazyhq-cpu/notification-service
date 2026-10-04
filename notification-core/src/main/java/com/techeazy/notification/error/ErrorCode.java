@@ -148,6 +148,11 @@ public enum ErrorCode {
             "The provider destination is not allowed",
             "The provider URL points at a private, loopback or link-local address, or is not HTTPS (ADR-022).",
             "Use the provider's public HTTPS endpoint, or add an internal gateway to the trusted hosts list."),
+    IDEMPOTENCY_KEY_REUSED("NS-3009", ErrorCategory.RESOURCE, 422, false,
+            "The idempotency key was already used for a different request",
+            "An earlier request with this Idempotency-Key had different content, recipients or options, so this one "
+                    + "is neither sent nor answered with the earlier result.",
+            "Use a new Idempotency-Key for every distinct request, and the same key only to retry the same request."),
 
     INSUFFICIENT_CREDIT("NS-4001", ErrorCategory.BILLING, 402, false,
             "There is not enough prepaid credit",
