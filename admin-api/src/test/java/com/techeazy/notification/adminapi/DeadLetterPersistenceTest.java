@@ -147,6 +147,25 @@ class DeadLetterPersistenceTest {
                 .containsExactly(oldOrdinary, newerOtp);
     }
 
+    @Test
+    void aMessageReleasedForRepublishIsPendingAndOutOfEverySweepersReachUntilItIsStaleAgain() {
+        UUID client = client();
+        UUID stuck = message(client, MessageStatus.PROCESSING, null, "+20", 30);
+        Instant cutoff = NOW.minusSeconds(600);
+        assertThat(messages.lockStale("PROCESSING", cutoff, 10)).extracting(NotificationMessage::getId).contains(stuck);
+
+        messages.releaseForRepublish(List.of(stuck), NOW);
+
+        NotificationMessage released = reload(stuck);
+        assertThat(released.getStatus()).isEqualTo(MessageStatus.PENDING);
+        assertThat(released.getUpdatedAt()).isEqualTo(NOW);
+        assertThat(messages.lockStale("PENDING", cutoff, 10)).extracting(NotificationMessage::getId).doesNotContain(stuck);
+
+        messages.markQueued(List.of(stuck), NOW.plusSeconds(1));
+
+        assertThat(reload(stuck).getStatus()).isEqualTo(MessageStatus.QUEUED);
+    }
+
     private NotificationMessage reload(UUID id) {
         em.flush();
         em.clear();
