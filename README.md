@@ -321,6 +321,11 @@ cd admin-ui && npm run build   # type-check + build the UI
 cd client-ui && npm run build  # likewise for the client tracker
 ```
 
+## Contributing
+
+Contributions are welcome. Read [CONTRIBUTING.md](CONTRIBUTING.md) for the development setup, coding standards and
+pull request guidelines, and report security problems privately as it describes, never in a public issue.
+
 ## License
 
-Copyright 2026 Vasantha Kumar (vasantha.kumar@hotmail.com). Licensed under the [Apache License, Version 2.0](LICENSE); see [NOTICE](NOTICE). Every source file carries the license header and author.
+Copyright 2026 Vasantha Kumar Kesavan (vasantha.kumar@hotmail.com). Licensed under the [Apache License, Version 2.0](LICENSE); see [NOTICE](NOTICE). Every source file carries the license header and author.
