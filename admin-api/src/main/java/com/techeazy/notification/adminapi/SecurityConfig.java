@@ -35,6 +35,8 @@ import com.techeazy.notification.adminapi.auth.SecurityRefusals;
 import com.techeazy.notification.error.TraceIdSource;
 import com.techeazy.notification.adminapi.auth.AdminAuthService;
 import com.techeazy.notification.adminapi.auth.BearerTokenFilter;
+import com.techeazy.notification.adminapi.auth.SignInThrottle;
+import com.techeazy.notification.application.RateLimitService;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.crypto.factory.PasswordEncoderFactories;
@@ -85,7 +87,7 @@ class SecurityConfig {
     @Bean
     @SuppressWarnings("java:S4502") // reviewed: stateless header-authenticated API, see Javadoc
     SecurityFilterChain chain(HttpSecurity http, AdminAuthService auth, AuditLog auditLog, MeterRegistry meters,
-                              TraceIdSource traceIds)
+                              TraceIdSource traceIds, RateLimitService rateLimits)
             throws Exception {
         http.csrf(AbstractHttpConfigurer::disable)
                 .cors(Customizer.withDefaults())
@@ -114,6 +116,7 @@ class SecurityConfig {
                         .anyRequest().denyAll())
                 .addFilterBefore(new BearerTokenFilter(auth), UsernamePasswordAuthenticationFilter.class)
                 .addFilterAfter(new AuditTrailFilter(auditLog, Clock.systemUTC(), meters), BearerTokenFilter.class)
+                .addFilterAfter(new SignInThrottle(rateLimits, traceIds), AuditTrailFilter.class)
                 .exceptionHandling(e -> e.authenticationEntryPoint(new SecurityRefusals(traceIds))
                         .accessDeniedHandler(new SecurityRefusals(traceIds)));
         return http.build();

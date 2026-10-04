@@ -27,7 +27,9 @@ import com.techeazy.notification.adminapi.auth.AdminRole;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import jakarta.servlet.Filter;
+import com.techeazy.notification.application.RateLimitService;
 import com.techeazy.notification.error.TraceIdSource;
+import com.techeazy.notification.port.RateLimiter.Decision;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -50,7 +52,11 @@ import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.clearInvocations;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.request;
 
@@ -83,6 +89,13 @@ class SecurityRulesTest {
         TraceIdSource traceIdSource() {
             return Optional::empty;
         }
+
+        @Bean
+        RateLimitService rateLimitService() {
+            RateLimitService rateLimits = mock(RateLimitService.class);
+            when(rateLimits.checkAdminSignIn(anyString())).thenReturn(Decision.GRANTED);
+            return rateLimits;
+        }
     }
 
     @Autowired
@@ -91,6 +104,8 @@ class SecurityRulesTest {
     private AdminAuthService auth;
     @Autowired
     private RecordingAuditLog auditLog;
+    @Autowired
+    private RateLimitService rateLimits;
 
     private MockMvc mvc;
 
@@ -99,6 +114,7 @@ class SecurityRulesTest {
     @BeforeEach
     void setUp() {
         auditLog.clear();
+        clearInvocations(rateLimits);
         mvc = MockMvcBuilders.webAppContextSetup(context).addFilters(context.getBean("springSecurityFilterChain", Filter.class)).build();
         for (AdminRole role : AdminRole.values()) {
             when(auth.authenticate(role.name())).thenReturn(Optional.of(
@@ -122,6 +138,28 @@ class SecurityRulesTest {
         assertThat(status(null, HttpMethod.POST, "/api/admin/clients")).isEqualTo(401);
         assertThat(status(null, HttpMethod.GET, "/api/admin/auth/me")).isEqualTo(401);
         assertThat(status(null, HttpMethod.POST, "/api/admin/auth/login")).isEqualTo(404);
+    }
+
+    @Test
+    void signInAttemptsBeyondTheAddressBudgetAreRefusedAndAuditedWithoutReachingTheLogin() throws Exception {
+        when(rateLimits.checkAdminSignIn(anyString())).thenReturn(new Decision(false, 4_200));
+
+        MockHttpServletResponse response = mvc.perform(request(HttpMethod.POST, "/api/admin/auth/login"))
+                .andReturn().getResponse();
+
+        assertThat(response.getStatus()).isEqualTo(429);
+        assertThat(response.getHeader("Retry-After")).isEqualTo("5");
+        assertThat(response.getContentAsString()).contains("RATE_LIMITED");
+        assertThat(auditLog.recorded()).singleElement().satisfies(event -> assertThat(event.statusCode()).isEqualTo(429));
+        when(rateLimits.checkAdminSignIn(anyString())).thenReturn(Decision.GRANTED);
+    }
+
+    @Test
+    void onlySignInAttemptsSpendTheSignInBudget() throws Exception {
+        status(AdminRole.VIEWER, HttpMethod.GET, "/api/admin/clients");
+        status(null, HttpMethod.GET, "/api/admin/auth/login");
+
+        verify(rateLimits, never()).checkAdminSignIn(anyString());
     }
 
     @Test
