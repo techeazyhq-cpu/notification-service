@@ -82,6 +82,12 @@ capabilities:
   valueFrom: {secretKeyRef: {name: {{ .Values.secrets.existingSecret }}, key: SECRETS_ENCRYPTION_KEY}}
 - name: DATA_ENCRYPTION_KEY
   valueFrom: {secretKeyRef: {name: {{ .Values.secrets.existingSecret }}, key: DATA_ENCRYPTION_KEY}}
+- name: SECRETS_ENCRYPTION_KEY_PREVIOUS
+  valueFrom: {secretKeyRef: {name: {{ .Values.secrets.existingSecret }}, key: SECRETS_ENCRYPTION_KEY_PREVIOUS, optional: true}}
+- name: DATA_ENCRYPTION_KEY_PREVIOUS
+  valueFrom: {secretKeyRef: {name: {{ .Values.secrets.existingSecret }}, key: DATA_ENCRYPTION_KEY_PREVIOUS, optional: true}}
+- name: FINGERPRINT_KEY
+  valueFrom: {secretKeyRef: {name: {{ .Values.secrets.existingSecret }}, key: FINGERPRINT_KEY, optional: true}}
 - name: PROVIDER_TRUSTED_HOSTS
   value: {{ $config.providerTrustedHosts | quote }}
 - name: PROVIDER_OTHER_PUBLIC_HOSTS_ALLOWED

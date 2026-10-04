@@ -81,5 +81,6 @@ one AES-GCM operation per message on write and per delivery on read, measured in
 
 ## Follow-ups
 
-Recipient blind index and encryption; mTLS to datastores; TLS from the proxy to the services; key rotation (a
-`key id` in the stored envelope so old and new keys can coexist); a secrets manager for the three keys.
+Recipient blind index and encryption; mTLS to datastores; TLS from the proxy to the services; ~~key rotation (a
+`key id` in the stored envelope so old and new keys can coexist)~~ done in ADR-037; a secrets manager for the three
+keys.

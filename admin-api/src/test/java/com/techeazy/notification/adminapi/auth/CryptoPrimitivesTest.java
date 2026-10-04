@@ -18,6 +18,7 @@
 
 package com.techeazy.notification.adminapi.auth;
 
+import com.techeazy.notification.infra.AesGcmCipher;
 import org.junit.jupiter.api.Test;
 
 import java.security.SecureRandom;
@@ -95,14 +96,14 @@ class CryptoPrimitivesTest {
 
     @Test
     void secretsAreEncryptedAtRestAndOnlyReadableWithTheSameKey() {
-        SecretCipher cipher = new SecretCipher("key-one", new SecureRandom());
+        AesGcmCipher cipher = new AesGcmCipher("key-one", new SecureRandom());
 
         String stored = cipher.encrypt(RFC_SECRET);
 
         assertThat(stored).doesNotContain(RFC_SECRET);
         assertThat(cipher.decrypt(stored)).isEqualTo(RFC_SECRET);
         assertThat(cipher.encrypt(RFC_SECRET)).isNotEqualTo(stored);
-        SecretCipher otherCipher = new SecretCipher("key-two", new SecureRandom());
+        AesGcmCipher otherCipher = new AesGcmCipher("key-two", new SecureRandom());
         assertThatThrownBy(() -> otherCipher.decrypt(stored)).isInstanceOf(IllegalStateException.class);
     }
 

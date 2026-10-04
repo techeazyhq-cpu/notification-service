@@ -67,6 +67,25 @@ public final class ProviderSecrets {
         return result;
     }
 
+    /**
+     * Whether any secret in {@code settings} is still stored in plaintext, or was encrypted in an earlier format or under
+     * a previous key.
+     */
+    public boolean needsReencryption(Map<String, String> settings) {
+        return settings.entrySet().stream().anyMatch(setting -> {
+            String value = setting.getValue();
+            if (value == null || value.isEmpty() || !isSecret(setting.getKey())) {
+                return false;
+            }
+            return !value.startsWith(PREFIX) || cipher.needsReencryption(value.substring(PREFIX.length()));
+        });
+    }
+
+    /** Encrypts every secret value again under the current key; plaintext secrets get encrypted too. */
+    public Map<String, String> reencrypt(Map<String, String> settings) {
+        return encryptForStorage(decryptForUse(settings));
+    }
+
     private static boolean isSecret(String key) {
         return SECRET_KEYS.contains(key.toLowerCase());
     }

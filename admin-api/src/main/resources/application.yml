@@ -41,6 +41,11 @@ spring:
 notification:
   secrets-key: ${SECRETS_ENCRYPTION_KEY:development-only-change-me}
   data-key: ${DATA_ENCRYPTION_KEY:development-only-change-me}
+  # Earlier keys, comma-separated, that still decrypt what they wrote during a rotation (ADR-037).
+  secrets-key-previous: ${SECRETS_ENCRYPTION_KEY_PREVIOUS:}
+  data-key-previous: ${DATA_ENCRYPTION_KEY_PREVIOUS:}
+  # Keys recipient fingerprints; defaults to the data key and must outlive a data-key rotation.
+  fingerprint-key: ${FINGERPRINT_KEY:${DATA_ENCRYPTION_KEY:development-only-change-me}}
   pulsar:
     service-url: ${PULSAR_URL:pulsar://localhost:6650}
     tls-trust-certs-file: ${PULSAR_TLS_TRUST_CERTS_FILE:}
@@ -63,6 +68,7 @@ admin:
   username: ${ADMIN_USERNAME:admin}
   password: ${ADMIN_PASSWORD:admin}
   two-factor-key: ${ADMIN_TWO_FACTOR_KEY:development-only-change-me}
+  two-factor-key-previous: ${ADMIN_TWO_FACTOR_KEY_PREVIOUS:}
   issuer: ${ADMIN_ISSUER:Notification Admin}
   session-idle-minutes: ${ADMIN_SESSION_IDLE_MINUTES:30}
   session-max-hours: ${ADMIN_SESSION_MAX_HOURS:12}
