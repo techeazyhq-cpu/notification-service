@@ -74,6 +74,12 @@ class JdbcCreditStore implements CreditStore {
     }
 
     @Override
+    public void lockAccount(UUID clientId) {
+        jdbc.sql("SELECT client_id FROM billing_account WHERE client_id = :client FOR UPDATE")
+                .param(CLIENT, clientId).query(UUID.class).optional();
+    }
+
+    @Override
     public boolean debitIfSufficient(UUID clientId, Money amount) {
         return jdbc.sql("""
                 UPDATE billing_account SET credit_balance = credit_balance - :amount, updated_at = now()

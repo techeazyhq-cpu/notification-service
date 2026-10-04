@@ -32,6 +32,12 @@ public interface CreditStore {
     /** A hold whose messages have all finished, with how many of them were sent. */
     record CompletedHold(CreditHold hold, long sentCount) {}
 
+    /**
+     * Locks the client's billing account until the surrounding transaction ends, so admissions of one account are
+     * checked one after another: each then sees the messages the previous one stored.
+     */
+    void lockAccount(UUID clientId);
+
     /** Subtracts the amount only if the balance covers it, in a single atomic step. Returns whether it did. */
     boolean debitIfSufficient(UUID clientId, Money amount);
 

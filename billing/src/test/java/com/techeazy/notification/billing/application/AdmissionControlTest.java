@@ -29,6 +29,7 @@ import com.techeazy.notification.billing.domain.LedgerEntryType;
 import com.techeazy.notification.billing.domain.Money;
 import com.techeazy.notification.billing.domain.OtpPrices;
 import com.techeazy.notification.billing.domain.Plan;
+import com.techeazy.notification.billing.domain.SentCount;
 import com.techeazy.notification.billing.domain.SpendCapExceededException;
 import com.techeazy.notification.domain.Channel;
 import org.junit.jupiter.api.Test;
@@ -146,6 +147,37 @@ class AdmissionControlTest {
         assertThatThrownBy(() -> f.admission.admit(overCap))
                 .isInstanceOfSatisfying(SpendCapExceededException.class, e -> assertThat(e.getMessage()).contains("100.00 USD", "101.00 USD"));
         f.admission.admit(sms(40));
+    }
+
+    @Test
+    void messagesStillInFlightCountAgainstTheCapAsIfAlreadySent() {
+        f.account(client, f.smsPlan("1", 0), BillingMode.POSTPAID, "100");
+        f.usage.sent(client, Channel.SMS, "2026-09-03T10:00:00Z", 30);
+        f.usage.inFlight(client, Channel.SMS, SentCount.ordinary(50));
+
+        Admission overCap = sms(21);
+
+        assertThatThrownBy(() -> f.admission.admit(overCap))
+                .isInstanceOfSatisfying(SpendCapExceededException.class, e -> assertThat(e.getMessage()).contains("101.00 USD"));
+        f.admission.admit(sms(20));
+    }
+
+    @Test
+    void theAccountIsLockedForTheCapCheckSoConcurrentRequestsAreCheckedInTurn() {
+        f.account(client, f.smsPlan("1", 0), BillingMode.POSTPAID, "100");
+
+        f.admission.admit(sms(1));
+
+        assertThat(f.credits.lockedAccounts).containsExactly(client);
+    }
+
+    @Test
+    void anAccountWithoutACapIsNotLocked() {
+        f.account(client, f.smsPlan("1", 0), BillingMode.POSTPAID, null);
+
+        f.admission.admit(sms(1));
+
+        assertThat(f.credits.lockedAccounts).isEmpty();
     }
 
     @Test

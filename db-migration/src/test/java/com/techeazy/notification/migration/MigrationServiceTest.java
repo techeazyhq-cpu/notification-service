@@ -61,7 +61,7 @@ class MigrationServiceTest {
                     "009-admin-roles", "010-admin-audit-log", "011-message-error-code",
                     "012-message-category", "013-otp-sweep-index", "014-billing-otp-price",
                     "015-sent-usage-by-category", "016-message-event-log", "017-recipient-fingerprint-index",
-                    "018-fingerprint-backfill-index", "019-signed-requests", "020-idempotency-payload-fingerprint");
+                    "018-fingerprint-backfill-index", "019-signed-requests", "020-idempotency-payload-fingerprint", "021-inflight-usage-index");
     private static final String NOT_COMPARED = "('databasechangelog','databasechangeloglock','flyway_schema_history',"
             + "'billing_plan','billing_plan_rate','billing_account','credit_ledger_entry','credit_hold','invoice','invoice_line','invoice_payment','admin_user','admin_recovery_code','admin_session','client_sender','admin_audit_event','billing_account_otp_price','message_event','api_request_nonce')";
     private static final List<String> BILLING_TABLES =
@@ -397,6 +397,20 @@ class MigrationServiceTest {
     }
 
     @Test
+    void theInFlightUsageIndexIsBuiltValidAndRollsBackCleanly() throws Exception {
+        String db = newDatabase();
+        MigrationService service = service(db, true);
+        service.update();
+
+        assertThat(query(db, "select i.indisvalid::text from pg_index i join pg_class c on c.oid = i.indexrelid "
+                + "where c.relname = 'ix_message_inflight_usage'")).containsExactly("true");
+
+        undoFrom(service, "021-inflight-usage-index");
+
+        assertThat(query(db, "select indexname from pg_indexes where indexname = 'ix_message_inflight_usage'")).isEmpty();
+    }
+
+    @Test
     void theFingerprintIndexesAreBuiltValidAndRollBackCleanly() throws Exception {
         String db = newDatabase();
         MigrationService service = service(db, true);
@@ -662,7 +676,7 @@ class MigrationServiceTest {
                 + "where schemaname='public' and indexname not in ('ix_message_sent_usage','ix_message_erase_due',"
                 + "'ix_request_erase_due','ix_request_idempotency_due','ix_message_dead_letters',"
                 + "'ix_message_pending_otp','ix_message_inflight_otp',"
-                + "'ix_message_sent_usage_category','ix_message_client_fingerprint','ix_message_fingerprint_missing') and tablename not in " + NOT_COMPARED));
+                + "'ix_message_sent_usage_category','ix_message_client_fingerprint','ix_message_fingerprint_missing','ix_message_inflight_usage') and tablename not in " + NOT_COMPARED));
         lines.addAll(query(database, "select 'con ' || conrelid::regclass || ' ' || conname || ' ' || pg_get_constraintdef(oid) "
                 + "from pg_constraint where connamespace = 'public'::regnamespace and conrelid::regclass::text not in "
                         + NOT_COMPARED + " and conname not in ('ck_message_failure_kind', 'ck_request_category',"
