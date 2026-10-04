@@ -46,8 +46,9 @@ import java.time.Duration;
 import java.util.Optional;
 
 /**
- * Authenticates {@code X-API-Key}, applies the client's API rate limit and checks the request's signature
- * ({@link RequestSignatureGate}, ADR-036) before any controller runs. A client's settings are cached for 30 seconds,
+ * Authenticates {@code X-API-Key}, checks the request's signature ({@link RequestSignatureGate}, ADR-036) and then
+ * applies the client's API rate limit before any controller runs. The signature comes first so that someone holding
+ * a leaked key but not the signing secret cannot spend the client's quota. A client's settings are cached for 30 seconds,
  * so a rotated key, a new signing secret or a change to whether signatures are required takes up to that long.
  */
 @Component
@@ -103,15 +104,15 @@ public class ClientAuthFilter extends OncePerRequestFilter {
             return;
         }
         AuthenticatedClient client = caller.get().client();
+        Admission admission = signatures.admit(req, client.id(), caller.get().signing());
+        if (!admission.admitted()) {
+            reject(res, admission.refusal(), admission.reason(), null);
+            return;
+        }
         Decision d = rateLimitTimer.record(() -> rateLimits.checkClientApi(client.id()));
         if (!d.allowed()) {
             long seconds = Math.max(1, (d.waitMillis() + 999) / 1000);
             reject(res, ErrorCode.RATE_LIMITED, "API rate limit exceeded", seconds);
-            return;
-        }
-        Admission admission = signatures.admit(req, client.id(), caller.get().signing());
-        if (!admission.admitted()) {
-            reject(res, admission.refusal(), admission.reason(), null);
             return;
         }
         admission.request().setAttribute(CLIENT_ATTRIBUTE, client);
