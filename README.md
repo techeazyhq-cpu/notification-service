@@ -12,6 +12,9 @@ Health checks and Prometheus metrics (`/actuator/health`, `/actuator/prometheus`
 
 Design: [docs/design.md](docs/design.md) · Decisions: [ADR-001](docs/adr-001-modular-monolith-pulsar-outbox.md), [ADR-002](docs/adr-002-client-owned-templates-content-snapshot.md), [ADR-003](docs/adr-003-liquibase-migration-job.md)
 
+An introduction to the product for newcomers, with speaker notes:
+[docs/presentation/notification-service.pptx](docs/presentation/notification-service.pptx).
+
 ## Run it
 
 Requires Docker, and Node 20+ for the seed script and UI.
