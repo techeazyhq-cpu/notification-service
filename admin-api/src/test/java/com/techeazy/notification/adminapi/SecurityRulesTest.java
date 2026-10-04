@@ -130,6 +130,9 @@ class SecurityRulesTest {
         assertThat(status(AdminRole.VIEWER, HttpMethod.GET, "/api/admin/auth/me")).isEqualTo(404);
         assertThat(status(AdminRole.VIEWER, HttpMethod.POST, "/api/admin/clients")).isEqualTo(403);
         assertThat(status(AdminRole.VIEWER, HttpMethod.POST, "/api/admin/dead-letters/reprocess")).isEqualTo(403);
+        assertThat(status(AdminRole.VIEWER, HttpMethod.POST, "/api/admin/clients/7f0c/signing-secret")).isEqualTo(403);
+        assertThat(status(AdminRole.VIEWER, HttpMethod.DELETE, "/api/admin/clients/7f0c/signing-secret")).isEqualTo(403);
+        assertThat(status(AdminRole.VIEWER, HttpMethod.PUT, "/api/admin/clients/7f0c/signing-required")).isEqualTo(403);
         assertThat(status(AdminRole.VIEWER, HttpMethod.GET, "/api/admin/administrators")).isEqualTo(403);
     }
 

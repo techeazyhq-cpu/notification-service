@@ -60,6 +60,10 @@ message (`GET /v1/messages/{id}`), next to the provider's own wording in `lastEr
 | [NS-2008](#ns-2008-channel-not-allowed) | `CHANNEL_NOT_ALLOWED` | 403 | no | The channel is not enabled for this client |
 | [NS-2009](#ns-2009-template-read-only) | `TEMPLATE_READ_ONLY` | 403 | no | The template is read-only |
 | [NS-2010](#ns-2010-sign-in-required) | `SIGN_IN_REQUIRED` | 401 | no | Sign-in is required |
+| [NS-2011](#ns-2011-signature-required) | `SIGNATURE_REQUIRED` | 401 | no | A request signature is required |
+| [NS-2012](#ns-2012-signature-invalid) | `SIGNATURE_INVALID` | 401 | no | The request signature is not valid |
+| [NS-2013](#ns-2013-signature-expired) | `SIGNATURE_EXPIRED` | 401 | no | The request signature has expired |
+| [NS-2014](#ns-2014-request-replayed) | `REQUEST_REPLAYED` | 409 | no | The request was already received |
 | [NS-3001](#ns-3001-not-found) | `NOT_FOUND` | 404 | no | The resource does not exist |
 | [NS-3002](#ns-3002-invalid-state) | `INVALID_STATE` | 409 | no | The resource's state does not allow this action |
 | [NS-3003](#ns-3003-template-exists) | `TEMPLATE_EXISTS` | 409 | no | A template with this name already exists |
@@ -197,6 +201,34 @@ message (`GET /v1/messages/{id}`), next to the provider's own wording in `lastEr
 
 - **Cause:** The admin API call carried no session token, or the session expired or was signed out.
 - **Resolution:** Sign in again in the admin console, or send a current bearer token.
+
+### NS-2011 SIGNATURE_REQUIRED
+
+**A request signature is required** · HTTP 401 · not retryable
+
+- **Cause:** The client requires every state-changing request to be signed, and this one carried no signature.
+- **Resolution:** Sign the request as the client guide describes and send the X-Signature headers (ADR-036).
+
+### NS-2012 SIGNATURE_INVALID
+
+**The request signature is not valid** · HTTP 401 · not retryable
+
+- **Cause:** A signature header is missing or malformed, the client has no signing secret, or the signature does not match the method, path, query and body that arrived.
+- **Resolution:** Sign exactly the bytes you send with the current signing secret; ask an administrator for one if needed.
+
+### NS-2013 SIGNATURE_EXPIRED
+
+**The request signature has expired** · HTTP 401 · not retryable
+
+- **Cause:** X-Signature-Timestamp is further from the service's clock than the acceptance window (5 minutes).
+- **Resolution:** Sign each request when you send it, and keep the sending host's clock synchronised (NTP).
+
+### NS-2014 REQUEST_REPLAYED
+
+**The request was already received** · HTTP 409 · not retryable
+
+- **Cause:** A signed request with this X-Signature-Nonce was already accepted, so this copy is refused as a replay.
+- **Resolution:** Generate a new nonce, and a new signature, for every request, including retries.
 
 ## Resource (NS-3xxx)
 

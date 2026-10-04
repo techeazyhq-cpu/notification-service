@@ -162,6 +162,31 @@ curl -X PUT "$ADMIN_API/api/admin/billing/accounts/<client id>/otp-prices" -H "A
   -H "Content-Type: application/json" -d '{"prices":[{"channel":"SMS","unitPrice":0.012}]}'
 ```
 
+## 6a. Issue a signing secret (if the tenant signs its requests)
+
+Do this step if the tenant wants protection against replayed or altered requests: banks, healthcare and public
+sector tenants usually do. Otherwise skip it; the tenant can start later.
+
+**Admin console → Clients → Issue signing secret.**
+
+- **The secret is shown once, now.** It starts with `nss_`. Hand it over in step 7 with the API key, through the same
+  secure channel.
+- **Signing stays optional at first.** The platform verifies any request that carries a signature, but still accepts
+  unsigned ones.
+- **Require signatures** once the tenant confirms its integration signs every request (the client guide's *Signed
+  requests* section has code). From then on, an unsigned `POST`, `PUT` or `DELETE` is refused with
+  `401 SIGNATURE_REQUIRED` (NS-2011). Reads stay unsigned.
+- **Rotate signing secret** replaces the secret at once. Requests signed with the old one fail within 30 seconds, so
+  agree the moment with the tenant.
+- **Remove signing secret** turns signing off again.
+
+API:
+
+```bash
+curl -X POST "$ADMIN_API/api/admin/clients/$CLIENT_ID/signing-secret" -H "Authorization: Bearer $ADMIN_TOKEN"
+curl -X PUT "$ADMIN_API/api/admin/clients/$CLIENT_ID/signing-required" -H "Authorization: Bearer $ADMIN_TOKEN"   -H "Content-Type: application/json" -d '{"required":true}'
+```
+
 ## 7. Hand over access
 
 Give the tenant's named contact:
@@ -169,10 +194,13 @@ Give the tenant's named contact:
 - **The API key,** through a channel meant for secrets, such as a password manager share or a one-time secret link.
   Never send it in e-mail or chat. It is what authenticates every call, as the `X-API-Key` header.
 - **The client console address.** They sign in there with the API key. It shows their requests, templates, sender
-  addresses, billing and an API playground. The key is kept in the browser tab only and is gone when the tab closes.
+  addresses, billing and an API playground. The key is held only in the open page, never saved in the browser,
+  and is gone when the page is reloaded or the tab closed.
 - **The client API address and its reference** (`/swagger-ui.html`), and the
   [error code dictionary](error-codes.md), which the API also serves at `GET /v1/errors`.
 - **The [client guide](client-guide.md),** which walks their team through the console and the API.
+- **The signing secret,** if you issued one in step 6a, through the same channel as the API key. It is also pasted
+  into the console at sign-in.
 
 ## 8. The tenant sets up senders and templates
 

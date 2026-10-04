@@ -47,6 +47,13 @@ npx newman run postman/notification-service.postman_collection.json -e postman/l
 - **No copying keys between requests.** Folder 2 creates a new tenant and stores its API key in the collection variable
   `apiKey`; the client folders send it as `X-API-Key`. To call the client API as an existing tenant instead, set
   `apiKey` to that tenant's key and run folders 3 to 8.
+- **Signed requests.** Folder 2 also issues the tenant a signing secret, stored in `signingSecret`.
+  - From then on, the collection's pre-request script signs every client API write: method, path, query and body,
+    with a timestamp and a single-use nonce (ADR-036). The platform verifies each signature.
+  - The CSV upload is the one exception. Postman builds `form-data` bodies only while sending, so they cannot be
+    signed in advance. It is sent unsigned, which is accepted while signing is optional.
+  - To call as an existing tenant that signs, set its `apiKey` and `signingSecret`. Clear `signingSecret` to send
+    unsigned.
 - **Every run is independent.** Names carry a per-run id, so runs never collide.
 - **Other environments.** Copy the environment and change:
   - `clientApiUrl` and `adminApiUrl`;

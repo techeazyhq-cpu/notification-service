@@ -16,7 +16,10 @@
  * @author Vasantha Kumar <vasantha.kumar@hotmail.com>
  */
 
-const KEY = 'notification-client-api-key';
+import { signatureHeaders } from './signing';
+
+/** Where earlier versions kept the credentials in sessionStorage; removed on load so nothing lingers there. */
+const LEGACY_STORAGE_KEYS = ['notification-client-api-key', 'notification-client-signing-secret'];
 
 export const CHANNELS = ['EMAIL', 'SMS', 'WHATSAPP', 'PUSH'] as const;
 export type Channel = (typeof CHANNELS)[number];
@@ -33,12 +36,34 @@ export const MESSAGE_STATUSES = ['PENDING', 'QUEUED', 'PROCESSING', 'RETRYING', 
 export type MessageStatus = (typeof MESSAGE_STATUSES)[number];
 export type RequestStatus = 'PROCESSING' | 'COMPLETED' | 'PARTIALLY_FAILED' | 'FAILED';
 
-/** The API key lives in sessionStorage only: it disappears when the tab closes. */
+interface Credentials { apiKey: string; signingSecret: string | null }
+
+let credentials: Credentials | null = null;
+
+for (const key of LEGACY_STORAGE_KEYS) sessionStorage.removeItem(key);
+
+/**
+ * The API key, and the signing secret if the client has one, are held only in this page's memory and never written to
+ * browser storage, so no other script, tab or later visitor can read them back. Reloading or closing the tab signs
+ * out. With a signing secret every request that changes something is signed (ADR-036).
+ */
 export const session = {
-  get: () => sessionStorage.getItem(KEY),
-  set: (apiKey: string) => sessionStorage.setItem(KEY, apiKey),
-  clear: () => sessionStorage.removeItem(KEY),
+  get: () => credentials?.apiKey ?? null,
+  signingSecret: () => credentials?.signingSecret ?? null,
+  set: (apiKey: string, signingSecret?: string) => {
+    credentials = { apiKey, signingSecret: signingSecret || null };
+  },
+  clear: () => {
+    credentials = null;
+  },
 };
+
+/** Signature headers for a request that changes something, when the client signs; none otherwise. */
+export async function signingHeaders(method: string, url: string, body?: Uint8Array<ArrayBuffer>): Promise<Record<string, string>> {
+  const secret = session.signingSecret();
+  if (!secret || method === 'GET') return {};
+  return signatureHeaders(secret, method, url, body);
+}
 
 export class ApiError extends Error {
   constructor(public readonly status: number, message: string) {
@@ -47,14 +72,16 @@ export class ApiError extends Error {
 }
 
 async function request(path: string, init: { method?: string; body?: unknown } = {}): Promise<Response> {
-  const headers: Record<string, string> = { 'X-API-Key': session.get() ?? '' };
-  if (init.body !== undefined) headers['Content-Type'] = 'application/json';
-  const res = await fetch(path, {
-    method: init.method ?? 'GET',
-    headers,
-    body: init.body === undefined ? undefined : JSON.stringify(init.body),
-  });
+  const method = init.method ?? 'GET';
+  const body = init.body === undefined ? undefined : new TextEncoder().encode(JSON.stringify(init.body));
+  const headers: Record<string, string> = { 'X-API-Key': session.get() ?? '', ...(await signingHeaders(method, path, body)) };
+  if (body !== undefined) headers['Content-Type'] = 'application/json';
+  const res = await fetch(path, { method, headers, body });
   if (res.status === 401) {
+    const refusal = await res.json().catch(() => ({}));
+    if (String(refusal.code ?? '').startsWith('SIGNATURE_')) {
+      throw new ApiError(401, `${refusal.message} (${refusal.errorId})`);
+    }
     session.clear();
     window.dispatchEvent(new Event('auth-lost'));
     throw new ApiError(401, 'Your API key is not valid or has been disabled');

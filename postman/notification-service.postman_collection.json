@@ -196,6 +196,45 @@
           ]
         },
         {
+          "name": "Issue a signing secret",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{adminApiUrl}}/api/admin/clients/{{clientId}}/signing-secret",
+              "host": [
+                "{{adminApiUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "clients",
+                "{{clientId}}",
+                "signing-secret"
+              ]
+            },
+            "description": "Gives the tenant a request-signing secret, returned **once** and stored as `signingSecret`. From here on the collection's pre-request script signs every client API write (method, path, query and body, with a timestamp and a single-use nonce), and the platform verifies each signature. Signing stays optional until an administrator requires it (`PUT .../signing-required`). See ADR-036."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('answers 200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('returns the signing secret once', () => pm.expect(body.signingSecret).to.match(/^nss_[0-9a-f]{64}$/));",
+                  "pm.test('signing is optional until required', () => {",
+                  "  pm.expect(body.client.signingEnabled).to.equal(true);",
+                  "  pm.expect(body.client.signingRequired).to.equal(false);",
+                  "});",
+                  "pm.collectionVariables.set('signingSecret', body.signingSecret);"
+                ]
+              }
+            }
+          ]
+        },
+        {
           "name": "Rate limit · API calls",
           "request": {
             "method": "POST",
@@ -2281,6 +2320,41 @@
     {
       "key": "bulkRequestId",
       "value": ""
+    },
+    {
+      "key": "signingSecret",
+      "value": "",
+      "description": "Set by \"Issue a signing secret\". While it is set, every client API write is signed (ADR-036)."
+    }
+  ],
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+            "const cryptoJs = require('crypto-js');",
+          "const secret = pm.collectionVariables.get('signingSecret');",
+          "const target = pm.variables.replaceIn(pm.request.url.toString());",
+          "const clientApi = pm.variables.replaceIn('{{clientApiUrl}}');",
+          "if (secret && target.startsWith(clientApi) && pm.request.method !== 'GET') {",
+          "  const body = pm.request.body;",
+          "  if (body && body.mode && body.mode !== 'raw') {",
+          "    console.warn(`Not signed: Postman builds ${body.mode} bodies while sending, so they cannot be signed in advance.`);",
+          "  } else {",
+          "    const bytes = body && body.mode === 'raw' ? pm.variables.replaceIn(body.raw) : '';",
+          "    const [path, query = ''] = target.replace(/^[a-z]+:\\/\\/[^/]+/i, '').split('?');",
+          "    const timestamp = Math.floor(Date.now() / 1000).toString();",
+          "    const nonce = cryptoJs.lib.WordArray.random(16).toString(cryptoJs.enc.Hex);",
+          "    const signed = ['NS1-HMAC-SHA256', timestamp, nonce, pm.request.method, path, query,",
+          "      cryptoJs.SHA256(bytes).toString(cryptoJs.enc.Hex)].join('\\n');",
+          "    pm.request.headers.upsert({ key: 'X-Signature-Timestamp', value: timestamp });",
+          "    pm.request.headers.upsert({ key: 'X-Signature-Nonce', value: nonce });",
+          "    pm.request.headers.upsert({ key: 'X-Signature', value: cryptoJs.HmacSHA256(signed, secret).toString(cryptoJs.enc.Hex) });",
+          "  }",
+          "}"
+        ]
+      }
     }
   ]
 }

@@ -21,6 +21,7 @@ package com.techeazy.notification.config;
 import com.techeazy.notification.application.RecipientFingerprints;
 import com.techeazy.notification.domain.FieldEncryptor;
 import com.techeazy.notification.infra.AesGcmCipher;
+import com.techeazy.notification.infra.ClientSigningSecrets;
 import com.techeazy.notification.infra.ProviderSecrets;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
@@ -28,7 +29,7 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Primary;
 import org.springframework.core.env.Environment;
 
-/** Provider-secret encryption, and the startup checks that refuse known development defaults outside {@code local}. */
+/** Provider-secret and client signing-secret encryption, and the startup checks that refuse known development defaults outside {@code local}. */
 @Configuration
 public class SecretsConfig {
 
@@ -57,6 +58,11 @@ public class SecretsConfig {
     @Bean
     ProviderSecrets providerSecrets(AesGcmCipher providerSecretsCipher) {
         return new ProviderSecrets(providerSecretsCipher);
+    }
+
+    @Bean
+    ClientSigningSecrets clientSigningSecrets(AesGcmCipher providerSecretsCipher) {
+        return new ClientSigningSecrets(providerSecretsCipher);
     }
 
     /** Exists only so its factory method below runs during startup; nothing depends on the instance itself. */

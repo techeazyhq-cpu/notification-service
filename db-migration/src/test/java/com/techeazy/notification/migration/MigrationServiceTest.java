@@ -61,9 +61,9 @@ class MigrationServiceTest {
                     "009-admin-roles", "010-admin-audit-log", "011-message-error-code",
                     "012-message-category", "013-otp-sweep-index", "014-billing-otp-price",
                     "015-sent-usage-by-category", "016-message-event-log", "017-recipient-fingerprint-index",
-                    "018-fingerprint-backfill-index");
+                    "018-fingerprint-backfill-index", "019-signed-requests");
     private static final String NOT_COMPARED = "('databasechangelog','databasechangeloglock','flyway_schema_history',"
-            + "'billing_plan','billing_plan_rate','billing_account','credit_ledger_entry','credit_hold','invoice','invoice_line','invoice_payment','admin_user','admin_recovery_code','admin_session','client_sender','admin_audit_event','billing_account_otp_price','message_event')";
+            + "'billing_plan','billing_plan_rate','billing_account','credit_ledger_entry','credit_hold','invoice','invoice_line','invoice_payment','admin_user','admin_recovery_code','admin_session','client_sender','admin_audit_event','billing_account_otp_price','message_event','api_request_nonce')";
     private static final List<String> BILLING_TABLES =
             List.of("billing_plan", "billing_plan_rate", "billing_account", "credit_ledger_entry", "credit_hold", "invoice", "invoice_line", "invoice_payment");
 
@@ -641,7 +641,8 @@ class MigrationServiceTest {
                 + "|| ' default=' || coalesce(column_default, '') from information_schema.columns "
                 + "where table_schema='public' and column_name not in "
                 + "('sender_email','sender_name','erased_at','failure_kind',"
-                + "'reprocess_count','error_code','category','expires_at','recipient_fingerprint','template_name') and table_name not in " + NOT_COMPARED));
+                + "'reprocess_count','error_code','category','expires_at','recipient_fingerprint','template_name',"
+                + "'signing_secret','signing_required') and table_name not in " + NOT_COMPARED));
         lines.addAll(query(database, "select 'idx ' || tablename || ' ' || indexdef from pg_indexes "
                 + "where schemaname='public' and indexname not in ('ix_message_sent_usage','ix_message_erase_due',"
                 + "'ix_request_erase_due','ix_request_idempotency_due','ix_message_dead_letters',"

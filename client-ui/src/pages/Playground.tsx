@@ -17,7 +17,8 @@
  */
 
 import { useMemo, useState } from 'react';
-import { session } from '../api';
+import { session, signingHeaders } from '../api';
+import { multipartBody } from '../signing';
 import { CATALOG, PlaygroundEndpoint } from '../playgroundCatalog';
 import { buildCurl, buildUrl, formatBody, pretty, safeParse } from '../playgroundLogic';
 
@@ -29,21 +30,20 @@ const SHOWN_HEADERS = ['content-type', 'retry-after', 'content-disposition', 'id
 async function execute(endpoint: PlaygroundEndpoint, url: string, body: string, idempotencyKey: string): Promise<Result> {
   const headers: Record<string, string> = { 'X-API-Key': session.get() ?? '' };
   if (idempotencyKey.trim()) headers['Idempotency-Key'] = idempotencyKey.trim();
-  let payload: BodyInit | undefined;
+  let payload: Uint8Array<ArrayBuffer> | undefined;
   if (endpoint.upload) {
-    const fields = safeParse(body) as Record<string, string>;
-    const form = new FormData();
-    for (const [name, value] of Object.entries(fields)) {
-      if (name !== 'csv' && value) form.append(name, value);
-    }
-    form.append('file', new Blob([fields.csv ?? ''], { type: 'text/csv' }), 'recipients.csv');
-    payload = form;
+    const { csv, ...rest } = (safeParse(body) ?? {}) as Record<string, string>;
+    const fields = Object.fromEntries(Object.entries(rest).filter(([, value]) => value));
+    const multipart = multipartBody(fields, { field: 'file', name: 'recipients.csv', type: 'text/csv', content: csv ?? '' });
+    headers['Content-Type'] = multipart.contentType;
+    payload = multipart.body;
   } else if (endpoint.body !== undefined) {
     headers['Content-Type'] = 'application/json';
-    payload = body;
+    payload = new TextEncoder().encode(body);
   }
   const started = performance.now();
   try {
+    Object.assign(headers, await signingHeaders(endpoint.method, url, payload));
     const res = await fetch(url, { method: endpoint.method, headers, body: payload });
     const text = await res.text();
     const shown = SHOWN_HEADERS.flatMap((name) => (res.headers.has(name) ? [[name, res.headers.get(name) ?? ''] as [string, string]] : []));
