@@ -56,6 +56,7 @@ class JdbcAuthStoresTest {
 
     private static JdbcAdminUserStore users;
     private static JdbcSessionStore sessions;
+    private static JdbcClient jdbc;
 
     @BeforeAll
     static void migrate() throws Exception {
@@ -67,7 +68,7 @@ class JdbcAuthStoresTest {
                 liquibase.update(new Contexts(), new LabelExpression());
             }
         }
-        JdbcClient jdbc = JdbcClient.create(dataSource);
+        jdbc = JdbcClient.create(dataSource);
         users = new JdbcAdminUserStore(jdbc);
         sessions = new JdbcSessionStore(jdbc);
     }
@@ -94,6 +95,56 @@ class JdbcAuthStoresTest {
         assertThat(stored.passwordChangedAt()).isEqualTo(NOW);
         assertThat(stored.totpEnabled()).isTrue();
         assertThat(stored.totpSecret()).isEqualTo("encrypted");
+    }
+
+    @Test
+    void theLastAdministratorCanBeNeitherDemotedNorDeletedButOthersCan() {
+        onlyTheseAreAdmins();
+        AdminUser only = newUser("only-admin-" + UUID.randomUUID());
+        AdminUser viewer = newUser("viewer-" + UUID.randomUUID());
+        assertThat(users.updateRoleKeepingAnAdmin(viewer.id(), AdminRole.VIEWER)).isTrue();
+
+        assertThat(users.updateRoleKeepingAnAdmin(only.id(), AdminRole.OPERATOR)).isFalse();
+        assertThat(users.deleteKeepingAnAdmin(only.id())).isFalse();
+        assertThat(users.updateRoleKeepingAnAdmin(only.id(), AdminRole.ADMIN)).isTrue();
+        assertThat(users.deleteKeepingAnAdmin(viewer.id())).isTrue();
+        assertThat(users.updateRoleKeepingAnAdmin(UUID.randomUUID(), AdminRole.VIEWER)).isFalse();
+    }
+
+    /** Two administrators demoting or deleting each other at the same moment must never leave none. */
+    @Test
+    void concurrentDemotionsAndDeletionsAlwaysLeaveAnAdministrator() throws Exception {
+        ExecutorService pool = Executors.newFixedThreadPool(2);
+        try {
+            for (int round = 0; round < 25; round++) {
+                onlyTheseAreAdmins();
+                AdminUser first = newUser("race-a-" + UUID.randomUUID());
+                AdminUser second = newUser("race-b-" + UUID.randomUUID());
+                List<Callable<Boolean>> both = round % 2 == 0
+                        ? List.of(() -> users.updateRoleKeepingAnAdmin(first.id(), AdminRole.VIEWER),
+                                  () -> users.updateRoleKeepingAnAdmin(second.id(), AdminRole.VIEWER))
+                        : List.of(() -> users.deleteKeepingAnAdmin(first.id()),
+                                  () -> users.updateRoleKeepingAnAdmin(second.id(), AdminRole.OPERATOR));
+
+                int changed = 0;
+                for (Future<Boolean> attempt : pool.invokeAll(both)) {
+                    changed += attempt.get() ? 1 : 0;
+                }
+
+                assertThat(changed).as("round %d", round).isEqualTo(1);
+                assertThat(adminCount()).as("round %d", round).isEqualTo(1);
+            }
+        } finally {
+            pool.shutdownNow();
+        }
+    }
+
+    private static void onlyTheseAreAdmins() {
+        jdbc.sql("UPDATE admin_user SET role = 'VIEWER' WHERE role = 'ADMIN'").update();
+    }
+
+    private static long adminCount() {
+        return jdbc.sql("SELECT count(*) FROM admin_user WHERE role = 'ADMIN'").query(Long.class).single();
     }
 
     @Test

@@ -71,14 +71,24 @@ class JdbcAdminUserStore implements AdminUserStore {
                 .param("now", Timestamp.from(now)).param("role", user.role().name()).update();
     }
 
+    /**
+     * Locks every ADMIN row before counting them ({@code FOR UPDATE} in the CTE), so a concurrent demotion or deletion
+     * waits, and on resuming PostgreSQL re-checks each locked row: one that is no longer an ADMIN drops out of the count.
+     */
+    private static final String ADMINS_LOCKED = "WITH admins AS (SELECT id FROM admin_user WHERE role = 'ADMIN' FOR UPDATE) ";
+    private static final String KEEPS_AN_ADMIN = "(role <> 'ADMIN' OR (SELECT count(*) FROM admins) > 1)";
+
     @Override
-    public void updateRole(UUID id, AdminRole role) {
-        jdbc.sql("UPDATE admin_user SET role = :role WHERE id = :id").param("role", role.name()).param("id", id).update();
+    public boolean updateRoleKeepingAnAdmin(UUID id, AdminRole role) {
+        return jdbc.sql(ADMINS_LOCKED + "UPDATE admin_user SET role = :role WHERE id = :id AND (:role = 'ADMIN' OR "
+                        + KEEPS_AN_ADMIN + ")")
+                .param("role", role.name()).param("id", id).update() == 1;
     }
 
     @Override
-    public boolean delete(UUID id) {
-        return jdbc.sql("DELETE FROM admin_user WHERE id = :id").param("id", id).update() == 1;
+    public boolean deleteKeepingAnAdmin(UUID id) {
+        return jdbc.sql(ADMINS_LOCKED + "DELETE FROM admin_user WHERE id = :id AND " + KEEPS_AN_ADMIN)
+                .param("id", id).update() == 1;
     }
 
     @Override

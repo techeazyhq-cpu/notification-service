@@ -63,14 +63,26 @@ final class InMemoryStores {
         }
 
         @Override
-        public void updateRole(UUID id, AdminRole role) {
+        public synchronized boolean updateRoleKeepingAnAdmin(UUID id, AdminRole role) {
             AdminUser u = byId.get(id);
+            if (u == null || (u.role() == AdminRole.ADMIN && role != AdminRole.ADMIN && admins() <= 1)) {
+                return false;
+            }
             byId.put(id, new AdminUser(id, u.username(), u.passwordHash(), u.passwordChangedAt(), u.totpSecret(), u.totpEnabled(), u.totpLastStep(), u.lockedUntil(), role));
+            return true;
         }
 
         @Override
-        public boolean delete(UUID id) {
+        public synchronized boolean deleteKeepingAnAdmin(UUID id) {
+            AdminUser u = byId.get(id);
+            if (u == null || (u.role() == AdminRole.ADMIN && admins() <= 1)) {
+                return false;
+            }
             return byId.remove(id) != null;
+        }
+
+        private long admins() {
+            return byId.values().stream().filter(user -> user.role() == AdminRole.ADMIN).count();
         }
 
         @Override
