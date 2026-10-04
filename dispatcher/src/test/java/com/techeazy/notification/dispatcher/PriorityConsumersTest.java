@@ -115,7 +115,9 @@ class PriorityConsumersTest {
     void deadLettersFromThePriorityTopicsAreRecordedToo() throws Exception {
         new DeadLetterConsumers(client, new NotificationProperties(),
                 new DeadLetterRecorder(mock(com.techeazy.notification.persistence.NotificationMessageRepository.class),
-                        new SimpleMeterRegistry()), new ObjectMapper()).start();
+                        new SimpleMeterRegistry(), mock(com.techeazy.notification.persistence.MessageEventLog.class),
+                        org.springframework.transaction.support.TransactionOperations.withoutTransaction()),
+                new ObjectMapper()).start();
 
         ArgumentCaptor<String> topics = ArgumentCaptor.forClass(String.class);
         verify(builder, atLeastOnce()).topic(topics.capture());

@@ -24,8 +24,11 @@ import com.techeazy.notification.billing.application.AdmissionControl;
 import com.techeazy.notification.billing.domain.HoldScope;
 import com.techeazy.notification.domain.FailureKind;
 import com.techeazy.notification.domain.MessageCategory;
+import com.techeazy.notification.domain.MessageEvent;
+import com.techeazy.notification.domain.MessageEventType;
 import com.techeazy.notification.domain.MessageStatus;
 import com.techeazy.notification.domain.NotificationMessage;
+import com.techeazy.notification.persistence.MessageEventLog;
 import com.techeazy.notification.persistence.NotificationMessageRepository;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -45,10 +48,12 @@ class MessageRetry {
 
     private final NotificationMessageRepository messages;
     private final AdmissionControl admission;
+    private final MessageEventLog events;
 
-    MessageRetry(NotificationMessageRepository messages, AdmissionControl admission) {
+    MessageRetry(NotificationMessageRepository messages, AdmissionControl admission, MessageEventLog events) {
         this.messages = messages;
         this.admission = admission;
+        this.events = events;
     }
 
     @Transactional
@@ -67,9 +72,12 @@ class MessageRetry {
         }
         admission.admit(new Admission(message.getClientId(), message.getChannel(), 1, HoldScope.MESSAGE, message.getId(),
                 message.getCategory() == MessageCategory.OTP));
-        if (messages.requeueFailed(id, Instant.now()) != 1) {
+        Instant now = Instant.now();
+        if (messages.requeueFailed(id, now) != 1) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "The message changed while it was being retried");
         }
+        events.record(MessageEvent.of(message, MessageEventType.REQUEUED, now)
+                .withDetail("Sent again by the platform operator"));
         return message;
     }
 }

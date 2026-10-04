@@ -22,6 +22,7 @@ import com.techeazy.notification.application.RetentionService;
 import com.techeazy.notification.config.RetentionProperties;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
@@ -32,7 +33,10 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.io.IOException;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneOffset;
 
 /** How long recipient data is kept, and erasure of a recipient's data on request. */
 @RestController
@@ -46,10 +50,38 @@ public class PrivacyController {
 
     public record RetentionView(int personalDataDays, int deleteDays, int idempotencyDays) {}
 
-    private final RetentionService retention;
+    /** {@code from} and {@code to} are inclusive UTC dates of acceptance; leave either out for no bound. */
+    public record RecipientReportRequest(@NotBlank @Size(max = 320) String recipient, LocalDate from, LocalDate to) {}
 
-    public PrivacyController(RetentionService retention) {
+    private final RetentionService retention;
+    private final RecipientActivityReport activityReport;
+
+    public PrivacyController(RetentionService retention, RecipientActivityReport activityReport) {
         this.retention = retention;
+        this.activityReport = activityReport;
+    }
+
+    /**
+     * POST rather than GET, so the recipient's address travels in the body and never in a URL that access logs and
+     * proxies record.
+     */
+    @PostMapping(value = "/recipient-report", produces = "text/csv")
+    @Operation(summary = "Download everything you sent to one recipient, as CSV",
+            description = "For answering a complaint to a data protection authority: one row per event of every message "
+                    + "you sent to the e-mail address, phone number or device token, with UTC timestamps, the category, "
+                    + "template and your reference, and how delivery went. Messages are found even after the "
+                    + "recipient's data was erased. The message text is never included.")
+    public void recipientReport(@RequestAttribute(ClientAuthFilter.CLIENT_ATTRIBUTE) AuthenticatedClient client,
+                                @Valid @RequestBody RecipientReportRequest request,
+                                HttpServletResponse response) throws IOException {
+        if (request.from() != null && request.to() != null && request.from().isAfter(request.to())) {
+            throw ApiException.badRequest("'from' must not be after 'to'");
+        }
+        response.setContentType("text/csv;charset=UTF-8");
+        response.setHeader("Content-Disposition", "attachment; filename=\"recipient-activity-"
+                + LocalDate.now(ZoneOffset.UTC) + ".csv\"");
+        activityReport.write(client.id(), request.recipient().strip(), request.from(), request.to(),
+                response.getWriter());
     }
 
     @GetMapping("/retention")

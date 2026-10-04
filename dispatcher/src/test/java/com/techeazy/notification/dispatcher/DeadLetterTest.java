@@ -21,13 +21,18 @@ package com.techeazy.notification.dispatcher;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.techeazy.notification.config.NotificationProperties;
 import com.techeazy.notification.domain.Channel;
+import com.techeazy.notification.domain.MessageEventType;
 import com.techeazy.notification.domain.MessageStatus;
+import com.techeazy.notification.domain.NotificationMessage;
+import com.techeazy.notification.error.ErrorCode;
+import com.techeazy.notification.persistence.MessageEventLog;
 import com.techeazy.notification.persistence.NotificationMessageRepository;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.apache.pulsar.client.api.Consumer;
 import org.apache.pulsar.client.api.Message;
 import org.apache.pulsar.client.api.PulsarClient;
 import org.junit.jupiter.api.Test;
+import org.springframework.transaction.support.TransactionOperations;
 
 import java.nio.charset.StandardCharsets;
 import java.util.UUID;
@@ -35,10 +40,12 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 @SuppressWarnings("unchecked")
@@ -46,7 +53,9 @@ class DeadLetterTest {
 
     private final NotificationMessageRepository messages = mock(NotificationMessageRepository.class);
     private final SimpleMeterRegistry meters = new SimpleMeterRegistry();
-    private final DeadLetterRecorder recorder = new DeadLetterRecorder(messages, meters);
+    private final MessageEventLog events = mock(MessageEventLog.class);
+    private final DeadLetterRecorder recorder = new DeadLetterRecorder(messages, meters, events,
+            TransactionOperations.withoutTransaction());
     private final DeadLetterConsumers consumers = new DeadLetterConsumers(mock(PulsarClient.class), new NotificationProperties(), recorder, new ObjectMapper());
     private final Consumer<byte[]> consumer = mock(Consumer.class);
     private final UUID id = UUID.randomUUID();
@@ -60,8 +69,14 @@ class DeadLetterTest {
     @Test
     void aMessageStillInFlightBecomesAFailedDeadLetterAndIsCounted() {
         when(messages.markDeadLettered(eq(id), eq(MessageStatus.IN_FLIGHT), eq(DeadLetterRecorder.REASON), any())).thenReturn(1);
+        NotificationMessage message = new NotificationMessage();
+        message.setId(id);
+        message.setClientId(UUID.randomUUID());
+        when(messages.findById(id)).thenReturn(java.util.Optional.of(message));
 
         assertThat(recorder.recordDeadLetter(id, "SMS")).isTrue();
+        verify(events).record(argThat(event -> event.type() == MessageEventType.DEAD_LETTERED
+                && event.messageId().equals(id) && event.errorCode() == ErrorCode.DELIVERY_DEAD_LETTERED));
 
         assertThat(meters.get("notification.dead_letter").tag("channel", "SMS").counter().count()).isEqualTo(1.0);
         assertThat(meters.get(DispatchService.DELIVERY_ERRORS).tag("channel", "SMS")
@@ -75,6 +90,7 @@ class DeadLetterTest {
         assertThat(recorder.recordDeadLetter(id, "SMS")).isFalse();
 
         assertThat(meters.find("notification.dead_letter").counter()).isNull();
+        verifyNoInteractions(events);
     }
 
     @Test

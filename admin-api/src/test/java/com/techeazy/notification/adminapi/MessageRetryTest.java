@@ -25,6 +25,7 @@ import com.techeazy.notification.domain.FailureKind;
 import com.techeazy.notification.domain.MessageCategory;
 import com.techeazy.notification.domain.MessageStatus;
 import com.techeazy.notification.domain.NotificationMessage;
+import com.techeazy.notification.persistence.MessageEventLog;
 import com.techeazy.notification.persistence.NotificationMessageRepository;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpStatus;
@@ -47,7 +48,8 @@ class MessageRetryTest {
 
     private final NotificationMessageRepository messages = mock(NotificationMessageRepository.class);
     private final AdmissionControl admission = mock(AdmissionControl.class);
-    private final MessageRetry retry = new MessageRetry(messages, admission);
+    private final MessageEventLog events = mock(MessageEventLog.class);
+    private final MessageRetry retry = new MessageRetry(messages, admission, events);
 
     @Test
     void anExpiredOneTimePasswordIsNotSentAgainBecauseItsCodeIsNoLongerValid() {

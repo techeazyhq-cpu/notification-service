@@ -41,6 +41,8 @@ public class NotificationMessage {
     private UUID clientId;
     @Enumerated(EnumType.STRING) private Channel channel;
     private String recipient;
+    /** Keyed fingerprint of the recipient, kept after the address is erased (ADR-035). */
+    private String recipientFingerprint;
     @Convert(converter = EncryptedVariablesConverter.class) @JdbcTypeCode(SqlTypes.JSON) private Map<String, String> variables = new HashMap<>();
     @Enumerated(EnumType.STRING) private MessageStatus status;
     /** What the message is for; one-time passwords are delivered with priority (ADR-033). */

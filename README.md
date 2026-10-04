@@ -201,6 +201,16 @@ Each tenant may pay its own price per OTP and channel: set it on **Billing accou
 with `PUT /api/admin/billing/accounts/{clientId}/otp-prices`. Channels without one charge the plan's price; invoices
 show OTPs on a line of their own, and the free allowance covers ordinary messages first. See ADR-034.
 
+## Recipient activity report
+
+When someone complains to a data protection authority, a tenant can download everything it sent that person as a
+CSV, one row per event with UTC timestamps: accepted, each attempt, sent or failed, erased. It includes what each
+message was for (category, template, the tenant's reference), never the text, and finds messages even after the
+person's data was erased.
+- **Console:** client console **Privacy** page.
+- **API:** `POST /v1/privacy/recipient-report`.
+- See ADR-035.
+
 ## Error codes
 
 Every error from the client and admin APIs carries a stable `code` (what programs branch on), a numbered `errorId`

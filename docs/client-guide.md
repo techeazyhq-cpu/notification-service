@@ -162,10 +162,29 @@ decimals but are kept exactly: a 0.012 charge shows as `-0.01`.
 **Privacy and data retention** shows **How long recipient data is kept**:
 
 - **Recipient data** (addresses, template values, error text) is erased after **90 days**.
-- **Message records** are deleted after **400 days**.
+- **Message records** are deleted after **400 days**. Until then each record keeps its event log and a fingerprint of
+  the recipient's address. The fingerprint can't be turned back into the address, but lets you find the record when
+  someone gives you their address again (see below).
 - **An idempotency key** stops working after **7 days**.
 
 Your operator may have set different periods; the page shows the ones that apply to you.
+
+**Recipient activity report.** When someone complains to a data protection authority about messages from you, the
+authority will ask what you sent them, when and why. Enter their e-mail address, phone number or device token, and
+optionally a date range, then **Download CSV**:
+
+- **One row per event** of every message you sent them, oldest first, with UTC timestamps: `ACCEPTED`, each failed
+  attempt (`ATTEMPT_FAILED`), `SENT` or `FAILED`, `EXPIRED` for an OTP, `DEAD_LETTERED`, `REQUEUED` when the operator
+  resent it, and `DATA_ERASED`.
+- **What each message was for:** its category, template, your `clientReference`, request id, channel and sender
+  address.
+- **How it went:** attempt number, error code and id, and the provider's message id.
+- **Found even after erasure.** Messages are found even after the recipient's data was erased; the address then reads
+  `[erased]`.
+- **Never the message text,** so no one-time password code ends up in the file.
+- **Older messages:** a message from before the event log existed has `source` `RECORD`, and only its final outcome.
+
+Spellings don't matter: `Ann@Example.com` finds `ann@example.com`, and `+1 (415) 555-0123` finds `+14155550123`.
 
 **Erase a recipient's data now** removes one recipient's address, values and error text from every finished message
 you sent to them, for example after a data-protection request.
@@ -355,6 +374,21 @@ A message that ends `FAILED` carries an `errorCode`:
 **While retrying,** a message is `RETRYING` with `PROVIDER_TEMPORARILY_FAILING` (NS-6006). You don't need to do anything.
 
 **Resending failures:** download the failed recipients as CSV, correct them, and upload them as a new bulk request.
+
+### Recipient activity report
+
+The same report as the console's, as CSV:
+
+```bash
+curl -X POST "$CLIENT_API/v1/privacy/recipient-report" -H "X-API-Key: $API_KEY" -H "Content-Type: application/json" \
+  -d '{"recipient":"ann@example.com","from":"2026-01-01","to":"2026-09-30"}' -o recipient-activity.csv
+```
+
+- **Dates:** `from` and `to` are optional, inclusive UTC dates of acceptance.
+- **Why POST:** the address goes in the body, never in the URL, so it doesn't end up in access logs.
+- **Columns:** `message_id`, `request_id`, `client_reference`, `channel`, `category`, `template`, `sender`,
+  `recipient`, `current_status`, `event`, `occurred_at`, `attempt`, `error_code`, `error_id`, `provider_message_id`,
+  `detail`, `source`.
 
 ### Limits
 

@@ -45,6 +45,8 @@ notification:
     other-public-hosts-allowed: ${PROVIDER_OTHER_PUBLIC_HOSTS_ALLOWED:true}
   sweeper:
     enabled: true
+  fingerprint-backfill:
+    enabled: ${FINGERPRINT_BACKFILL_ENABLED:true}
 
 retention:
   enabled: ${RETENTION_ENABLED:true}

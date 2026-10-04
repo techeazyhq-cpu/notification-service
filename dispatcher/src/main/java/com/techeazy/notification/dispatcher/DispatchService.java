@@ -26,6 +26,7 @@ import com.techeazy.notification.dispatcher.provider.ChannelProvider.PermanentSe
 import com.techeazy.notification.dispatcher.provider.ChannelProvider.SendResult;
 import com.techeazy.notification.dispatcher.provider.ProviderRegistry;
 import com.techeazy.notification.domain.*;
+import com.techeazy.notification.persistence.MessageEventLog;
 import com.techeazy.notification.persistence.NotificationMessageRepository;
 import com.techeazy.notification.persistence.NotificationRequestRepository;
 import com.techeazy.notification.port.RateLimiter.Decision;
@@ -34,6 +35,7 @@ import io.micrometer.core.instrument.Timer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.support.TransactionOperations;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -79,10 +81,20 @@ public class DispatchService {
     private final ProviderRegistry providers;
     private final DispatcherProperties props;
     private final MeterRegistry metrics;
+    private final MessageEventLog events;
+    private final TransactionOperations transactions;
 
+    /**
+     * {@code events} and {@code transactions} record each outcome in the event log in the same transaction as the
+     * status change it describes (ADR-035).
+     */
+    @SuppressWarnings("java:S107")
     public DispatchService(NotificationMessageRepository messages, NotificationRequestRepository requests,
                            RateLimitService rateLimits, ProviderRegistry providers,
-                           DispatcherProperties props, MeterRegistry metrics) {
+                           DispatcherProperties props, MeterRegistry metrics, MessageEventLog events,
+                           TransactionOperations transactions) {
+        this.events = events;
+        this.transactions = transactions;
         this.messages = messages;
         this.requests = requests;
         this.rateLimits = rateLimits;
@@ -127,7 +139,11 @@ public class DispatchService {
             Outbound outbound = render(m);
             SendResult result = providers.send(outbound);
             Instant sentAt = Instant.now();
-            messages.markSent(messageId, result.providerMessageId(), sentAt);
+            transactions.executeWithoutResult(status -> {
+                messages.markSent(messageId, result.providerMessageId(), sentAt);
+                events.record(MessageEvent.of(m, MessageEventType.SENT, sentAt).withAttempt(attempt)
+                        .withProviderMessageId(result.providerMessageId()));
+            });
             count(m.getChannel(), "sent");
             recordDeliveryLatency(m, sentAt);
             return new Outcome.Done();
@@ -137,24 +153,37 @@ public class DispatchService {
             count(m.getChannel(), "circuit_open");
             return new Outcome.Unavailable(UNAVAILABLE_POLL_MS);
         } catch (MessageContentMissingException e) {
-            return failPermanently(m, ErrorCode.MESSAGE_CONTENT_MISSING, e);
+            return failPermanently(m, attempt, ErrorCode.MESSAGE_CONTENT_MISSING, e);
         } catch (TemplateRenderer.MissingVariableException e) {
-            return failPermanently(m, ErrorCode.TEMPLATE_VARIABLE_MISSING, e);
+            return failPermanently(m, attempt, ErrorCode.TEMPLATE_VARIABLE_MISSING, e);
         } catch (PermanentSendException e) {
-            return failPermanently(m, ErrorCode.DELIVERY_REJECTED, e);
+            return failPermanently(m, attempt, ErrorCode.DELIVERY_REJECTED, e);
         } catch (RuntimeException e) {
             if (attempt >= props.getMaxAttempts()) {
-                messages.markFailed(messageId, FailureKind.EXHAUSTED, ErrorCode.DELIVERY_ATTEMPTS_EXHAUSTED,
-                        truncate("Gave up after " + attempt + " attempts: " + e.getMessage()), Instant.now());
+                Instant failedAt = Instant.now();
+                transactions.executeWithoutResult(status -> {
+                    messages.markFailed(messageId, FailureKind.EXHAUSTED, ErrorCode.DELIVERY_ATTEMPTS_EXHAUSTED,
+                            truncate("Gave up after " + attempt + " attempts: " + e.getMessage()), failedAt);
+                    events.record(MessageEvent.of(m, MessageEventType.FAILED, failedAt).withAttempt(attempt)
+                            .withError(ErrorCode.DELIVERY_ATTEMPTS_EXHAUSTED)
+                            .withDetail("Gave up after " + attempt + " attempts"));
+                });
                 count(m.getChannel(), "failed_exhausted");
                 countError(metrics, m.getChannel().name(), ErrorCode.DELIVERY_ATTEMPTS_EXHAUSTED);
                 return new Outcome.Done();
             }
-            messages.markFailedOrRetry(messageId, MessageStatus.RETRYING, ErrorCode.PROVIDER_TEMPORARILY_FAILING,
-                    truncate(e.getMessage()), Instant.now());
+            Duration backoff = backoff(attempt);
+            Instant failedAt = Instant.now();
+            transactions.executeWithoutResult(status -> {
+                messages.markFailedOrRetry(messageId, MessageStatus.RETRYING, ErrorCode.PROVIDER_TEMPORARILY_FAILING,
+                        truncate(e.getMessage()), failedAt);
+                events.record(MessageEvent.of(m, MessageEventType.ATTEMPT_FAILED, failedAt).withAttempt(attempt)
+                        .withError(ErrorCode.PROVIDER_TEMPORARILY_FAILING)
+                        .withDetail("Next attempt in " + backoff.toSeconds() + " s"));
+            });
             count(m.getChannel(), "retry");
             countError(metrics, m.getChannel().name(), ErrorCode.PROVIDER_TEMPORARILY_FAILING);
-            return new Outcome.Retry(backoff(attempt));
+            return new Outcome.Retry(backoff);
         }
     }
 
@@ -182,15 +211,24 @@ public class DispatchService {
         if (messages.claim(m.getId(), MessageStatus.CLAIMABLE, Instant.now()) == 0) {
             return new Outcome.Done();
         }
-        messages.markFailed(m.getId(), FailureKind.EXPIRED, ErrorCode.OTP_EXPIRED,
-                "The one-time password expired at " + m.getExpiresAt() + " before it could be sent", Instant.now());
+        Instant expiredAt = Instant.now();
+        transactions.executeWithoutResult(status -> {
+            messages.markFailed(m.getId(), FailureKind.EXPIRED, ErrorCode.OTP_EXPIRED,
+                    "The one-time password expired at " + m.getExpiresAt() + " before it could be sent", expiredAt);
+            events.record(MessageEvent.of(m, MessageEventType.EXPIRED, expiredAt).withError(ErrorCode.OTP_EXPIRED)
+                    .withDetail("Valid until " + m.getExpiresAt()));
+        });
         count(m.getChannel(), "failed_expired");
         countError(metrics, m.getChannel().name(), ErrorCode.OTP_EXPIRED);
         return new Outcome.Done();
     }
 
-    private Outcome failPermanently(NotificationMessage m, ErrorCode errorCode, RuntimeException cause) {
-        messages.markFailed(m.getId(), FailureKind.PERMANENT, errorCode, truncate(cause.getMessage()), Instant.now());
+    private Outcome failPermanently(NotificationMessage m, int attempt, ErrorCode errorCode, RuntimeException cause) {
+        Instant failedAt = Instant.now();
+        transactions.executeWithoutResult(status -> {
+            messages.markFailed(m.getId(), FailureKind.PERMANENT, errorCode, truncate(cause.getMessage()), failedAt);
+            events.record(MessageEvent.of(m, MessageEventType.FAILED, failedAt).withAttempt(attempt).withError(errorCode));
+        });
         count(m.getChannel(), "failed_permanent");
         countError(metrics, m.getChannel().name(), errorCode);
         return new Outcome.Done();
