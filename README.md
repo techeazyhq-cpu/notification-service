@@ -104,6 +104,9 @@ The client UI has an **API playground** for trying the Client API from the brows
 Step by step, from creating the client and its API key through rate limits, billing, credit and OTP prices to the
 tenant's first delivered message: [docs/tenant-onboarding.md](docs/tenant-onboarding.md).
 
+For the tenant's own team, using the client console and integrating with the client API:
+[docs/client-guide.md](docs/client-guide.md).
+
 ## Sending from your own address
 
 In the client UI open **Sender addresses**, add an address and open the link that is e-mailed to it. A confirmed address can be the default, or be chosen per request with `"from": "orders@acme.com"`. Requests naming an unconfirmed address get `422 SENDER_NOT_VERIFIED`. Set `CLIENT_API_PUBLIC_BASE_URL` to the public URL of the client API so the link in the e-mail works. See ADR-007.
