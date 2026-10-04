@@ -177,6 +177,7 @@ public class IngestService {
         request.setKind(cmd.kind());
         request.setChannel(cmd.channel());
         request.setTemplateId(content.templateId());
+        request.setTemplateName(content.templateId() == null ? null : cmd.templateName());
         request.setSubject(content.subject());
         request.setBody(content.body());
         request.setTotal(cmd.recipients().size());

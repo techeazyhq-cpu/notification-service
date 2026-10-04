@@ -39,6 +39,8 @@ public class NotificationRequest {
     /** One-time passwords only: when the request's messages stop being worth sending (ADR-033). */
     private Instant expiresAt;
     private UUID templateId;
+    /** The template's name when the request was accepted; kept although the template may change or go (ADR-035). */
+    private String templateName;
     private String subject;
     private String body;
     private int total;

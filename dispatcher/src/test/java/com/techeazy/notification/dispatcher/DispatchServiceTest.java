@@ -18,8 +18,6 @@
 
 package com.techeazy.notification.dispatcher;
 
-import com.techeazy.notification.domain.MessageCategory;
-import com.techeazy.notification.error.ErrorCode;
 import com.techeazy.notification.application.RateLimitService;
 import com.techeazy.notification.dispatcher.DispatchService.Outcome;
 import com.techeazy.notification.dispatcher.provider.ChannelProvider.PermanentSendException;
@@ -27,6 +25,11 @@ import com.techeazy.notification.dispatcher.provider.ChannelProvider.SendResult;
 import com.techeazy.notification.dispatcher.provider.ChannelProvider.TransientSendException;
 import com.techeazy.notification.dispatcher.provider.ProviderRegistry;
 import com.techeazy.notification.domain.*;
+import com.techeazy.notification.domain.MessageCategory;
+import com.techeazy.notification.domain.MessageEvent;
+import com.techeazy.notification.domain.MessageEventType;
+import com.techeazy.notification.error.ErrorCode;
+import com.techeazy.notification.persistence.MessageEventLog;
 import com.techeazy.notification.persistence.NotificationMessageRepository;
 import com.techeazy.notification.persistence.NotificationRequestRepository;
 import com.techeazy.notification.port.RateLimiter.Decision;
@@ -34,6 +37,8 @@ import io.micrometer.core.instrument.Timer;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
+import org.springframework.transaction.support.TransactionOperations;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -44,7 +49,10 @@ import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.*;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 
 class DispatchServiceTest {
 
@@ -54,6 +62,7 @@ class DispatchServiceTest {
     ProviderRegistry providers = mock(ProviderRegistry.class);
     DispatcherProperties props = new DispatcherProperties();
     SimpleMeterRegistry meters = new SimpleMeterRegistry();
+    MessageEventLog events = mock(MessageEventLog.class);
     DispatchService service;
 
     UUID id = UUID.randomUUID();
@@ -63,7 +72,8 @@ class DispatchServiceTest {
     void setUp() {
         props.setMaxAttempts(3);
         props.setBaseBackoffSeconds(5);
-        service = new DispatchService(messages, requests, rateLimits, providers, props, meters);
+        service = new DispatchService(messages, requests, rateLimits, providers, props, meters, events,
+                TransactionOperations.withoutTransaction());
 
         message = new NotificationMessage();
         message.setId(id);
@@ -95,6 +105,10 @@ class DispatchServiceTest {
         verify(messages).markFailed(eq(id), eq(FailureKind.EXPIRED), eq(ErrorCode.OTP_EXPIRED),
                 contains("expired"), any());
         assertThat(errors("SMS", ErrorCode.OTP_EXPIRED)).isEqualTo(1.0);
+        assertThat(loggedEvent()).satisfies(event -> {
+            assertThat(event.type()).isEqualTo(MessageEventType.EXPIRED);
+            assertThat(event.errorCode()).isEqualTo(ErrorCode.OTP_EXPIRED);
+        });
         verifyNoInteractions(rateLimits);
         verify(providers, never()).send(any());
     }
@@ -227,6 +241,12 @@ class DispatchServiceTest {
                 eq(ErrorCode.PROVIDER_TEMPORARILY_FAILING),
                 contains("timeout"), any());
         assertThat(errors("SMS", ErrorCode.PROVIDER_TEMPORARILY_FAILING)).isEqualTo(1.0);
+        assertThat(loggedEvent()).satisfies(event -> {
+            assertThat(event.type()).isEqualTo(MessageEventType.ATTEMPT_FAILED);
+            assertThat(event.attempt()).isEqualTo(1);
+            assertThat(event.errorCode()).isEqualTo(ErrorCode.PROVIDER_TEMPORARILY_FAILING);
+            assertThat(event.detail()).isEqualTo("Next attempt in 5 s");
+        });
 
         message.setAttempts(1);
         assertThat(service.process(id)).isEqualTo(new Outcome.Retry(Duration.ofSeconds(10)));
@@ -242,6 +262,11 @@ class DispatchServiceTest {
         verify(messages).markFailed(eq(id), eq(FailureKind.EXHAUSTED), eq(ErrorCode.DELIVERY_ATTEMPTS_EXHAUSTED),
                 contains("Gave up after 3"), any());
         assertThat(errors("SMS", ErrorCode.DELIVERY_ATTEMPTS_EXHAUSTED)).isEqualTo(1.0);
+        assertThat(loggedEvent()).satisfies(event -> {
+            assertThat(event.type()).isEqualTo(MessageEventType.FAILED);
+            assertThat(event.attempt()).isEqualTo(3);
+            assertThat(event.errorCode()).isEqualTo(ErrorCode.DELIVERY_ATTEMPTS_EXHAUSTED);
+        });
     }
 
     @Test
@@ -253,6 +278,11 @@ class DispatchServiceTest {
         verify(messages).markFailed(eq(id), eq(FailureKind.PERMANENT), eq(ErrorCode.DELIVERY_REJECTED),
                 contains("invalid recipient"), any());
         assertThat(errors("SMS", ErrorCode.DELIVERY_REJECTED)).isEqualTo(1.0);
+        assertThat(loggedEvent()).satisfies(event -> {
+            assertThat(event.type()).isEqualTo(MessageEventType.FAILED);
+            assertThat(event.errorCode()).isEqualTo(ErrorCode.DELIVERY_REJECTED);
+            assertThat(event.detail()).as("provider wording can quote the recipient").isNull();
+        });
         assertThat(meters.get(DispatchService.DELIVERY_ERRORS).tag("code", "DELIVERY_REJECTED").counter().getId()
                 .getTag("error_id")).isEqualTo(ErrorCode.DELIVERY_REJECTED.errorId());
     }
@@ -282,6 +312,32 @@ class DispatchServiceTest {
         assertThat(errors("SMS", ErrorCode.MESSAGE_CONTENT_MISSING)).isEqualTo(1.0);
     }
 
+    /** The log keeps no personal data: a sent message's event holds the attempt and provider id, nothing else. */
+    @Test
+    void aSentMessageIsLoggedWithItsAttemptAndProviderId() {
+        when(providers.send(any())).thenReturn(new SendResult("prov-77"));
+
+        service.process(id);
+
+        assertThat(loggedEvent()).satisfies(event -> {
+            assertThat(event.type()).isEqualTo(MessageEventType.SENT);
+            assertThat(event.messageId()).isEqualTo(id);
+            assertThat(event.clientId()).isEqualTo(message.getClientId());
+            assertThat(event.attempt()).isEqualTo(1);
+            assertThat(event.providerMessageId()).isEqualTo("prov-77");
+            assertThat(event.errorCode()).isNull();
+        });
+    }
+
+    @Test
+    void aMessageHeldForAnOutageLogsNothing() {
+        when(providers.isAvailable(Channel.SMS)).thenReturn(false);
+
+        service.process(id);
+
+        verify(events, never()).record(any());
+    }
+
     @Test
     void aSentMessageCountsNoDeliveryError() {
         when(providers.send(any())).thenReturn(new SendResult("prov-1"));
@@ -289,6 +345,12 @@ class DispatchServiceTest {
         service.process(id);
 
         assertThat(meters.find(DispatchService.DELIVERY_ERRORS).counters()).isEmpty();
+    }
+
+    private MessageEvent loggedEvent() {
+        ArgumentCaptor<MessageEvent> event = ArgumentCaptor.forClass(MessageEvent.class);
+        verify(events).record(event.capture());
+        return event.getValue();
     }
 
     private double errors(String channel, ErrorCode errorCode) {

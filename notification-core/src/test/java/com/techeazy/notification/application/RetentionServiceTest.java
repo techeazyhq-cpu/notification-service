@@ -109,6 +109,11 @@ class RetentionServiceTest {
         return id;
     }
 
+    private static List<String> erasureEvents(UUID message) {
+        return jdbc.sql("SELECT detail FROM message_event WHERE message_id = :id AND event = 'DATA_ERASED'")
+                .param("id", message).query(String.class).list();
+    }
+
     private static Map<String, Object> row(String table, UUID id) {
         return jdbc.sql("SELECT * FROM " + table + " WHERE id = :id").param("id", id).query().singleRow();
     }
@@ -129,6 +134,22 @@ class RetentionServiceTest {
         assertThat(row).extractingByKey("erased_at").isNotNull();
         assertThat(row("notification_request", request)).containsEntry("body", "[erased]");
         assertThat(row("notification_request", request)).containsEntry("subject", null);
+        assertThat(erasureEvents(old)).containsExactly("Retention: personal data is kept 90 days");
+    }
+
+    /** The fingerprint outlives the address, so the message can still be found for a complaint (ADR-035). */
+    @Test
+    void erasureKeepsTheFingerprintAndRecordsTheErasureInTheEventLog() {
+        UUID client = client();
+        UUID request = request(client, 1, 1, "Hi", null);
+        UUID sent = message(client, request, "eve@example.com", "SENT", 1);
+        jdbc.sql("UPDATE notification_message SET recipient_fingerprint = 'fp-eve' WHERE id = :id").param("id", sent).update();
+
+        service(90, 400, 7, 100).eraseRecipient(client, "eve@example.com", NOW);
+
+        assertThat(row("notification_message", sent)).containsEntry("recipient", "[erased]")
+                .containsEntry("recipient_fingerprint", "fp-eve");
+        assertThat(erasureEvents(sent)).containsExactly("Erased on request");
     }
 
     @Test

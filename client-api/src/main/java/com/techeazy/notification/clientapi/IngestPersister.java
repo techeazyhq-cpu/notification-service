@@ -18,6 +18,7 @@
 
 package com.techeazy.notification.clientapi;
 
+import com.techeazy.notification.application.RecipientFingerprints;
 import com.techeazy.notification.domain.MessageStatus;
 import com.techeazy.notification.domain.NotificationMessage;
 import com.techeazy.notification.domain.NotificationRequest;
@@ -48,6 +49,12 @@ public class IngestPersister {
     @PersistenceContext
     private EntityManager em;
 
+    private final RecipientFingerprints fingerprints;
+
+    public IngestPersister(RecipientFingerprints fingerprints) {
+        this.fingerprints = fingerprints;
+    }
+
     @Transactional
     public List<NotificationMessage> persist(NotificationRequest request, List<Recipient> recipients, Runnable admission) {
         em.persist(request);
@@ -62,6 +69,7 @@ public class IngestPersister {
             m.setClientId(request.getClientId());
             m.setChannel(request.getChannel());
             m.setRecipient(r.address());
+            m.setRecipientFingerprint(fingerprints.of(r.address()));
             m.setVariables(r.variables() == null ? new HashMap<>() : new HashMap<>(r.variables()));
             m.setStatus(MessageStatus.PENDING);
             m.setCategory(request.getCategory());

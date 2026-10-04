@@ -60,9 +60,10 @@ class MigrationServiceTest {
                     "005-admin-accounts", "006-client-senders", "007-personal-data-retention", "008-dead-letters",
                     "009-admin-roles", "010-admin-audit-log", "011-message-error-code",
                     "012-message-category", "013-otp-sweep-index", "014-billing-otp-price",
-                    "015-sent-usage-by-category");
+                    "015-sent-usage-by-category", "016-message-event-log", "017-recipient-fingerprint-index",
+                    "018-fingerprint-backfill-index");
     private static final String NOT_COMPARED = "('databasechangelog','databasechangeloglock','flyway_schema_history',"
-            + "'billing_plan','billing_plan_rate','billing_account','credit_ledger_entry','credit_hold','invoice','invoice_line','invoice_payment','admin_user','admin_recovery_code','admin_session','client_sender','admin_audit_event','billing_account_otp_price')";
+            + "'billing_plan','billing_plan_rate','billing_account','credit_ledger_entry','credit_hold','invoice','invoice_line','invoice_payment','admin_user','admin_recovery_code','admin_session','client_sender','admin_audit_event','billing_account_otp_price','message_event')";
     private static final List<String> BILLING_TABLES =
             List.of("billing_plan", "billing_plan_rate", "billing_account", "credit_ledger_entry", "credit_hold", "invoice", "invoice_line", "invoice_payment");
 
@@ -355,6 +356,48 @@ class MigrationServiceTest {
     }
 
     @Test
+    void theMessageEventLogIsAppendOnlyGoesWithItsMessageAndRollsBackCleanly() throws Exception {
+        String db = newDatabase();
+        MigrationService service = service(db, true);
+        service.update();
+        seed(db);
+        insertMessage(db, "00000000-0000-0000-0000-0000000000e2", "SENT", "null");
+        execute(db, "insert into message_event (message_id, client_id, event, occurred_at, attempt) "
+                + "select id, client_id, 'SENT', now(), 1 from notification_message");
+
+        assertThatThrownBy(() -> execute(db, "update message_event set attempt = 2")).hasMessageContaining("append-only");
+        assertThatThrownBy(() -> execute(db, "insert into message_event (message_id, client_id, event, occurred_at) "
+                + "select id, client_id, 'OPENED', now() from notification_message"))
+                .hasMessageContaining("ck_message_event_type");
+
+        execute(db, "delete from notification_message where id = '00000000-0000-0000-0000-0000000000e2'");
+        assertThat(query(db, "select count(*)::text from message_event")).containsExactly("0");
+
+        undoFrom(service, "016-message-event-log");
+
+        assertThat(query(db, "select table_name from information_schema.tables where table_name = 'message_event'"))
+                .isEmpty();
+        assertThat(query(db, "select column_name from information_schema.columns where column_name in "
+                + "('recipient_fingerprint', 'template_name')")).isEmpty();
+    }
+
+    @Test
+    void theFingerprintIndexesAreBuiltValidAndRollBackCleanly() throws Exception {
+        String db = newDatabase();
+        MigrationService service = service(db, true);
+        service.update();
+
+        assertThat(query(db, "select i.indisvalid::text from pg_index i join pg_class c on c.oid = i.indexrelid "
+                + "where c.relname in ('ix_message_client_fingerprint', 'ix_message_fingerprint_missing')"))
+                .containsExactly("true", "true");
+
+        undoFrom(service, "017-recipient-fingerprint-index");
+
+        assertThat(query(db, "select indexname from pg_indexes where indexname in "
+                + "('ix_message_client_fingerprint', 'ix_message_fingerprint_missing')")).isEmpty();
+    }
+
+    @Test
     void theDeadLetterChangesetBackfillsExistingFailuresAndRollsBackCleanly() throws Exception {
         String db = newDatabase();
         MigrationService service = service(db, true);
@@ -598,12 +641,12 @@ class MigrationServiceTest {
                 + "|| ' default=' || coalesce(column_default, '') from information_schema.columns "
                 + "where table_schema='public' and column_name not in "
                 + "('sender_email','sender_name','erased_at','failure_kind',"
-                + "'reprocess_count','error_code','category','expires_at') and table_name not in " + NOT_COMPARED));
+                + "'reprocess_count','error_code','category','expires_at','recipient_fingerprint','template_name') and table_name not in " + NOT_COMPARED));
         lines.addAll(query(database, "select 'idx ' || tablename || ' ' || indexdef from pg_indexes "
                 + "where schemaname='public' and indexname not in ('ix_message_sent_usage','ix_message_erase_due',"
                 + "'ix_request_erase_due','ix_request_idempotency_due','ix_message_dead_letters',"
                 + "'ix_message_pending_otp','ix_message_inflight_otp',"
-                + "'ix_message_sent_usage_category') and tablename not in " + NOT_COMPARED));
+                + "'ix_message_sent_usage_category','ix_message_client_fingerprint','ix_message_fingerprint_missing') and tablename not in " + NOT_COMPARED));
         lines.addAll(query(database, "select 'con ' || conrelid::regclass || ' ' || conname || ' ' || pg_get_constraintdef(oid) "
                 + "from pg_constraint where connamespace = 'public'::regnamespace and conrelid::regclass::text not in "
                         + NOT_COMPARED + " and conname not in ('ck_message_failure_kind', 'ck_request_category',"

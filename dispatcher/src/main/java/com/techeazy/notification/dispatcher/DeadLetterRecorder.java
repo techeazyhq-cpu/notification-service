@@ -18,13 +18,17 @@
 
 package com.techeazy.notification.dispatcher;
 
+import com.techeazy.notification.domain.MessageEvent;
+import com.techeazy.notification.domain.MessageEventType;
 import com.techeazy.notification.domain.MessageStatus;
 import com.techeazy.notification.error.ErrorCode;
+import com.techeazy.notification.persistence.MessageEventLog;
 import com.techeazy.notification.persistence.NotificationMessageRepository;
 import io.micrometer.core.instrument.MeterRegistry;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.support.TransactionOperations;
 
 import java.time.Instant;
 import java.util.UUID;
@@ -43,15 +47,29 @@ class DeadLetterRecorder {
 
     private final NotificationMessageRepository messages;
     private final MeterRegistry meters;
+    private final MessageEventLog events;
+    private final TransactionOperations transactions;
 
-    DeadLetterRecorder(NotificationMessageRepository messages, MeterRegistry meters) {
+    DeadLetterRecorder(NotificationMessageRepository messages, MeterRegistry meters, MessageEventLog events,
+                       TransactionOperations transactions) {
         this.messages = messages;
         this.meters = meters;
+        this.events = events;
+        this.transactions = transactions;
     }
 
     /** @return true when the message was moved to FAILED by this call */
     boolean recordDeadLetter(UUID messageId, String channel) {
-        boolean changed = messages.markDeadLettered(messageId, MessageStatus.IN_FLIGHT, REASON, Instant.now()) == 1;
+        Instant now = Instant.now();
+        boolean changed = Boolean.TRUE.equals(transactions.execute(status -> {
+            if (messages.markDeadLettered(messageId, MessageStatus.IN_FLIGHT, REASON, now) != 1) {
+                return false;
+            }
+            messages.findById(messageId).ifPresent(message -> events.record(
+                    MessageEvent.of(message, MessageEventType.DEAD_LETTERED, now)
+                            .withError(ErrorCode.DELIVERY_DEAD_LETTERED)));
+            return true;
+        }));
         if (changed) {
             LOG.warn("Message {} on {} was dead-lettered by the broker and is now FAILED", messageId, channel);
             meters.counter("notification.dead_letter", "channel", channel).increment();

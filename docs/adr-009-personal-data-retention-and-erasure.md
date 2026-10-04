@@ -37,6 +37,16 @@ Negative / accepted:
 - Defaults (90 and 400 days) are a starting point; the legal retention period is the operator's decision (confirm with your DPO).
 - The status views show `[erased]` in place of the address once data is erased.
 
+## Amendment (2026-10-04): what erasure keeps
+
+Since ADR-035, erasure, by retention or on request, removes the address, template values and error text as before,
+but keeps two things for the record's lifetime (400 days by default):
+- a keyed fingerprint of the address;
+- the message's event log, which holds no personal data.
+
+A tenant can then still evidence what it sent to a person who complains to an authority. Every erasure is itself
+recorded as a `DATA_ERASED` event.
+
 ## Follow-ups
 
 Erase or expire audit and provider data if any is added; per-client retention overrides; a "prove erasure" report; crypto-shredding; retention for admin sessions and unconfirmed sender addresses.

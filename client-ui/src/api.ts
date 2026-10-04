@@ -85,8 +85,9 @@ export async function send<T = void>(method: 'POST' | 'PUT' | 'DELETE', path: st
 }
 
 /** Fetches with the API key header (a plain link cannot) and hands the result to the browser as a download. */
-export async function download(path: string, filename: string): Promise<void> {
-  const blob = await (await request(path)).blob();
+/** Saves a file from the API; with a `body` the request is a POST, which keeps personal data out of the URL. */
+export async function download(path: string, filename: string, body?: unknown): Promise<void> {
+  const blob = await (await request(path, body === undefined ? {} : { method: 'POST', body })).blob();
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
   link.href = url;
