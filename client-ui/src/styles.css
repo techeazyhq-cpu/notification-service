@@ -28,7 +28,8 @@
 body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
 h1, h2, h3 { margin: 0 0 12px; }
 .shell { display: grid; grid-template-columns: 200px 1fr; min-height: 100vh; }
-nav { background: var(--panel); border-right: 1px solid var(--line); padding: 16px 12px; display: flex; flex-direction: column; gap: 2px; }
+nav { background: var(--panel); border-right: 1px solid var(--line); padding: 16px 12px; display: flex; flex-direction: column; gap: 2px;
+  position: sticky; top: 0; height: 100vh; overflow-y: auto; }
 nav h2 { font-size: 16px; padding: 0 8px 12px; }
 nav a { padding: 8px 10px; border-radius: 6px; color: var(--text); text-decoration: none; }
 nav a.active { background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--accent); font-weight: 600; }
@@ -67,7 +68,7 @@ button:disabled { opacity: .5; cursor: default; }
 .chart { width: 100%; height: 180px; }
 .legend { display: flex; gap: 14px; color: var(--muted); font-size: 12px; margin-top: 6px; }
 .legend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 5px; }
-@media (max-width: 720px) { .shell { grid-template-columns: 1fr; } nav { flex-direction: row; flex-wrap: wrap; } nav h2 { width: 100%; } }
+@media (max-width: 720px) { .shell { grid-template-columns: 1fr; } nav { flex-direction: row; flex-wrap: wrap; position: static; height: auto; } nav h2 { width: 100%; } }
 
 /* client tracker */
 .bar { display: flex; height: 8px; min-width: 120px; border-radius: 4px; overflow: hidden; background: color-mix(in srgb, var(--muted) 22%, transparent); }
