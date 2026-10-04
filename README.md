@@ -307,7 +307,7 @@ docker run -d --name sonarqube-local -p 9001:9000 -e SONAR_SEARCH_JAVAADDITIONAL
 # create a token in the UI (My Account > Security), then the Java modules:
 mvn verify org.sonarsource.scanner.maven:sonar-maven-plugin:sonar -Dsonar.host.url=http://localhost:9001 -Dsonar.token=<token>   -Dsonar.projectKey=notification-service -Dsonar.coverage.jacoco.xmlReportPaths='**/target/site/jacoco/jacoco.xml'
 # and the front ends, scripts and container files:
-docker run --rm -v "$PWD:/usr/src" -w /usr/src sonarsource/sonar-scanner-cli -Dsonar.host.url=http://host.docker.internal:9001   -Dsonar.token=<token> -Dsonar.projectKey=notification-service-frontend -Dsonar.sources=.   -Dsonar.inclusions='admin-ui/src/**,client-ui/src/**,client-ui/tests/**,scripts/**,perf/**,tools/**,**/Dockerfile,docker-compose*.yml,.github/**,deploy/**'   -Dsonar.exclusions='**/node_modules/**,**/dist/**,**/target/**'
+docker run --rm -v "$PWD:/usr/src" -w /usr/src sonarsource/sonar-scanner-cli -Dsonar.host.url=http://host.docker.internal:9001   -Dsonar.token=<token> -Dsonar.projectKey=notification-service-frontend -Dsonar.sources=.   -Dsonar.inclusions='admin-ui/src/**,client-ui/src/**,client-ui/tests/**,scripts/**,perf/**,tools/**,postman/**,**/Dockerfile,docker-compose*.yml,.github/**,deploy/**'   -Dsonar.exclusions='**/node_modules/**,**/dist/**,**/target/**,**/.terraform/**'
 ```
 
 JaCoCo reports are written to `*/target/site/jacoco/` by `mvn test` and picked up by Sonar.
