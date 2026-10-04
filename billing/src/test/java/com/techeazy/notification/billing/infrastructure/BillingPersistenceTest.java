@@ -39,6 +39,7 @@ import com.techeazy.notification.billing.domain.BillingPeriod;
 import com.techeazy.notification.billing.domain.ChannelRate;
 import com.techeazy.notification.billing.domain.CreditHold;
 import com.techeazy.notification.billing.domain.HoldScope;
+import com.techeazy.notification.billing.domain.SpendCapExceededException;
 import com.techeazy.notification.billing.domain.HoldStatus;
 import com.techeazy.notification.billing.domain.InsufficientCreditException;
 import com.techeazy.notification.billing.domain.Invoice;
@@ -352,6 +353,90 @@ class BillingPersistenceTest {
                 Instant.parse("2026-09-01T00:00:00Z"));
 
         assertThat(august).containsOnly(Map.entry(Channel.SMS, new SentCount(1, 1)));
+    }
+
+    @Test
+    void inFlightUsageCountsOnlyUnfinishedMessagesPerChannelAndClient() {
+        UUID client = newClient();
+        UUID other = newClient();
+        UUID request = newRequest(client);
+        newMessage(request, client, Channel.SMS, "PENDING", null);
+        newMessage(request, client, Channel.SMS, "QUEUED", null);
+        newMessage(request, client, Channel.SMS, "PROCESSING", null);
+        UUID otp = newMessage(request, client, Channel.SMS, "RETRYING", null);
+        newMessage(request, client, Channel.EMAIL, "QUEUED", null);
+        newMessage(request, client, Channel.SMS, "SENT", "2026-08-10T10:00:00Z");
+        newMessage(request, client, Channel.SMS, "FAILED", null);
+        newMessage(newRequest(other), other, Channel.SMS, "QUEUED", null);
+        jdbc.sql("UPDATE notification_message SET category = 'OTP' WHERE id = :id").param("id", otp).update();
+
+        assertThat(usage.inFlightByChannel(client)).containsOnly(Map.entry(Channel.SMS, new SentCount(3, 1)),
+                Map.entry(Channel.EMAIL, SentCount.ordinary(1)));
+    }
+
+    @Test
+    void concurrentRequestsTogetherNeverTakeAPostpaidAccountPastItsCap() throws Exception {
+        UUID client = newClient();
+        Plan plan = plans.save(new Plan(UUID.randomUUID(), "plan-" + UUID.randomUUID(), USD, Money.zero(USD),
+                new BigDecimal("0.10"), Map.of(Channel.SMS, new ChannelRate(usd("1"), 0)), true));
+        accounts.save(new BillingAccount(client, plan.id(), BillingMode.POSTPAID, usd("100"), Money.zero(USD),
+                AccountStatus.ACTIVE, null));
+        AdmissionControl admission = new AdmissionControl(accounts, plans, otpPrices, credits, usage,
+                new InvoiceCalculator(), CLOCK);
+        ExecutorService pool = Executors.newFixedThreadPool(12);
+        List<Callable<Boolean>> requests = new ArrayList<>();
+        for (int i = 0; i < 30; i++) {
+            requests.add(() -> {
+                try {
+                    template.executeWithoutResult(status -> {
+                        UUID request = newRequest(client);
+                        admission.admit(new Admission(client, Channel.SMS, 10, HoldScope.REQUEST, request));
+                        for (int m = 0; m < 10; m++) {
+                            newMessage(request, client, Channel.SMS, "QUEUED", null);
+                        }
+                    });
+                    return true;
+                } catch (SpendCapExceededException e) {
+                    return false;
+                }
+            });
+        }
+
+        long accepted = 0;
+        try {
+            for (Future<Boolean> request : pool.invokeAll(requests)) {
+                accepted += request.get(60, TimeUnit.SECONDS) ? 1 : 0;
+            }
+        } finally {
+            pool.shutdownNow();
+        }
+
+        assertThat(accepted).isEqualTo(10);
+        assertThat(usage.inFlightByChannel(client)).containsOnly(Map.entry(Channel.SMS, SentCount.ordinary(100)));
+    }
+
+    /** In-flight usage is read at every postpaid accept with a spend cap too, so it must come from an index alone. */
+    @Test
+    void inFlightUsageIsCountedFromTheIndexWithoutReadingTheTable() throws Exception {
+        UUID client = newClient();
+        UUID request = newRequest(client);
+        for (int i = 0; i < 200; i++) {
+            newMessage(request, client, Channel.SMS, i % 2 == 0 ? "QUEUED" : "SENT", "2026-08-10T10:00:00Z");
+        }
+        String explain = JdbcUsageReader.IN_FLIGHT_BY_CHANNEL.replace(":client", "'" + client + "'");
+        List<String> plan = new ArrayList<>();
+        try (Connection connection = dataSource.getConnection();
+             Statement statement = connection.createStatement()) {
+            statement.execute("VACUUM ANALYZE notification_message");
+            statement.execute("SET enable_seqscan = off");
+            try (ResultSet rs = statement.executeQuery("EXPLAIN " + explain)) {
+                while (rs.next()) {
+                    plan.add(rs.getString(1));
+                }
+            }
+        }
+
+        assertThat(plan).anyMatch(line -> line.contains("Index Only Scan using ix_message_inflight_usage"));
     }
 
     /** Usage is read at every postpaid accept with a spend cap, so it must come from the index alone. */
