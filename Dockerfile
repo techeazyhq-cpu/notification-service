@@ -20,7 +20,7 @@
 # ADR-018, which stops relying on Dependabot's version classifier for this image at all. Bumping this tag needs a
 # human to verify the build (Lombok's generated code, not just compilation, since a no-op annotation processor can
 # still produce a jar that only fails at runtime).
-FROM maven:3.9-eclipse-temurin-21 AS build
+FROM maven:3.9-eclipse-temurin-21@sha256:99e61abcff91a9b1333463bd8451fb18495d6eba9250ac66a338b518f8278320 AS build
 ARG MODULE
 WORKDIR /src
 COPY pom.xml .
@@ -36,7 +36,7 @@ COPY billing/src billing/src
 COPY ${MODULE}/src ${MODULE}/src
 RUN --mount=type=cache,target=/root/.m2 mvn -q -B -DskipTests package -pl ${MODULE} -am
 
-FROM eclipse-temurin:21-jre
+FROM eclipse-temurin:21-jre@sha256:cff19e6215689161eb6162c11b86b0c60ddf802164f2eaf48d570f8fb79a36c5
 ARG MODULE
 RUN useradd --system --uid 1001 app
 USER app

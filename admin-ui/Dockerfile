@@ -13,7 +13,7 @@
 # limitations under the License.
 #
 # @author Vasantha Kumar <vasantha.kumar@hotmail.com>
-FROM node:25-alpine AS build
+FROM node:25-alpine@sha256:bdf2cca6fe3dabd014ea60163eca3f0f7015fbd5c7ee1b0e9ccb4ced6eb02ef4 AS build
 WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci
@@ -22,7 +22,7 @@ RUN npm run build
 
 # Non-root nginx: serves the SPA and proxies /api to the Admin API, so the browser sees a single origin. The base
 # image already defaults to this user; USER is explicit here so it survives a future change to that default.
-FROM nginxinc/nginx-unprivileged:1.31-alpine
+FROM nginxinc/nginx-unprivileged:1.31-alpine@sha256:26b0bf6fbf07297983cb341998d79c831508787de26627dd2a112321b9c3a4af
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 COPY security-headers.conf /etc/nginx/conf.d/security-headers.inc
 COPY --from=build /app/dist /usr/share/nginx/html
