@@ -24,8 +24,9 @@ import java.util.UUID;
 public interface NonceStore {
 
     /**
-     * Records that {@code clientId} used {@code nonce}, unless it already did and that use has not expired by
-     * {@code now}.
+     * Records that {@code clientId} used {@code nonce}, unless it already did and that use is still live at {@code now}.
+     * A use stays live up to and including its {@code expiresAt}, because the signature gate still accepts a request
+     * signed exactly one window before {@code now}.
      *
      * @return true when this is the nonce's first live use; false when it is a replay
      */
