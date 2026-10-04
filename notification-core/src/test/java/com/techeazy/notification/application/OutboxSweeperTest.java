@@ -25,18 +25,23 @@ import com.techeazy.notification.persistence.NotificationMessageRepository;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InOrder;
+import org.springframework.transaction.TransactionStatus;
+import org.springframework.transaction.support.TransactionCallback;
+import org.springframework.transaction.support.TransactionOperations;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -44,7 +49,8 @@ class OutboxSweeperTest {
 
     private final NotificationMessageRepository messages = mock(NotificationMessageRepository.class);
     private final OutboxPublisher outbox = mock(OutboxPublisher.class);
-    private final OutboxSweeper sweeper = new OutboxSweeper(messages, outbox, new NotificationProperties());
+    private final RecordingTransactions transactions = new RecordingTransactions();
+    private final OutboxSweeper sweeper = new OutboxSweeper(messages, outbox, new NotificationProperties(), transactions);
 
     private static NotificationMessage message(MessageStatus status) {
         NotificationMessage m = new NotificationMessage();
@@ -54,15 +60,32 @@ class OutboxSweeperTest {
     }
 
     @Test
-    void republishesMessagesThatStayedQueuedAndKeepsThemQueued() {
+    void republishesMessagesThatStayedQueuedAndMarksThemQueuedAgain() {
         NotificationMessage lost = message(MessageStatus.QUEUED);
         when(messages.lockStale(eq("QUEUED"), any(), anyInt())).thenReturn(List.of(lost));
         when(outbox.publishOnly(List.of(lost))).thenReturn(List.of(lost.getId()));
 
         sweeper.sweep();
 
-        assertThat(lost.getStatus()).isEqualTo(MessageStatus.QUEUED);
-        assertThat(lost.getUpdatedAt()).isNotNull();
+        verify(messages).releaseForRepublish(eq(List.of(lost.getId())), any());
+        verify(messages).markQueued(eq(List.of(lost.getId())), any());
+    }
+
+    @Test
+    void theRowsAreReleasedAndCommittedBeforeTheBrokerIsCalled() {
+        NotificationMessage lost = message(MessageStatus.QUEUED);
+        when(messages.lockStale(eq("QUEUED"), any(), anyInt())).thenReturn(List.of(lost));
+        when(outbox.publishOnly(List.of(lost))).thenAnswer(call -> {
+            assertThat(transactions.open).as("a transaction is open while publishing").isFalse();
+            return List.of(lost.getId());
+        });
+
+        sweeper.sweep();
+
+        InOrder order = inOrder(messages, outbox);
+        order.verify(messages).releaseForRepublish(eq(List.of(lost.getId())), any());
+        order.verify(outbox).publishOnly(List.of(lost));
+        order.verify(messages).markQueued(eq(List.of(lost.getId())), any());
     }
 
     /** A retry waits in the broker's retry topic; if the broker loses it, only this sweep brings the message back. */
@@ -74,7 +97,7 @@ class OutboxSweeperTest {
 
         sweeper.sweep();
 
-        assertThat(stranded.getStatus()).isEqualTo(MessageStatus.QUEUED);
+        verify(messages).markQueued(eq(List.of(stranded.getId())), any());
     }
 
     @Test
@@ -103,7 +126,7 @@ class OutboxSweeperTest {
         verify(messages).lockStaleOtp(eq("QUEUED"), cutoff.capture(), anyInt());
         assertThat(Duration.between(cutoff.getValue(), before).abs().toSeconds()).isBetween(59L, 61L);
         verify(outbox).publishOnly(List.of(lost));
-        assertThat(lost.getStatus()).isEqualTo(MessageStatus.QUEUED);
+        verify(messages).markQueued(eq(List.of(lost.getId())), any());
     }
 
     @Test
@@ -119,13 +142,45 @@ class OutboxSweeperTest {
     }
 
     @Test
-    void marksMessagesPendingAgainWhenThePublishFails() {
+    void messagesWhosePublishFailsAreLeftPendingForTheNextSweep() {
         NotificationMessage stuck = message(MessageStatus.PROCESSING);
         when(messages.lockStale(eq("PROCESSING"), any(), anyInt())).thenReturn(List.of(stuck));
         when(outbox.publishOnly(List.of(stuck))).thenReturn(List.of());
 
         sweeper.sweep();
 
-        assertThat(stuck.getStatus()).isEqualTo(MessageStatus.PENDING);
+        verify(messages).releaseForRepublish(eq(List.of(stuck.getId())), any());
+        verify(messages, never()).markQueued(any(), any());
+    }
+
+    @Test
+    void eachNonEmptyBatchIsTakenInATransactionOfItsOwn() {
+        when(messages.lockStale(eq("PENDING"), any(), anyInt())).thenReturn(List.of(message(MessageStatus.PENDING)));
+        when(messages.lockStale(eq("QUEUED"), any(), anyInt())).thenReturn(List.of(message(MessageStatus.QUEUED)));
+
+        sweeper.sweep();
+
+        assertThat(transactions.count).isEqualTo(8);
+        verify(messages, never()).releaseForRepublish(eq(List.of()), any());
+    }
+
+    /** Runs each callback directly, remembering whether one is running and how many ran. */
+    private static final class RecordingTransactions implements TransactionOperations {
+        private boolean open;
+        private int count;
+        private final List<Object> results = new ArrayList<>();
+
+        @Override
+        public <T> T execute(TransactionCallback<T> action) {
+            open = true;
+            count++;
+            try {
+                T result = action.doInTransaction(mock(TransactionStatus.class));
+                results.add(result);
+                return result;
+            } finally {
+                open = false;
+            }
+        }
     }
 }

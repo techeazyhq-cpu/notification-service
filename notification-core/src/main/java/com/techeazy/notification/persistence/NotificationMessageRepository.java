@@ -132,6 +132,18 @@ public interface NotificationMessageRepository
             where m.id in :ids and m.status = com.techeazy.notification.domain.MessageStatus.PENDING""")
     int markQueued(@Param("ids") Collection<UUID> ids, @Param("now") Instant now);
 
+    /**
+     * Sweeper: hands rows it has just locked back to the outbox state for republishing. The fresh {@code updatedAt}
+     * keeps every sweeper from taking them again before they had a chance to be delivered.
+     */
+    @Transactional
+    @Modifying
+    @Query("""
+            update NotificationMessage m set m.status = com.techeazy.notification.domain.MessageStatus.PENDING,
+                   m.updatedAt = :now
+            where m.id in :ids""")
+    int releaseForRepublish(@Param("ids") Collection<UUID> ids, @Param("now") Instant now);
+
     /** Admin re-queue of a FAILED message: resets attempts and puts it back in the outbox state. */
     @Transactional
     @Modifying
