@@ -81,6 +81,16 @@ class JdbcNonceStoreTest {
     }
 
     @Test
+    void aReplayAtTheVeryEndOfTheWindowIsStillRefused() {
+        UUID client = UUID.randomUUID();
+        nonces.claim(client, "nonce-boundary-001", NOW, NOW.plus(WINDOW));
+        Instant lastAcceptedMoment = NOW.plus(WINDOW);
+
+        assertThat(nonces.claim(client, "nonce-boundary-001", lastAcceptedMoment, lastAcceptedMoment.plus(WINDOW))).isFalse();
+        assertThat(nonces.purgeExpired(lastAcceptedMoment, 100)).isZero();
+    }
+
+    @Test
     void theSameNonceFromAnotherClientIsUnrelated() {
         String nonce = "shared-nonce-00001";
 

@@ -36,11 +36,11 @@ public class JdbcNonceStore implements NonceStore {
     private static final String CLAIM = """
             INSERT INTO api_request_nonce (client_id, nonce, expires_at) VALUES (:client, :nonce, :expires)
             ON CONFLICT (client_id, nonce) DO UPDATE SET expires_at = EXCLUDED.expires_at
-            WHERE api_request_nonce.expires_at <= :now""";
+            WHERE api_request_nonce.expires_at < :now""";
 
     private static final String PURGE = """
             DELETE FROM api_request_nonce
-            WHERE ctid IN (SELECT ctid FROM api_request_nonce WHERE expires_at <= :now LIMIT :limit)""";
+            WHERE ctid IN (SELECT ctid FROM api_request_nonce WHERE expires_at < :now LIMIT :limit)""";
 
     private final JdbcClient jdbc;
 
