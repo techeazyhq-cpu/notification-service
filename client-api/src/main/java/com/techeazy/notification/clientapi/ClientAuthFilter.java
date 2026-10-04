@@ -28,6 +28,7 @@ import com.techeazy.notification.clientapi.RequestSignatureGate.SigningPolicy;
 import com.techeazy.notification.domain.Client;
 import com.techeazy.notification.error.ErrorBody;
 import com.techeazy.notification.error.ErrorCode;
+import com.techeazy.notification.infra.ClientChangeBroadcast;
 import com.techeazy.notification.error.TraceIdSource;
 import com.techeazy.notification.persistence.ClientRepository;
 import com.techeazy.notification.port.RateLimiter.Decision;
@@ -46,10 +47,10 @@ import java.time.Duration;
 import java.util.Optional;
 
 /**
- * Authenticates {@code X-API-Key}, checks the request's signature ({@link RequestSignatureGate}, ADR-036) and then
- * applies the client's API rate limit before any controller runs. The signature comes first so that someone holding
- * a leaked key but not the signing secret cannot spend the client's quota. A client's settings are cached for 30 seconds,
- * so a rotated key, a new signing secret or a change to whether signatures are required takes up to that long.
+ * Authenticates {@code X-API-Key}, applies the client's API rate limit and checks the request's signature
+ * ({@link RequestSignatureGate}, ADR-036) before any controller runs. A client's settings are cached for 30 seconds;
+ * an administrator's change to a client empties the cache at once ({@link ClientChangeBroadcast}), and the expiry
+ * only bounds how long an old setting can survive if that announcement is lost.
  */
 @Component
 public class ClientAuthFilter extends OncePerRequestFilter {
@@ -117,6 +118,14 @@ public class ClientAuthFilter extends OncePerRequestFilter {
         }
         admission.request().setAttribute(CLIENT_ATTRIBUTE, client);
         chain.doFilter(admission.request(), res);
+    }
+
+    /**
+     * Forgets every cached client, so the next request with any key reads the client again. Called when a client
+     * changes; changes are rare, so dropping everything is simpler than tracking which key belongs to which client.
+     */
+    void forgetCachedClients() {
+        cache.invalidateAll();
     }
 
     /** Only ACTIVE clients are cached as authenticated; a disabled client resolves to empty (401). */

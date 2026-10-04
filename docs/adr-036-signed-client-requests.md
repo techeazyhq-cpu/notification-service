@@ -141,8 +141,8 @@ replay protection. Others integrate from simple scripts and must not be forced i
   The body is held in memory: up to about 21 MB for the largest CSV upload.
 - **Clock and nonces.** Clients need a synchronised clock (NTP) and a new nonce per request. Retries must be signed
   afresh; the client guide says so and gives code in shell, Python, Node.js and Java.
-- **Rotation is immediate.** Issuing a new secret makes requests signed with the old one fail within the client API's
-  30-second cache. To rotate without errors, the client stops signing, the administrator makes signing optional, then
+- **Rotation is immediate.** Issuing a new secret makes requests signed with the old one fail at once: the admin API
+  announces every client change and the client API drops its cache (the 30-second expiry is only the fallback). To rotate without errors, the client stops signing, the administrator makes signing optional, then
   issues the new secret. Accepting the previous secret for a grace period is left for a later change.
 - **Shared exposure in the console.** The console holds the signing secret in the same page as the API key, so
   script running in that page could use both. Signing in the console protects against replay of captured traffic, not
