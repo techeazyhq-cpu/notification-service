@@ -22,6 +22,7 @@ import java.time.Duration;
 import com.techeazy.notification.domain.MessageCategory;
 import com.techeazy.notification.error.ErrorCode;
 import com.techeazy.notification.application.OutboxPublisher;
+import com.techeazy.notification.application.PayloadFingerprints;
 import com.techeazy.notification.billing.application.Admission;
 import com.techeazy.notification.billing.application.AdmissionControl;
 import com.techeazy.notification.billing.domain.HoldScope;
@@ -60,7 +61,7 @@ class IngestServiceTest {
     StatusQueryService status = mock(StatusQueryService.class);
     AdmissionControl admission = mock(AdmissionControl.class);
     SenderService senders = mock(SenderService.class);
-    IngestService service =new IngestService(new TemplateCache(templates, 0), requests, persister, outbox, status, admission, senders, new io.micrometer.core.instrument.simple.SimpleMeterRegistry(), 100);
+    IngestService service =new IngestService(new TemplateCache(templates, 0), requests, persister, outbox, status, admission, senders, new PayloadFingerprints("test-data-key"), new io.micrometer.core.instrument.simple.SimpleMeterRegistry(), 100);
 
     AuthenticatedClient me = new AuthenticatedClient(UUID.randomUUID(), "acme", Set.of(Channel.SMS, Channel.EMAIL));
 
@@ -332,6 +333,66 @@ class IngestServiceTest {
         assertThat(response.idempotentReplay()).isTrue();
         assertThat(response.requestId()).isEqualTo(original.getId());
         verifyNoInteractions(persister, admission, outbox);
+    }
+
+    @Test
+    void anIdempotentRequestStoresAFingerprintOfItsPayload() {
+        service.submit(me, idempotent("hi", Map.of("a", "1", "b", "2")));
+
+        assertThat(persistedRequest().getPayloadFingerprint()).matches("[0-9a-f]{64}");
+    }
+
+    @Test
+    void aRequestWithoutAnIdempotencyKeyStoresNoFingerprint() {
+        service.submit(me, single(MessageCategory.TRANSACTIONAL, null));
+
+        assertThat(persistedRequest().getPayloadFingerprint()).isNull();
+    }
+
+    @Test
+    void retryingTheSameRequestReplaysItEvenWithItsVariablesListedInAnotherOrder() {
+        service.submit(me, idempotent("hi", Map.of("a", "1", "b", "2")));
+        NotificationRequest original = storedAsOriginal();
+
+        Dtos.SubmitResponse response = service.submit(me, idempotent("hi", new java.util.LinkedHashMap<>(
+                java.util.Map.of("b", "2", "a", "1"))));
+
+        assertThat(response.idempotentReplay()).isTrue();
+        assertThat(response.requestId()).isEqualTo(original.getId());
+    }
+
+    @Test
+    void reusingAnIdempotencyKeyForDifferentContentIsRefused() {
+        service.submit(me, idempotent("hi", Map.of("a", "1")));
+        storedAsOriginal();
+
+        assertThatThrownBy(() -> service.submit(me, idempotent("hello", Map.of("a", "1"))))
+                .isInstanceOfSatisfying(ApiException.class,
+                        e -> assertThat(e.errorCode()).isEqualTo(ErrorCode.IDEMPOTENCY_KEY_REUSED));
+    }
+
+    @Test
+    void reusingAnIdempotencyKeyForDifferentVariablesIsRefused() {
+        service.submit(me, idempotent("hi", Map.of("a", "1")));
+        storedAsOriginal();
+
+        assertThatThrownBy(() -> service.submit(me, idempotent("hi", Map.of("a", "2"))))
+                .isInstanceOfSatisfying(ApiException.class,
+                        e -> assertThat(e.errorCode()).isEqualTo(ErrorCode.IDEMPOTENCY_KEY_REUSED));
+    }
+
+    private SubmitCommand idempotent(String body, Map<String, String> variables) {
+        return new SubmitCommand(RequestKind.SINGLE, Channel.SMS, null, null, body,
+                List.of(to("+14155550101", variables)), null, "key-2");
+    }
+
+    private NotificationRequest storedAsOriginal() {
+        NotificationRequest original = persistedRequest();
+        when(requests.findByClientIdAndIdempotencyKey(me.id(), "key-2")).thenReturn(Optional.of(original));
+        when(status.view(original)).thenReturn(new Dtos.RequestView(original.getId(), RequestKind.SINGLE, Channel.SMS,
+                com.techeazy.notification.domain.RequestStatus.PROCESSING, 1, null, null, original.getCreatedAt(), null,
+                null));
+        return original;
     }
 
     @Test

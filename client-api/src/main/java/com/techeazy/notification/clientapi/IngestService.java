@@ -22,6 +22,7 @@ import java.time.Duration;
 import com.techeazy.notification.domain.MessageCategory;
 import com.techeazy.notification.error.ErrorCode;
 import com.techeazy.notification.application.OutboxPublisher;
+import com.techeazy.notification.application.PayloadFingerprints;
 import com.techeazy.notification.application.TemplateRenderer;
 import com.techeazy.notification.billing.application.Admission;
 import com.techeazy.notification.billing.application.AdmissionControl;
@@ -42,6 +43,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.TreeMap;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Supplier;
@@ -65,14 +67,16 @@ public class IngestService {
     private final StatusQueryService status;
     private final AdmissionControl admission;
     private final SenderService senders;
+    private final PayloadFingerprints payloadFingerprints;
     private final int maxBulkRecipients;
     private final MeterRegistry meters;
     private final Map<String, Timer> stageTimers = new ConcurrentHashMap<>();
 
     public IngestService(TemplateCache templates, NotificationRequestRepository requests, IngestPersister persister,
                          OutboxPublisher outbox, StatusQueryService status, AdmissionControl admission,
-                         SenderService senders, MeterRegistry meters,
+                         SenderService senders, PayloadFingerprints payloadFingerprints, MeterRegistry meters,
                          @Value("${client-api.max-bulk-recipients:50000}") int maxBulkRecipients) {
+        this.payloadFingerprints = payloadFingerprints;
         this.templates = templates;
         this.requests = requests;
         this.persister = persister;
@@ -118,12 +122,14 @@ public class IngestService {
         validateVariables(content, cmd.recipients());
         Optional<SenderAddress> sender = timed("sender", () -> senders.resolve(client, cmd.channel(), cmd.from()));
 
+        String fingerprint = cmd.idempotencyKey() == null ? null : fingerprint(cmd);
         Optional<NotificationRequest> duplicate = findByIdempotencyKey(client, cmd.idempotencyKey());
         if (duplicate.isPresent()) {
-            return replay(duplicate.get());
+            return replay(duplicate.get(), fingerprint);
         }
 
         NotificationRequest request = newRequest(client, cmd, content);
+        request.setPayloadFingerprint(fingerprint);
         request.setCategory(category);
         Duration validity = cmd.validity() == null ? MessageCategory.DEFAULT_OTP_VALIDITY : cmd.validity();
         request.setExpiresAt(category == MessageCategory.OTP ? request.getCreatedAt().plus(validity) : null);
@@ -135,7 +141,8 @@ public class IngestService {
         try {
             messages = timed("persist", () -> persister.persist(request, cmd.recipients(), () -> admit(client, cmd, request)));
         } catch (DataIntegrityViolationException e) {
-            return findByIdempotencyKey(client, cmd.idempotencyKey()).map(this::replay).orElseThrow(() -> e);
+            return findByIdempotencyKey(client, cmd.idempotencyKey()).map(existing -> replay(existing, fingerprint))
+                    .orElseThrow(() -> e);
         }
         timed("publish", () -> outbox.publishAndMarkQueuedLater(messages));
         return accepted(request, messages);
@@ -198,9 +205,46 @@ public class IngestService {
                 request.getCreatedAt());
     }
 
-    private SubmitResponse replay(NotificationRequest existing) {
+    /**
+     * Answers a repeated {@code Idempotency-Key} with the request it first created, unless the payload differs: that is
+     * a different request reusing the key, refused with {@code IDEMPOTENCY_KEY_REUSED}. Requests stored before
+     * fingerprints existed have none and are replayed as before.
+     */
+    private SubmitResponse replay(NotificationRequest existing, String fingerprint) {
+        if (existing.getPayloadFingerprint() != null && !existing.getPayloadFingerprint().equals(fingerprint)) {
+            throw new ApiException(ErrorCode.IDEMPOTENCY_KEY_REUSED,
+                    "Idempotency-Key '" + existing.getIdempotencyKey() + "' was already used for a different request");
+        }
         var view = status.view(existing);
         return new SubmitResponse(existing.getId(), existing.getKind(), view.status(), existing.getTotal(), null, true, existing.getCreatedAt());
+    }
+
+    /**
+     * Fingerprints everything the client chose for this request, in a fixed order; variables are sorted by name so the
+     * order a JSON object or CSV row lists them in does not matter.
+     */
+    private String fingerprint(SubmitCommand cmd) {
+        List<String> fields = new ArrayList<>();
+        fields.add(String.valueOf(cmd.kind()));
+        fields.add(String.valueOf(cmd.channel()));
+        fields.add(cmd.templateName());
+        fields.add(cmd.subject());
+        fields.add(cmd.body());
+        fields.add(cmd.clientReference());
+        fields.add(cmd.from());
+        fields.add(cmd.category() == null ? null : cmd.category().name());
+        fields.add(cmd.validity() == null ? null : Long.toString(cmd.validity().toSeconds()));
+        fields.add(Integer.toString(cmd.recipients().size()));
+        for (Recipient recipient : cmd.recipients()) {
+            fields.add(recipient.address());
+            Map<String, String> variables = recipient.variables() == null ? Map.of() : new TreeMap<>(recipient.variables());
+            fields.add(Integer.toString(variables.size()));
+            variables.forEach((name, value) -> {
+                fields.add(name);
+                fields.add(value);
+            });
+        }
+        return payloadFingerprints.of(fields);
     }
 
     /** The content a request will be sent with, and the template it came from (null for inline content). */
