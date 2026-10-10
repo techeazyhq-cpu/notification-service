@@ -30,14 +30,16 @@ import java.util.stream.Stream;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * Keeps the {@code .trivyignore} entry for CVE-2026-47884 true: that Spring MVC flaw is only reachable through
- * server-side views ({@code XsltView}), and every service here is a JSON API that renders none. If a view is ever
- * introduced, this fails, and the ignore entry has to go with a real fix instead.
+ * Keeps the {@code .trivyignore} entries for CVE-2026-47884 and CVE-2026-47890 true: those Spring MVC flaws are only
+ * reachable through server-side views ({@code XsltView}) and through view fragments streamed as Server-Sent Events,
+ * and every service here is a JSON API that renders no views and streams no SSE. If either is ever introduced, this
+ * fails, and the ignore entries have to go with a real fix instead.
  */
 class NoServerSideViewsTest {
 
     private static final List<String> VIEW_TYPES = List.of("org.springframework.web.servlet.view.xslt", "XsltView",
-            "ViewResolver", "ModelAndView");
+            "ViewResolver", "ModelAndView", "SseEmitter", "ResponseBodyEmitter", "ServerSentEvent",
+            "FragmentsRendering");
 
     @Test
     void noServiceRendersServerSideViews() throws IOException {
@@ -51,7 +53,9 @@ class NoServerSideViewsTest {
                     .toList();
         }
 
-        assertThat(offending).as("main sources that use server-side views (see .trivyignore, CVE-2026-47884)").isEmpty();
+        assertThat(offending)
+                .as("main sources that use server-side views or SSE (see .trivyignore, CVE-2026-47884 and CVE-2026-47890)")
+                .isEmpty();
     }
 
     private static boolean mentionsAView(Path source) {
