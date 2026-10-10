@@ -39,6 +39,17 @@ class ProviderSecretsTest {
     }
 
     @Test
+    void encryptsAnFcmServiceAccountKeyButNotItsProjectOrAccount() {
+        Map<String, String> stored = secrets.encryptForStorage(Map.of(
+                "projectId", "demo", "clientEmail", "push@demo.iam.gserviceaccount.com",
+                "privateKey", "a-service-account-private-key"));
+
+        assertThat(stored).containsEntry("projectId", "demo")
+                .containsEntry("clientEmail", "push@demo.iam.gserviceaccount.com");
+        assertThat(stored.get("privateKey")).startsWith("enc:").doesNotContain("private-key");
+    }
+
+    @Test
     void roundTripsThroughStorageAndBackToTheOriginalValue() {
         Map<String, String> stored = secrets.encryptForStorage(Map.of("password", "hunter2"));
         Map<String, String> used = secrets.decryptForUse(stored);

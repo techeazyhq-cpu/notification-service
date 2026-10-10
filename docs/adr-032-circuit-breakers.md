@@ -35,7 +35,7 @@ broker outage into slow responses for every client, and a pile-up of request thr
 | Dependency | Failure mode guarded against | Protection | Where |
 |---|---|---|---|
 | SMS, e-mail and push providers | Outage, timeouts, throttling | One circuit breaker per provider (opens at 50 % transient failures over 20 calls; permanent rejections do not count), failover to the channel's next provider by priority, and consumers paused while every provider of a channel is open, so the backlog waits in Pulsar without spending retries | `ResilienceConfig`, `ProviderRegistry`, `DispatchConsumers` |
-| Provider calls | A hung connection | HTTP connect 5 s and read 10 s (configurable per provider); SMTP connect 5 s, read and write 10 s | `HttpJsonProvider`, `SmtpSenderFactory` |
+| Provider calls | A hung connection | HTTP connect 5 s and read 10 s (configurable per provider); SMTP connect 5 s, read and write 10 s | `HttpJsonProvider`, `FcmProvider`, `SmtpSenderFactory` |
 | Broker (publish) | Outage | **Circuit breaker `broker` (this ADR)**, publish timeout, outbox sweeper | `CircuitBreakingMessagePublisher`, `OutboxSweeper` |
 | Broker (consume) | Poison messages | Retry topic with back-off, dead-letter topic, dead-letter recorder | `DispatchConsumers`, ADR-010 |
 | Redis (rate limits) | Outage | Fails open: limits are skipped and Redis is not called again for 5 s after an error, counted and alerted. A breaker in all but name | `RedisRateLimiter`, ADR-024 |

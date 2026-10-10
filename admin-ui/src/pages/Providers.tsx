@@ -60,13 +60,13 @@ export default function Providers() {
           <label>Name<input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required /></label>
           <label><span>Type</span>
             <select value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value as Provider['type'] })}>
-              <option>SMTP</option><option>HTTP_JSON</option>
+              <option>SMTP</option><option>HTTP_JSON</option><option>FCM</option>
             </select>
           </label>
           <label>Priority<input type="number" value={form.priority} onChange={(e) => setForm({ ...form, priority: Number(e.target.value) })} style={{ width: 90 }} /></label>
           <label className="check"><input type="checkbox" checked={form.enabled} onChange={(e) => setForm({ ...form, enabled: e.target.checked })} />Enabled</label>
         </div>
-        <label style={{ marginTop: 12 }}><span>Settings (key=value per line; SMTP: host, port, from, username, password, starttls, html — HTTP_JSON: url, authHeader, timeoutMs)</span>
+        <label style={{ marginTop: 12 }}><span>Settings (key=value per line; SMTP: host, port, from, username, password, starttls, html — HTTP_JSON: url, authHeader, timeoutMs — FCM: projectId, clientEmail, privateKey, link, timeoutMs)</span>
           <textarea value={form.settings} onChange={(e) => setForm({ ...form, settings: e.target.value })} />
         </label>
         <div className="row" style={{ marginTop: 12 }}>
