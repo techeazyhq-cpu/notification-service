@@ -18,11 +18,17 @@
 
 package com.techeazy.notification.domain;
 
-public enum ProviderType {
-    /** SMTP server (Mailpit locally, any relay in production). */
-    SMTP,
-    /** Generic JSON-over-HTTP gateway; used for the SMS, WhatsApp and push catchers and as a base for real gateways. */
-    HTTP_JSON,
-    /** Firebase Cloud Messaging (HTTP v1 API): push to web browsers and Android/iOS apps by device token. */
-    FCM
+/**
+ * Where an {@link ProviderType#FCM} provider connects unless its settings say otherwise: the FCM HTTP v1 API and
+ * Google's OAuth 2.0 token endpoint. Both are overridable (settings {@code url} and {@code tokenUrl}) so that a test
+ * double or a regional endpoint can be used, and both go through the provider destination policy (ADR-022).
+ */
+public final class FcmEndpoints {
+
+    public static final String DEFAULT_URL = "https://fcm.googleapis.com";
+    public static final String DEFAULT_TOKEN_URL = "https://oauth2.googleapis.com/token";
+    public static final String TOKEN_URL_SETTING = "tokenUrl";
+
+    private FcmEndpoints() {
+    }
 }

@@ -301,6 +301,15 @@ then open Jaeger at http://localhost:16686 for traces and Prometheus at http://l
 
 Four service level objectives (accept availability 99.9%, accept latency 99% within 250 ms, delivery within 5 minutes for 99%, delivery success 99.5%) with burn-rate alerts, plus alerts for a stale backlog, a service down, an open provider circuit, dead letters, the rate limiter failing open (Redis down: limits are not enforced, but the platform keeps working) and lost audit records. The rules are in `deploy/observability/prometheus/notification-slo.rules.yml` and unit-tested in CI with `promtool`; [docs/slo.md](docs/slo.md) defines each objective and is the runbook for every alert. See ADR-024. PostgreSQL's recovery point is guarded separately: alerts for failing or stalled WAL archiving and for a missing, failed or day-old base backup (`postgres-recovery.rules.yml`, runbook in [docs/disaster-recovery.md](docs/disaster-recovery.md#backup-alerts)).
 
+## Push through Firebase Cloud Messaging
+
+To deliver `PUSH` to real browsers and apps, add a provider of type `FCM` for the `PUSH` channel in the admin UI. In the Firebase console, create a service account key with the *Firebase Cloud Messaging API Admin* role (Project settings → Service accounts → Generate new private key). From the downloaded JSON, copy `project_id`, `client_email` and `private_key` into the settings `projectId`, `clientEmail` and `privateKey`. The key goes in as one line, with its `\n` escapes, exactly as the JSON has it. It is encrypted at rest and masked when read back. Optional settings:
+
+- `link`: an https page a web notification opens when clicked;
+- `timeoutMs`: the timeout for each call to Google.
+
+Clients send to `PUSH` with the device token their app got from the Firebase SDK as the `recipient`. A token Firebase no longer knows fails the message with `DELIVERY_REJECTED` and `UNREGISTERED` in its `lastError`, so the client can forget that device. Firebase is reached at `fcm.googleapis.com` and `oauth2.googleapis.com`; with `PROVIDER_OTHER_PUBLIC_HOSTS_ALLOWED=false`, add both to `PROVIDER_TRUSTED_HOSTS`. See ADR-038.
+
 ## Where providers may connect
 
 Whoever can edit a provider decides where the platform connects, so provider destinations are checked when a provider is saved (`400 PROVIDER_DESTINATION_REFUSED` with the reason), before every send, and before a sender confirmation e-mail. A host listed in `PROVIDER_TRUSTED_HOSTS` (comma-separated exact names, or `*.example.com` for subdomains) is allowed as it is, including internal addresses and plain HTTP, for an on-premises gateway or relay. Any other host must be reached over HTTPS (for HTTP gateways) and must resolve only to public addresses: loopback, private ranges, link-local (including cloud metadata at `169.254.169.254`), CGNAT and IPv6 local ranges are refused, whether written as an address or reached through DNS. URLs with credentials in them are refused, and redirects are never followed. `PROVIDER_OTHER_PUBLIC_HOSTS_ALLOWED=false` allows only the trusted hosts. `docker compose` trusts `mailpit` and `catcher`. Set the same values on admin-api, client-api and the dispatcher. See ADR-022.

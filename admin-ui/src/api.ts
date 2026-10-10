@@ -106,7 +106,7 @@ export async function api<T = unknown>(method: string, path: string, body?: unkn
 export interface Client { id: string; name: string; status: 'ACTIVE' | 'DISABLED'; allowedChannels: Channel[]; apiKeyPrefix: string; createdAt: string; signingEnabled: boolean; signingRequired: boolean }
 /** ownerClientId is null for shared templates (managed here); otherwise the template belongs to that client. */
 export interface Template { id: string; ownerClientId?: string; ownerName?: string; name: string; channel: Channel; subject?: string; body: string; category?: Category }
-export interface Provider { id: string; channel: Channel; name: string; type: 'SMTP' | 'HTTP_JSON'; settings: Record<string, string>; enabled: boolean; priority: number }
+export interface Provider { id: string; channel: Channel; name: string; type: 'SMTP' | 'HTTP_JSON' | 'FCM'; settings: Record<string, string>; enabled: boolean; priority: number }
 export interface RateLimit { id: string; scope: 'CLIENT_API' | 'CLIENT_CHANNEL' | 'GLOBAL_CHANNEL'; clientId?: string; channel?: Channel; ratePerSecond: number; burst: number; enabled: boolean }
 export interface Count { channel: string; status: string; count: number }
 export interface Summary { hours: number; counts: Count[]; backlog: number; requests: number }

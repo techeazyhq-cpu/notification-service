@@ -26,6 +26,7 @@ import org.junit.jupiter.params.provider.ValueSource;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -41,7 +42,9 @@ class ProviderDestinationPolicyTest {
             "internal.example.com", List.of("10.1.2.3"),
             "rebound.example.com", List.of("93.184.216.36", "127.0.0.1"),
             "catcher", List.of("172.18.0.7"),
-            "sms.corp.example", List.of("192.168.10.20"));
+            "sms.corp.example", List.of("192.168.10.20"),
+            "fcm.googleapis.com", List.of("142.250.183.10"),
+            "oauth2.googleapis.com", List.of("142.250.183.42"));
 
     private static final HostResolver FAKE_DNS = host -> {
         if (host.matches("[0-9.]+") || host.contains(":")) {
@@ -62,6 +65,36 @@ class ProviderDestinationPolicyTest {
 
     private static Map<String, String> gateway(String url) {
         return Map.of("url", url);
+    }
+
+    private static Map<String, String> fcm(Map<String, String> endpoints) {
+        Map<String, String> settings = new HashMap<>(Map.of("projectId", "demo", "clientEmail", "push@demo.example"));
+        settings.putAll(endpoints);
+        return settings;
+    }
+
+    @Test
+    void anFcmProviderMayReachGooglesDefaultEndpoints() {
+        assertThatCode(() -> publicOnly.check(ProviderType.FCM, fcm(Map.of()))).doesNotThrowAnyException();
+    }
+
+    @Test
+    void anFcmProviderCannotBePointedAtTheInternalNetwork() {
+        assertThatThrownBy(() -> publicOnly.check(ProviderType.FCM, fcm(Map.of("url", "https://internal.example.com"))))
+                .isInstanceOf(ProviderDestinationRefusedException.class).hasMessageContaining("not a public address");
+        assertThatThrownBy(() -> publicOnly.check(ProviderType.FCM, fcm(Map.of("tokenUrl", "http://169.254.169.254/token"))))
+                .isInstanceOf(ProviderDestinationRefusedException.class);
+    }
+
+    @Test
+    void anFcmProviderNeedsGooglesHostsTrustedWhenOtherPublicHostsAreNot() {
+        ProviderDestinationPolicy trustedOnly = new ProviderDestinationPolicy(
+                Set.of("fcm.googleapis.com", "oauth2.googleapis.com"), false, FAKE_DNS);
+        ProviderDestinationPolicy nothingTrusted = new ProviderDestinationPolicy(Set.of(), false, FAKE_DNS);
+
+        assertThatCode(() -> trustedOnly.check(ProviderType.FCM, fcm(Map.of()))).doesNotThrowAnyException();
+        assertThatThrownBy(() -> nothingTrusted.check(ProviderType.FCM, fcm(Map.of())))
+                .isInstanceOf(ProviderDestinationRefusedException.class).hasMessageContaining("fcm.googleapis.com");
     }
 
     private static Map<String, String> smtp(String host) {

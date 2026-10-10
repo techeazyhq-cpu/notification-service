@@ -17,6 +17,7 @@
  */
 package com.techeazy.notification.application;
 
+import com.techeazy.notification.domain.FcmEndpoints;
 import com.techeazy.notification.domain.ProviderType;
 import com.techeazy.notification.port.HostResolver;
 
@@ -77,6 +78,10 @@ public final class ProviderDestinationPolicy {
         switch (type) {
             case HTTP_JSON -> checkGateway(settings.get(URL_SETTING));
             case SMTP -> checkMailServer(settings.get(HOST_SETTING));
+            case FCM -> {
+                checkGateway(settings.getOrDefault(URL_SETTING, FcmEndpoints.DEFAULT_URL));
+                checkGateway(settings.getOrDefault(FcmEndpoints.TOKEN_URL_SETTING, FcmEndpoints.DEFAULT_TOKEN_URL));
+            }
         }
     }
 

@@ -130,7 +130,7 @@ Delivery limits apply in the dispatcher, so a bulk request is *accepted* fast an
 
 ### 3.3 Providers
 
-`ChannelProvider` SPI with two implementations: `SmtpProvider` and `HttpJsonProvider` (generic JSON gateway). Configs live in the DB and are edited in the admin UI. Locally, Mailpit captures email and `tools/catcher` captures SMS/WhatsApp/Push. Real vendors (Twilio, Meta WhatsApp Cloud API, FCM/APNs, SES) are added as new `ChannelProvider` beans or through `HttpJsonProvider` when the gateway accepts our JSON. Where a provider may connect is checked on save and before every send: trusted hosts as configured, otherwise HTTPS to public addresses only, no redirects (ADR-022).
+`ChannelProvider` SPI with three implementations: `SmtpProvider`, `HttpJsonProvider` (generic JSON gateway) and `FcmProvider` (Firebase Cloud Messaging push, ADR-038). Configs live in the DB and are edited in the admin UI. Locally, Mailpit captures email and `tools/catcher` captures SMS/WhatsApp/Push. Other real vendors (Twilio, Meta WhatsApp Cloud API, APNs, SES) are added as new `ChannelProvider` beans or through `HttpJsonProvider` when the gateway accepts our JSON. Where a provider may connect is checked on save and before every send: trusted hosts as configured, otherwise HTTPS to public addresses only, no redirects (ADR-022).
 
 ### 3.4 Circuit breaker (provider failures)
 
@@ -256,7 +256,7 @@ PostgreSQL, schema owned by the `db-migration` job (Liquibase changesets in `db-
 ## 9. Next steps
 
 1. Testcontainers integration tests (Postgres + Redis + Pulsar) for the send → retry → DLQ → sweeper paths.
-2. Real vendor adapters (SES/Twilio/FCM) behind `ChannelProvider`; provider delivery receipts → `DELIVERED` state.
+2. Real vendor adapters (SES/Twilio; FCM is done, ADR-038) behind `ChannelProvider`; provider delivery receipts → `DELIVERED` state.
 3. Retention + partitioning of `notification_message`; erasure API.
 4. OIDC for admin (roles are in place, ADR-015; the audit log of admin changes is in place, ADR-019).
 5. Trace propagation; SLO dashboards and alerts; load test against the targets in §1.

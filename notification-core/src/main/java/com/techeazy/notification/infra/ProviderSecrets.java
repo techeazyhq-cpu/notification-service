@@ -23,7 +23,7 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * Encrypts the secret-looking settings of a {@code ProviderConfig} (SMTP password, gateway auth header) at rest
+ * Encrypts the secret-looking settings of a {@code ProviderConfig} (SMTP password, gateway auth header, FCM private key) at rest
  * with {@link AesGcmCipher}, so a copy of the database alone does not hand over live credentials.
  *
  * <p>Encrypted values are stored with an {@code enc:} prefix; anything without it is treated as plaintext. This
@@ -35,7 +35,7 @@ public final class ProviderSecrets {
     private static final String PREFIX = "enc:";
 
     /** Setting keys treated as secrets, matching what the admin API masks on read. */
-    public static final Set<String> SECRET_KEYS = Set.of("password", "authheader", "apikey", "token", "secret");
+    public static final Set<String> SECRET_KEYS = Set.of("password", "authheader", "apikey", "token", "secret", "privatekey");
 
     private final AesGcmCipher cipher;
 
