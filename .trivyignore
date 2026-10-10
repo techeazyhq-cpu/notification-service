@@ -28,3 +28,12 @@ CVE-2026-8763 exp:2026-12-31
 # would make this entry wrong. Short expiry because it is CRITICAL.
 # Re-review: take a 6.2.x release with the fix as soon as one ships, or plan the Spring Boot 4 move.
 CVE-2026-47884 exp:2026-11-30
+
+# org.springframework:spring-webmvc 6.2.19 again. The flaw is CRLF injection into a Server-Sent Events stream: a
+# view fragment rendered over SSE with attacker-controlled data containing a bare carriage return breaks out of its
+# data: field. Spring rates it LOW (2.6); NVD's 9.8 is why Trivy calls it CRITICAL. The fix exists only in 7.0.9,
+# not in any 6.2.x release, for the same Spring Boot 4 reason as above. None of the services streams SSE at all:
+# there is no SseEmitter, ResponseBodyEmitter, ServerSentEvent or FragmentsRendering, and no views to render into a
+# fragment. NoServerSideViewsTest fails the build if any of them is introduced. Short expiry because it is CRITICAL.
+# Re-review: take a 6.2.x release with the fix as soon as one ships, or plan the Spring Boot 4 move.
+CVE-2026-47890 exp:2026-11-30
