@@ -58,7 +58,7 @@
 
   <properties>
     <java.version>21</java.version>
-    <pulsar.version>4.2.4</pulsar.version>
+    <pulsar.version>4.2.5</pulsar.version>
     <commons-csv.version>1.14.1</commons-csv.version>
     <springdoc.version>2.9.1</springdoc.version>
     <!-- Spring Boot 3.3 manages an older Testcontainers whose Docker client is rejected by Docker Engine 29 (min API 1.40) -->
