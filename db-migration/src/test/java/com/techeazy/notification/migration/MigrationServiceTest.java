@@ -61,9 +61,10 @@ class MigrationServiceTest {
                     "009-admin-roles", "010-admin-audit-log", "011-message-error-code",
                     "012-message-category", "013-otp-sweep-index", "014-billing-otp-price",
                     "015-sent-usage-by-category", "016-message-event-log", "017-recipient-fingerprint-index",
-                    "018-fingerprint-backfill-index", "019-signed-requests", "020-idempotency-payload-fingerprint", "021-inflight-usage-index");
+                    "018-fingerprint-backfill-index", "019-signed-requests", "020-idempotency-payload-fingerprint", "021-inflight-usage-index",
+                    "022-traffic-hourly");
     private static final String NOT_COMPARED = "('databasechangelog','databasechangeloglock','flyway_schema_history',"
-            + "'billing_plan','billing_plan_rate','billing_account','credit_ledger_entry','credit_hold','invoice','invoice_line','invoice_payment','admin_user','admin_recovery_code','admin_session','client_sender','admin_audit_event','billing_account_otp_price','message_event','api_request_nonce')";
+            + "'billing_plan','billing_plan_rate','billing_account','credit_ledger_entry','credit_hold','invoice','invoice_line','invoice_payment','admin_user','admin_recovery_code','admin_session','client_sender','admin_audit_event','billing_account_otp_price','message_event','api_request_nonce','traffic_hourly')";
     private static final List<String> BILLING_TABLES =
             List.of("billing_plan", "billing_plan_rate", "billing_account", "credit_ledger_entry", "credit_hold", "invoice", "invoice_line", "invoice_payment");
 
@@ -408,6 +409,24 @@ class MigrationServiceTest {
         undoFrom(service, "021-inflight-usage-index");
 
         assertThat(query(db, "select indexname from pg_indexes where indexname = 'ix_message_inflight_usage'")).isEmpty();
+    }
+
+    @Test
+    void theTrafficHourlyTableKeepsOneRowPerTenantChannelAndWholeHourAndRollsBackCleanly() throws Exception {
+        String db = newDatabase();
+        MigrationService service = service(db, true);
+        service.update();
+        String insert = "insert into traffic_hourly (client_id, channel, hour, messages, recipients, new_recipients, failed, "
+                + "largest_request, computed_at) values ('00000000-0000-0000-0000-00000000000a', 'SMS', '%s', 1, 1, 1, 0, 1, now())";
+
+        execute(db, insert.formatted("2026-09-01T10:00:00Z"));
+
+        assertThatThrownBy(() -> execute(db, insert.formatted("2026-09-01T10:00:00Z"))).hasMessageContaining("duplicate key");
+        assertThatThrownBy(() -> execute(db, insert.formatted("2026-09-01T10:30:00Z"))).hasMessageContaining("ck_traffic_hourly_whole_hour");
+
+        undoFrom(service, "022-traffic-hourly");
+
+        assertThat(query(db, "select table_name from information_schema.tables where table_name = 'traffic_hourly'")).isEmpty();
     }
 
     @Test
