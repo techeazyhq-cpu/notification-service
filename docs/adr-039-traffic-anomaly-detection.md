@@ -51,9 +51,13 @@ evidence from Stage 1 says it would do better.
    - **Off the delivery path:** it reads committed data once an hour. Accepting and sending a message do no extra work.
 2. **A robust, seasonal baseline.** Each feature is compared with the same hour of the week over the tenant's last
    eight weeks, using the median and the median absolute deviation. One past spike does not move the baseline the way
-   a mean and standard deviation would. A value is anomalous when its robust z-score passes a threshold (default 4)
-   **and** its absolute size passes a floor, so a tenant going from 2 to 9 messages is not flagged.
-3. **Cold start.** A tenant with fewer than two weeks of history is compared with fixed per-plan limits instead.
+   a mean and standard deviation would. A value is anomalous when its robust z-score passes a threshold **and** its
+   absolute size passes a floor, so a tenant going from 2 to 9 messages is not flagged. A score of 4 or more is a
+   `WARNING`, 8 or more is `HIGH`; both are configurable and tuned by the false-alarm rate. A country that is new to
+   the tenant on SMS or WhatsApp is always `HIGH`.
+3. **Cold start.** A tenant with fewer than two weeks of history is compared with fixed per-channel limits from
+   configuration instead. Per-plan limits were considered and left out: plans describe pricing, not expected traffic,
+   and one more column on every plan buys little for the two weeks a tenant is new.
 4. **Anomaly records, `traffic_anomaly`.** One row per tenant, channel, hour and feature that crossed the threshold,
    with the expected value, the actual value and the score. An administrator sees why it was flagged, not just that it
    was. Each record has a status: `OPEN`, `CONFIRMED` or `FALSE_ALARM`, set by an administrator.
