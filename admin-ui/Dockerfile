@@ -22,7 +22,7 @@ RUN npm run build
 
 # Non-root nginx: serves the SPA and proxies /api to the Admin API, so the browser sees a single origin. The base
 # image already defaults to this user; USER is explicit here so it survives a future change to that default.
-FROM nginxinc/nginx-unprivileged:1.31-alpine@sha256:26b0bf6fbf07297983cb341998d79c831508787de26627dd2a112321b9c3a4af
+FROM nginxinc/nginx-unprivileged:1.31-alpine@sha256:b9241c6e7b8e9a862f129d8d4199ab64b10390949a78bdd5603379b32c844083
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 COPY security-headers.conf /etc/nginx/conf.d/security-headers.inc
 COPY --from=build /app/dist /usr/share/nginx/html
