@@ -61,6 +61,12 @@ retention:
   idempotency-days: ${RETENTION_IDEMPOTENCY_DAYS:7}
   batch-size: ${RETENTION_BATCH_SIZE:5000}
 
+anomaly:
+  enabled: ${ANOMALY_ENABLED:true}
+  aggregation-cron: ${ANOMALY_AGGREGATION_CRON:0 5 * * * *}
+  backfill-days: ${ANOMALY_BACKFILL_DAYS:56}
+  retention-days: ${ANOMALY_RETENTION_DAYS:400}
+
 billing:
   payment-terms-days: ${BILLING_PAYMENT_TERMS_DAYS:30}
 
