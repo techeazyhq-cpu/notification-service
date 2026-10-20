@@ -18,6 +18,7 @@
 
 package com.techeazy.notification.adminapi.anomaly;
 
+import io.micrometer.core.instrument.MeterRegistry;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -38,9 +39,34 @@ class AnomalyConfiguration {
     }
 
     @Bean
-    AnomalyDetector anomalyDetector(JdbcClient jdbc, Clock clock, AnomalyProperties properties) {
-        AnomalyProperties.Scoring scoring = properties.getScoring();
-        return new AnomalyDetector(new TrafficReader(jdbc), new BaselineScorer(scoring), new AnomalyStore(jdbc), clock,
-                scoring.getBaselineWeeks());
+    TrafficReader trafficReader(JdbcClient jdbc) {
+        return new TrafficReader(jdbc);
+    }
+
+    @Bean
+    BaselineScorer baselineScorer(AnomalyProperties properties) {
+        return new BaselineScorer(properties.getScoring());
+    }
+
+    @Bean
+    AnomalyRepository anomalyRepository(JdbcClient jdbc) {
+        return new AnomalyRepository(jdbc);
+    }
+
+    @Bean
+    AnomalyDetector anomalyDetector(TrafficReader reader, BaselineScorer scorer, JdbcClient jdbc, Clock clock,
+                                    AnomalyProperties properties) {
+        return new AnomalyDetector(reader, scorer, new AnomalyStore(jdbc), clock, properties.getScoring().getBaselineWeeks());
+    }
+
+    @Bean
+    TrafficReports trafficReports(TrafficReader reader, AnomalyRepository anomalies, BaselineScorer scorer, Clock clock,
+                                  AnomalyProperties properties) {
+        return new TrafficReports(reader, anomalies, scorer, clock, properties.getScoring().getBaselineWeeks());
+    }
+
+    @Bean
+    AnomalyMetrics anomalyMetrics(AnomalyRepository anomalies, MeterRegistry meters) {
+        return new AnomalyMetrics(anomalies, meters);
     }
 }

@@ -172,6 +172,9 @@ class SecurityRulesTest {
         assertThat(status(AdminRole.VIEWER, HttpMethod.DELETE, "/api/admin/clients/7f0c/signing-secret")).isEqualTo(403);
         assertThat(status(AdminRole.VIEWER, HttpMethod.PUT, "/api/admin/clients/7f0c/signing-required")).isEqualTo(403);
         assertThat(status(AdminRole.VIEWER, HttpMethod.GET, "/api/admin/administrators")).isEqualTo(403);
+        assertThat(status(AdminRole.VIEWER, HttpMethod.GET, "/api/admin/anomalies")).isEqualTo(404);
+        assertThat(status(AdminRole.VIEWER, HttpMethod.GET, "/api/admin/traffic/7f0c/weekly-report")).isEqualTo(404);
+        assertThat(status(AdminRole.VIEWER, HttpMethod.POST, "/api/admin/anomalies/1/status")).isEqualTo(403);
     }
 
     @Test
@@ -180,6 +183,7 @@ class SecurityRulesTest {
         assertThat(status(AdminRole.OPERATOR, HttpMethod.POST, "/api/admin/messages/1/retry")).isEqualTo(404);
         assertThat(status(AdminRole.OPERATOR, HttpMethod.POST, "/api/admin/privacy/erasure")).isEqualTo(404);
         assertThat(status(AdminRole.OPERATOR, HttpMethod.POST, "/api/admin/billing/accounts/1/credit")).isEqualTo(404);
+        assertThat(status(AdminRole.OPERATOR, HttpMethod.POST, "/api/admin/anomalies/1/status")).isEqualTo(404);
         assertThat(status(AdminRole.OPERATOR, HttpMethod.PUT, "/api/admin/providers/1")).isEqualTo(403);
         assertThat(status(AdminRole.OPERATOR, HttpMethod.GET, "/api/admin/administrators")).isEqualTo(403);
     }

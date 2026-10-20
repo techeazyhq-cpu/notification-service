@@ -31,6 +31,7 @@ import java.time.Instant;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.stream.IntStream;
 
@@ -75,10 +76,7 @@ class TrafficReader {
      *         every destination used in the baseline period
      */
     TenantHistory history(UUID clientId, String channel, Instant hour, int weeks) {
-        Instant firstSeen = jdbc.sql("SELECT min(hour) FROM traffic_hourly WHERE client_id = :client AND channel = :channel")
-                .param("client", clientId).param("channel", channel)
-                .query((row, i) -> row.getTimestamp(1)).optional()
-                .map(Timestamp::toInstant).orElse(hour);
+        Instant firstSeen = firstSeen(clientId, channel).orElse(hour);
         List<Timestamp> slots = IntStream.rangeClosed(1, weeks)
                 .mapToObj(week -> Timestamp.from(hour.minus(WEEK.multipliedBy(week)))).toList();
         List<TrafficHour> sameHourOfWeek = slots.isEmpty() ? List.of() : jdbc.sql("SELECT " + COLUMNS
@@ -92,6 +90,38 @@ class TrafficReader {
                 .param("hour", Timestamp.from(hour))
                 .query(String.class).list();
         return new TenantHistory(firstSeen, sameHourOfWeek, new HashSet<>(destinations));
+    }
+
+    /**
+     * The first hour ever measured for a tenant on a channel.
+     *
+     * @param clientId the tenant
+     * @param channel  the channel's name
+     * @return the hour, or empty if the tenant never sent on the channel
+     */
+    Optional<Instant> firstSeen(UUID clientId, String channel) {
+        return jdbc.sql("SELECT min(hour) FROM traffic_hourly WHERE client_id = :client AND channel = :channel")
+                .param("client", clientId).param("channel", channel)
+                .query(Timestamp.class).optional()
+                .map(Timestamp::toInstant);
+    }
+
+    /**
+     * A tenant's measured hours in a period, oldest first.
+     *
+     * @param clientId the tenant
+     * @param channel  the channel's name, or {@code null} for every channel
+     * @param from     the first hour, inclusive
+     * @param to       the end, exclusive
+     * @return the hours that had traffic; hours without traffic are absent
+     */
+    List<TrafficHour> range(UUID clientId, String channel, Instant from, Instant to) {
+        return jdbc.sql("SELECT " + COLUMNS + " FROM traffic_hourly WHERE client_id = :client "
+                        + "AND (CAST(:channel AS VARCHAR) IS NULL OR channel = :channel) AND hour >= :from AND hour < :to "
+                        + "ORDER BY hour, channel")
+                .param("client", clientId).param("channel", channel)
+                .param("from", Timestamp.from(from)).param("to", Timestamp.from(to))
+                .query((row, i) -> traffic(row)).list();
     }
 
     private TrafficHour traffic(ResultSet row) throws SQLException {

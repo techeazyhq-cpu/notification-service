@@ -22,9 +22,11 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.OptionalDouble;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.function.ToIntFunction;
@@ -87,18 +89,14 @@ final class BaselineScorer {
     private Optional<Anomaly> judge(Feature feature, TrafficHour current, TenantHistory history) {
         return switch (feature) {
             case MESSAGES -> baseline(current, feature, current.messages(),
-                    counts(current, history, TrafficHour::messages), settings.getMessagesFloor(), MIN_COUNT_SPREAD);
+                    weeklySamples(current, history, TrafficHour::messages), settings.getMessagesFloor(), MIN_COUNT_SPREAD);
             case NEW_RECIPIENTS -> baseline(current, feature, current.newRecipients(),
-                    counts(current, history, TrafficHour::newRecipients), settings.getNewRecipientsFloor(), MIN_COUNT_SPREAD);
+                    weeklySamples(current, history, TrafficHour::newRecipients), settings.getNewRecipientsFloor(), MIN_COUNT_SPREAD);
             case LARGEST_REQUEST -> baseline(current, feature, current.largestRequest(),
-                    counts(current, history, TrafficHour::largestRequest), settings.getLargestRequestFloor(), MIN_COUNT_SPREAD);
+                    weeklySamples(current, history, TrafficHour::largestRequest), settings.getLargestRequestFloor(), MIN_COUNT_SPREAD);
             case FAILURE_RATE -> failureRate(current, history);
             case NEW_DESTINATION -> newDestination(current, history);
         };
-    }
-
-    private boolean isColdStart(Instant hour, Instant firstSeen) {
-        return Duration.between(firstSeen, hour).compareTo(Duration.ofDays(settings.getColdStartDays())) < 0;
     }
 
     private Optional<Anomaly> coldStart(TrafficHour current) {
@@ -155,13 +153,49 @@ final class BaselineScorer {
                 settings.getHighScore(), detail);
     }
 
-    private double[] counts(TrafficHour current, TenantHistory history, ToIntFunction<TrafficHour> value) {
-        Map<Instant, TrafficHour> byHour = history.sameHourOfWeek().stream()
-                .collect(Collectors.toMap(TrafficHour::hour, past -> past, (first, second) -> first));
+    private double[] weeklySamples(TrafficHour current, TenantHistory history, ToIntFunction<TrafficHour> value) {
+        return weeklySamples(current.hour(), history.firstSeen(), byHour(history.sameHourOfWeek()),
+                settings.getBaselineWeeks(), value);
+    }
+
+    /**
+     * Whether an hour is still in the tenant's cold start, judged by fixed limits rather than a baseline.
+     *
+     * @param hour      the hour being judged
+     * @param firstSeen the tenant's first measured hour on the channel
+     * @return true while the tenant has less history than the cold-start period
+     */
+    boolean isColdStart(Instant hour, Instant firstSeen) {
+        return Duration.between(firstSeen, hour).compareTo(Duration.ofDays(settings.getColdStartDays())) < 0;
+    }
+
+    /**
+     * The baseline an hour's messages are compared with: their median over the same hour of the week in the baseline
+     * weeks, the {@code expected} of a baseline anomaly.
+     *
+     * @param hour      the hour being judged
+     * @param firstSeen the tenant's first measured hour on the channel
+     * @param byHour    the tenant's measured hours on the channel, by hour; at least the baseline weeks before
+     * @return the expected messages, or empty while the tenant is in its cold start
+     */
+    OptionalDouble expectedMessages(Instant hour, Instant firstSeen, Map<Instant, TrafficHour> byHour) {
+        if (isColdStart(hour, firstSeen)) {
+            return OptionalDouble.empty();
+        }
+        double[] samples = weeklySamples(hour, firstSeen, byHour, settings.getBaselineWeeks(), TrafficHour::messages);
+        return samples.length == 0 ? OptionalDouble.empty() : OptionalDouble.of(median(samples));
+    }
+
+    static Map<Instant, TrafficHour> byHour(Collection<TrafficHour> hours) {
+        return hours.stream().collect(Collectors.toMap(TrafficHour::hour, past -> past, (first, second) -> first));
+    }
+
+    private static double[] weeklySamples(Instant hour, Instant firstSeen, Map<Instant, TrafficHour> byHour, int weeks,
+                                          ToIntFunction<TrafficHour> value) {
         List<Double> samples = new ArrayList<>();
-        for (int week = 1; week <= settings.getBaselineWeeks(); week++) {
-            Instant slot = current.hour().minus(WEEK.multipliedBy(week));
-            if (!slot.isBefore(history.firstSeen())) {
+        for (int week = 1; week <= weeks; week++) {
+            Instant slot = hour.minus(WEEK.multipliedBy(week));
+            if (!slot.isBefore(firstSeen)) {
                 TrafficHour past = byHour.get(slot);
                 samples.add(past == null ? 0.0 : value.applyAsInt(past));
             }
@@ -182,7 +216,7 @@ final class BaselineScorer {
         return score >= settings.getWarningScore() ? Optional.of(Severity.WARNING) : Optional.empty();
     }
 
-    private static double median(double[] values) {
+    static double median(double[] values) {
         double[] sorted = values.clone();
         Arrays.sort(sorted);
         int middle = sorted.length / 2;
