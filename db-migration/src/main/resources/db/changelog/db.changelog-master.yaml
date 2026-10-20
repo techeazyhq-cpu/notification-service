@@ -60,3 +60,5 @@ databaseChangeLog:
       file: db/changelog/changes/021-inflight-usage-index.sql
   - include:
       file: db/changelog/changes/022-traffic-hourly.sql
+  - include:
+      file: db/changelog/changes/023-traffic-anomaly.sql

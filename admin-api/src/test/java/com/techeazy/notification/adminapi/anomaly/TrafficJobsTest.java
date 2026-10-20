@@ -32,6 +32,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 class TrafficJobsTest {
@@ -39,8 +40,9 @@ class TrafficJobsTest {
     private static final Instant NOW = Instant.parse("2026-09-01T10:07:30Z");
 
     private final TrafficAggregator aggregator = mock(TrafficAggregator.class);
+    private final AnomalyDetector detector = mock(AnomalyDetector.class);
     private final AnomalyProperties properties = new AnomalyProperties();
-    private final TrafficJobs jobs = new TrafficJobs(aggregator, properties, Clock.fixed(NOW, ZoneOffset.UTC));
+    private final TrafficJobs jobs = new TrafficJobs(aggregator, detector, properties, Clock.fixed(NOW, ZoneOffset.UTC));
 
     @Test
     void eachRunMeasuresTheRecentClosedHoursOldestFirstAndDeletesPastRetention() {
@@ -58,6 +60,18 @@ class TrafficJobsTest {
     }
 
     @Test
+    void eachRunScoresTheHourJustClosedAtOnceAndTheFailureRateOfTheOldestReMeasuredHour() {
+        properties.setRecomputeHours(3);
+
+        jobs.run();
+
+        InOrder order = inOrder(aggregator, detector);
+        order.verify(aggregator).aggregate(Instant.parse("2026-09-01T09:00:00Z"));
+        order.verify(detector).detect(Instant.parse("2026-09-01T09:00:00Z"), Feature.IMMEDIATE);
+        order.verify(detector).detect(Instant.parse("2026-09-01T07:00:00Z"), Feature.SETTLED);
+    }
+
+    @Test
     void withoutHistoryTheBackfillMeasuresEveryHourOfThePeriod() {
         properties.setBackfillDays(2);
         when(aggregator.hasHistory()).thenReturn(false);
@@ -67,6 +81,7 @@ class TrafficJobsTest {
         verify(aggregator, times(48)).aggregate(any());
         verify(aggregator).aggregate(Instant.parse("2026-08-30T10:00:00Z"));
         verify(aggregator).aggregate(Instant.parse("2026-09-01T09:00:00Z"));
+        verifyNoInteractions(detector);
     }
 
     @Test

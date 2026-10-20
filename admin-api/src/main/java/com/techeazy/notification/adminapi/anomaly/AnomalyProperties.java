@@ -20,10 +20,14 @@ package com.techeazy.notification.adminapi.anomaly;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
+import java.util.HashMap;
+import java.util.Map;
+
 /** Traffic anomaly detection settings under {@code anomaly.*} (ADR-039). Off unless switched on in configuration. */
 @ConfigurationProperties(prefix = "anomaly")
 public class AnomalyProperties {
 
+    private final Scoring scoring = new Scoring();
     private boolean enabled;
     private String aggregationCron = "0 5 * * * *";
     private int recomputeHours = 3;
@@ -58,4 +62,70 @@ public class AnomalyProperties {
     /** E-mail domains with fewer distinct recipients in an hour are recorded as {@code other}, so none points to a person. */
     public int getEmailDomainMinRecipients() { return emailDomainMinRecipients; }
     public void setEmailDomainMinRecipients(int emailDomainMinRecipients) { this.emailDomainMinRecipients = emailDomainMinRecipients; }
+
+    public Scoring getScoring() { return scoring; }
+
+    /** How an hour is judged against the tenant's history. Tuned by how often administrators mark false alarms. */
+    public static class Scoring {
+        private double warningScore = 4;
+        private double highScore = 8;
+        private int baselineWeeks = 8;
+        private int coldStartDays = 14;
+        private double minSpreadRatio = 0.1;
+        private int messagesFloor = 100;
+        private int newRecipientsFloor = 50;
+        private int largestRequestFloor = 1000;
+        private double failureRateFloor = 0.2;
+        private int failureRateMinMessages = 50;
+        private int newDestinationMinMessages = 10;
+        private final Map<String, Integer> coldStartMessagesPerHour = new HashMap<>(
+                Map.of("EMAIL", 5000, "SMS", 1000, "WHATSAPP", 1000, "PUSH", 10000));
+
+        /** The score from which an anomaly is recorded as a warning. */
+        public double getWarningScore() { return warningScore; }
+        public void setWarningScore(double warningScore) { this.warningScore = warningScore; }
+
+        /** The score from which an anomaly is high severity and alerts. */
+        public double getHighScore() { return highScore; }
+        public void setHighScore(double highScore) { this.highScore = highScore; }
+
+        /** How many earlier weeks of the same hour make the baseline. */
+        public int getBaselineWeeks() { return baselineWeeks; }
+        public void setBaselineWeeks(int baselineWeeks) { this.baselineWeeks = baselineWeeks; }
+
+        /** How much history a tenant needs before it is judged against itself rather than against fixed limits. */
+        public int getColdStartDays() { return coldStartDays; }
+        public void setColdStartDays(int coldStartDays) { this.coldStartDays = coldStartDays; }
+
+        /** The smallest spread assumed, as a share of the median, so a perfectly steady tenant is not flagged for noise. */
+        public double getMinSpreadRatio() { return minSpreadRatio; }
+        public void setMinSpreadRatio(double minSpreadRatio) { this.minSpreadRatio = minSpreadRatio; }
+
+        /** Fewer messages than this in an hour are never an anomaly, however unusual for the tenant. */
+        public int getMessagesFloor() { return messagesFloor; }
+        public void setMessagesFloor(int messagesFloor) { this.messagesFloor = messagesFloor; }
+
+        /** Fewer new recipients than this in an hour are never an anomaly. */
+        public int getNewRecipientsFloor() { return newRecipientsFloor; }
+        public void setNewRecipientsFloor(int newRecipientsFloor) { this.newRecipientsFloor = newRecipientsFloor; }
+
+        /** Requests smaller than this are never an anomaly. */
+        public int getLargestRequestFloor() { return largestRequestFloor; }
+        public void setLargestRequestFloor(int largestRequestFloor) { this.largestRequestFloor = largestRequestFloor; }
+
+        /** A failure rate below this is never an anomaly. */
+        public double getFailureRateFloor() { return failureRateFloor; }
+        public void setFailureRateFloor(double failureRateFloor) { this.failureRateFloor = failureRateFloor; }
+
+        /** Hours with fewer messages than this have too noisy a failure rate to judge. */
+        public int getFailureRateMinMessages() { return failureRateMinMessages; }
+        public void setFailureRateMinMessages(int failureRateMinMessages) { this.failureRateMinMessages = failureRateMinMessages; }
+
+        /** Fewer messages than this to new destinations in an hour are not flagged. */
+        public int getNewDestinationMinMessages() { return newDestinationMinMessages; }
+        public void setNewDestinationMinMessages(int newDestinationMinMessages) { this.newDestinationMinMessages = newDestinationMinMessages; }
+
+        /** Per channel, the hourly messages from which a tenant still in its cold start is flagged as a warning. */
+        public Map<String, Integer> getColdStartMessagesPerHour() { return coldStartMessagesPerHour; }
+    }
 }

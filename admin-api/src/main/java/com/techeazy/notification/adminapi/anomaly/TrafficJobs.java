@@ -29,13 +29,18 @@ import org.springframework.stereotype.Component;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
- * Keeps {@code traffic_hourly} current (ADR-039). Each run measures the last few closed hours again, because messages
- * accepted in an hour can still fail after it ends, and deletes measurements past their retention. When there is no
- * history at all, the first start measures the backfill period, so baselines do not have to wait weeks.
+ * Keeps {@code traffic_hourly} current and scores it (ADR-039). Each run measures the last few closed hours again,
+ * because messages accepted in an hour can still fail after it ends, and deletes measurements past their retention.
+ * It then scores the hour that just closed on the features that are final at once, and the oldest re-measured hour,
+ * whose messages have settled, on its failure rate. When there is no history at all, the first start measures the
+ * backfill period, so baselines do not have to wait weeks; the backfill is not scored.
  *
- * <p>Every admin API instance runs it. Measuring an hour twice writes the same row, so concurrent runs are harmless.
+ * <p>Every admin API instance runs it. Measuring an hour twice writes the same row, and an anomaly is recorded once,
+ * so concurrent runs are harmless.
  */
 @Component
 @ConditionalOnProperty(prefix = "anomaly", name = "enabled", havingValue = "true")
@@ -45,11 +50,13 @@ class TrafficJobs {
     private static final int HOURS_PER_DAY = 24;
 
     private final TrafficAggregator aggregator;
+    private final AnomalyDetector detector;
     private final AnomalyProperties properties;
     private final Clock clock;
 
-    TrafficJobs(TrafficAggregator aggregator, AnomalyProperties properties, Clock clock) {
+    TrafficJobs(TrafficAggregator aggregator, AnomalyDetector detector, AnomalyProperties properties, Clock clock) {
         this.aggregator = aggregator;
+        this.detector = detector;
         this.properties = properties;
         this.clock = clock;
     }
@@ -85,12 +92,27 @@ class TrafficJobs {
         LOG.info("Measured {} hour(s) of past traffic into {} row(s) for anomaly baselines", hours, rows);
     }
 
-    /** Measures the most recent closed hours again and deletes measurements past their retention. */
+    /** Measures the most recent closed hours again, scores them, and deletes measurements past their retention. */
     void run() {
         int rows = measureClosedHours(properties.getRecomputeHours());
-        Instant cutOff = currentHour().minus(properties.getRetentionDays(), ChronoUnit.DAYS);
-        int deleted = aggregator.deleteBefore(cutOff);
-        LOG.debug("Measured {} hourly traffic row(s), deleted {} past retention", rows, deleted);
+        Instant current = currentHour();
+        List<Anomaly> found = new ArrayList<>(detector.detect(current.minus(1, ChronoUnit.HOURS), Feature.IMMEDIATE));
+        found.addAll(detector.detect(current.minus(properties.getRecomputeHours(), ChronoUnit.HOURS), Feature.SETTLED));
+        found.forEach(TrafficJobs::log);
+        int deleted = aggregator.deleteBefore(current.minus(properties.getRetentionDays(), ChronoUnit.DAYS));
+        LOG.debug("Measured {} hourly traffic row(s), found {} anomaly(ies), deleted {} row(s) past retention",
+                rows, found.size(), deleted);
+    }
+
+    private static void log(Anomaly anomaly) {
+        String message = "Traffic anomaly: client {} {} {} at {}: {} expected {}, score {} ({})";
+        Object[] values = {anomaly.clientId(), anomaly.channel(), anomaly.feature(), anomaly.hour(),
+                anomaly.actual(), anomaly.expected(), Math.round(anomaly.score() * 10) / 10.0, anomaly.severity()};
+        if (anomaly.severity() == Severity.HIGH) {
+            LOG.warn(message, values);
+        } else {
+            LOG.info(message, values);
+        }
     }
 
     private int measureClosedHours(int hours) {
