@@ -79,6 +79,12 @@ Circuit breaker drill (SMS): `curl -X POST "localhost:9000/admin/fail?status=503
 `curl localhost:8082/actuator/providerhealth` shows `catcher-sms` `OPEN`; messages stay queued (not `FAILED`). Clear it with
 `curl -X POST "localhost:9000/admin/fail?count=0"`: after ~30 s the breaker half-opens, closes, and the backlog is delivered.
 
+Traffic anomaly drill ([ADR-039](docs/adr-039-traffic-anomaly-detection.md)): start the stack with
+`ANOMALY_AGGREGATION_CRON='0 * * * * *'` so measuring and scoring run every minute instead of hourly, then run
+`node scripts/seed-traffic.mjs`. It loads eight weeks of hourly history for `demo-app`, ending with an SMS spike to +882
+in the hour that just closed. Within a minute, **Anomalies** in the admin UI lists two high-severity anomalies, the
+dashboard counts them, and the client's **Traffic** page charts the spike against its baseline. Decide them there.
+
 ## Layout
 
 | Path | What |

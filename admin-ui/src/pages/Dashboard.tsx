@@ -17,7 +17,8 @@
  */
 
 import { useState } from 'react';
-import { api, CHANNELS, Point, Summary } from '../api';
+import { Link } from 'react-router-dom';
+import { AnomalyPage, api, CHANNELS, Point, Summary } from '../api';
 import { useLoad } from '../hooks';
 
 const RANGES = [
@@ -69,6 +70,8 @@ export default function Dashboard() {
   const [range, setRange] = useState(RANGES[1]);
   const summary = useLoad(() => api<Summary>('GET', `/dashboard/summary?hours=${range.hours}`), [range], 5000);
   const series = useLoad(() => api<Point[]>('GET', `/dashboard/timeseries?hours=${range.hours}&bucket=${range.bucket}`), [range], 5000);
+  const openAnomalies = useLoad(() => api<AnomalyPage>('GET', '/anomalies?status=OPEN&size=1'), [], 30000);
+  const openHigh = useLoad(() => api<AnomalyPage>('GET', '/anomalies?status=OPEN&severity=HIGH&size=1'), [], 30000);
 
   const counts = summary.data?.counts ?? [];
   const total = (status: string) => counts.filter((c) => c.status === status).reduce((a, c) => a + c.count, 0);
@@ -90,6 +93,13 @@ export default function Dashboard() {
         <div className="stat"><span>Sent</span><b style={{ color: 'var(--ok)' }}>{total('SENT')}</b></div>
         <div className="stat"><span>Failed</span><b style={{ color: 'var(--bad)' }}>{total('FAILED')}</b></div>
         <div className="stat"><span>Backlog (all time)</span><b>{summary.data?.backlog ?? '–'}</b></div>
+        <Link to="/anomalies" className="stat" title="Traffic anomalies no administrator has decided yet">
+          <span>Open anomalies</span>
+          <b style={{ color: (openHigh.data?.totalItems ?? 0) > 0 ? 'var(--bad)' : undefined }}>
+            {openAnomalies.data?.totalItems ?? '–'}
+          </b>
+          {(openHigh.data?.totalItems ?? 0) > 0 && <span>{openHigh.data?.totalItems} high</span>}
+        </Link>
       </div>
       <div className="card">
         <h3>Messages over time</h3>

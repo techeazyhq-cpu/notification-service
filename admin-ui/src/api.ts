@@ -155,3 +155,49 @@ export interface LedgerEntry { id: string; type: string; amount: string; referen
 export interface LedgerPage { items: LedgerEntry[]; total: number; page: number; size: number }
 export interface GenerationReport { created: number; existing: number; failures: string[] }
 export const money = (amount: string, currency: string) => `${amount} ${currency}`;
+
+export const ANOMALY_STATUSES = ['OPEN', 'CONFIRMED', 'FALSE_ALARM'] as const;
+export type AnomalyStatus = (typeof ANOMALY_STATUSES)[number];
+export const SEVERITIES = ['HIGH', 'WARNING'] as const;
+export type Severity = (typeof SEVERITIES)[number];
+export type AnomalyFeature = 'MESSAGES' | 'NEW_RECIPIENTS' | 'LARGEST_REQUEST' | 'FAILURE_RATE' | 'NEW_DESTINATION';
+export const FEATURE_LABELS: Record<AnomalyFeature, string> = {
+  MESSAGES: 'Messages',
+  NEW_RECIPIENTS: 'New recipients',
+  LARGEST_REQUEST: 'Largest request',
+  FAILURE_RATE: 'Failure rate',
+  NEW_DESTINATION: 'New destination',
+};
+export const STATUS_LABELS: Record<AnomalyStatus, string> = { OPEN: 'Open', CONFIRMED: 'Confirmed', FALSE_ALARM: 'False alarm' };
+/** How an anomaly was found: against the tenant's own baseline, a fixed limit while it is new, or a new country. */
+export type DetectionMethod = 'BASELINE' | 'COLD_START' | 'NEW_DESTINATION';
+export interface Anomaly {
+  id: string; clientId: string; clientName: string | null; channel: Channel; hour: string; feature: AnomalyFeature;
+  method: DetectionMethod; expected: number; actual: number; score: number; severity: Severity; detail: string | null;
+  status: AnomalyStatus; detectedAt: string; resolvedBy: string | null; resolvedAt: string | null;
+  resolutionNote: string | null;
+}
+export interface AnomalyPage { items: Anomaly[]; page: number; size: number; totalItems: number }
+/** expected is the baseline the scorer compares the hour with; null while the tenant is too new to have one. */
+export interface TrafficPoint { hour: string; messages: number; failed: number; newRecipients: number; expected: number | null }
+export interface TrafficSeries {
+  clientId: string; clientName: string; channel: Channel; from: string; to: string; points: TrafficPoint[]; anomalies: Anomaly[];
+}
+export interface ChannelWeek {
+  channel: Channel; messages: number; failed: number; failureRate: number; newRecipients: number; peakHour: string | null;
+  peakHourMessages: number; largestRequest: number; topDestinations: Record<string, number>; anomalies: number;
+  high: number; confirmed: number; falseAlarms: number; open: number;
+}
+export interface WeeklyReport { clientId: string; clientName: string; weekStart: string; from: string; to: string; channels: ChannelWeek[] }
+
+/** An anomaly's actual and expected values, read the way its feature and method mean them. */
+export function describeAnomaly(anomaly: Anomaly): { actual: string; expected: string } {
+  const value = (v: number) => (anomaly.feature === 'FAILURE_RATE' ? `${(v * 100).toFixed(1)}%` : Math.round(v).toLocaleString());
+  if (anomaly.method === 'NEW_DESTINATION') {
+    return { actual: `${value(anomaly.actual)} to +${(anomaly.detail ?? '').split(', ').join(', +')}`, expected: 'codes used in the last 8 weeks' };
+  }
+  if (anomaly.method === 'COLD_START') {
+    return { actual: value(anomaly.actual), expected: `${value(anomaly.expected)} (limit while the client is new)` };
+  }
+  return { actual: value(anomaly.actual), expected: `${value(anomaly.expected)} (same hour, past weeks)` };
+}
