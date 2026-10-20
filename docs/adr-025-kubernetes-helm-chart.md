@@ -110,4 +110,5 @@ Negative / accepted:
 
 - Datastore availability, backups and a tested restore (the second half of blocker 5).
 - Publish images from CI, signed and with an SBOM, and pin them by digest in values.
-- Optionally a PrometheusRule rendered from `deploy/observability/prometheus/notification-slo.rules.yml`.
+- Optionally a PrometheusRule rendered from `deploy/observability/prometheus/notification-slo.rules.yml` and
+  `traffic-anomaly.rules.yml`.

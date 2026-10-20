@@ -2,7 +2,8 @@
 
 The objectives the notification service is operated against, how each is measured, and what to do when an alert
 fires. The Prometheus rules that implement them are in
-[`notification-slo.rules.yml`](../deploy/observability/prometheus/notification-slo.rules.yml),
+[`notification-slo.rules.yml`](../deploy/observability/prometheus/notification-slo.rules.yml), and the traffic anomaly
+alert in [`traffic-anomaly.rules.yml`](../deploy/observability/prometheus/traffic-anomaly.rules.yml), both
 unit-tested in CI with `promtool`. The decision record is [ADR-024](adr-024-slos-and-alerts.md).
 
 All objectives are over a rolling 30 days. Each has an error budget: the share of events allowed to be bad. Alerts
@@ -151,3 +152,32 @@ a sender id or template that lost its registration, an account suspended, a chan
 
 Failures by every error code are counted in `notification_delivery_errors_total{channel, code, error_id}`, with codes
 from the [error code dictionary](error-codes.md).
+
+### <a id="traffic-anomaly-high"></a>`TrafficAnomalyHigh`
+
+A tenant's traffic on the channel has been far outside its own baseline, or has reached a country it has not sent to
+before, and no administrator has looked at it for 5 minutes (ADR-039). Nothing is blocked automatically: until someone
+acts, the tenant's postpaid spend cap or prepaid credit is the only limit, so treat SMS and WhatsApp as urgent.
+
+1. **Find it.** The **Anomalies** page in the admin UI, filtered to `HIGH` and `OPEN`, or
+   `GET /api/admin/anomalies?severity=HIGH&status=OPEN`. Each anomaly names the tenant, the feature, what was expected
+   and what happened. The tenant's **Traffic** chart shows the hours around it.
+2. **Read the feature.**
+   - `NEW_DESTINATION`: messages to calling codes the tenant never used; `detail` lists them. Codes the tenant does
+     not serve, international networks (+881, +882, +883) or premium ranges are the signature of **SMS pumping**:
+     fraudsters trigger one-time password sends to numbers whose termination fees they share.
+   - `MESSAGES`, `NEW_RECIPIENTS`, `LARGEST_REQUEST`: far more traffic, recipients or bulk size than usual. A
+     **leaked API key** sending spam, or a **loop** in the tenant's own system.
+   - `FAILURE_RATE`: a bad recipient list, or providers refusing a number range, which pumping also causes.
+3. **Contain it**, if it is not explained. These are configuration changes, so they need the `ADMIN` role:
+   - **Rotate the client's API key** (Clients) when a key may have leaked. The tenant must deploy the new key.
+   - **Remove the channel** from the client's allowed channels, or **disable the client**, to stop sending at once.
+   - **Lower the client's channel rate limit** (Rate limits, `CLIENT_CHANNEL`) to slow it while you investigate.
+   - **Tell the tenant.** For pumping through a sign-up or log-in form, they need to limit OTP requests per number and
+     per session, or add a challenge before sending.
+4. **Decide it.** Mark the anomaly **Confirmed** or **False alarm**, with a note on what it was (`OPERATOR` or
+   above). The alert resolves within a minute. The notes are what the thresholds are tuned against, so a false alarm
+   should say why the traffic was legitimate: a campaign, a launch, a tenant that grew.
+
+Many false alarms on one tenant mean its traffic is seasonal in a way eight weeks of history does not capture; raise
+the floors or the thresholds under `anomaly.scoring.*` rather than ignoring the alert.
