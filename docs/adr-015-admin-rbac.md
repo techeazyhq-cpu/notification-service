@@ -25,8 +25,9 @@ with roles: viewer/operator/admin).
    - `VIEWER`: every `GET` under `/api/**` (dashboard, clients, templates, providers, rate limits, messages, dead
      letters, billing, privacy) plus managing their own account (password, two-factor, sign out).
    - `OPERATOR`: everything `VIEWER` can, plus the day-to-day recovery actions that don't change configuration:
-     reprocessing dead letters, retrying a message, handling an erasure request, and topping up or adjusting a
-     prepaid client's credit (a routine support action, not a plan/pricing change).
+     reprocessing dead letters, retrying a message, handling an erasure request, topping up or adjusting a
+     prepaid client's credit (a routine support action, not a plan/pricing change), and deciding whether a traffic
+     anomaly was real (ADR-039).
    - `ADMIN`: everything, including client/API-key management, provider credentials, rate-limit policies, shared
      templates, billing plans/accounts/invoices, and managing other administrators.
    This line is a judgement call, not a fixed standard — it is deliberately drawn in one place

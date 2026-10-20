@@ -109,6 +109,7 @@ class SecurityConfig {
                         .requestMatchers(HttpMethod.POST, "/api/admin/messages/*/retry").hasRole(OPERATOR)
                         .requestMatchers(HttpMethod.POST, "/api/admin/privacy/erasure").hasRole(OPERATOR)
                         .requestMatchers(HttpMethod.POST, "/api/admin/billing/accounts/*/credit").hasRole(OPERATOR)
+                        .requestMatchers(HttpMethod.POST, "/api/admin/anomalies/*/status").hasRole(OPERATOR)
                         // Everything else: read is VIEWER, write is ADMIN (configuration: clients, providers, rate
                         // limits, templates, billing plans/accounts/invoices).
                         .requestMatchers(HttpMethod.GET, API).hasRole(VIEWER)
