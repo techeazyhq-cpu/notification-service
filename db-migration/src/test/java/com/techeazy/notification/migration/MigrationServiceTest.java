@@ -62,9 +62,9 @@ class MigrationServiceTest {
                     "012-message-category", "013-otp-sweep-index", "014-billing-otp-price",
                     "015-sent-usage-by-category", "016-message-event-log", "017-recipient-fingerprint-index",
                     "018-fingerprint-backfill-index", "019-signed-requests", "020-idempotency-payload-fingerprint", "021-inflight-usage-index",
-                    "022-traffic-hourly");
+                    "022-traffic-hourly", "023-traffic-anomaly");
     private static final String NOT_COMPARED = "('databasechangelog','databasechangeloglock','flyway_schema_history',"
-            + "'billing_plan','billing_plan_rate','billing_account','credit_ledger_entry','credit_hold','invoice','invoice_line','invoice_payment','admin_user','admin_recovery_code','admin_session','client_sender','admin_audit_event','billing_account_otp_price','message_event','api_request_nonce','traffic_hourly')";
+            + "'billing_plan','billing_plan_rate','billing_account','credit_ledger_entry','credit_hold','invoice','invoice_line','invoice_payment','admin_user','admin_recovery_code','admin_session','client_sender','admin_audit_event','billing_account_otp_price','message_event','api_request_nonce','traffic_hourly','traffic_anomaly')";
     private static final List<String> BILLING_TABLES =
             List.of("billing_plan", "billing_plan_rate", "billing_account", "credit_ledger_entry", "credit_hold", "invoice", "invoice_line", "invoice_payment");
 
@@ -427,6 +427,27 @@ class MigrationServiceTest {
         undoFrom(service, "022-traffic-hourly");
 
         assertThat(query(db, "select table_name from information_schema.tables where table_name = 'traffic_hourly'")).isEmpty();
+    }
+
+    @Test
+    void theTrafficAnomalyTableKeepsOneAnomalyPerFeatureAndHourAndRollsBackCleanly() throws Exception {
+        String db = newDatabase();
+        MigrationService service = service(db, true);
+        service.update();
+        String insert = "insert into traffic_anomaly (id, client_id, channel, hour, feature, method, expected, actual, score, "
+                + "severity, status, detected_at, resolved_at) values (gen_random_uuid(), '00000000-0000-0000-0000-00000000000a', "
+                + "'SMS', '2026-09-01T10:00:00Z', 'MESSAGES', 'BASELINE', 100, 900, 9.5, 'HIGH', '%s', now(), %s)";
+
+        execute(db, insert.formatted("OPEN", "null"));
+
+        assertThatThrownBy(() -> execute(db, insert.formatted("OPEN", "null"))).hasMessageContaining("ux_traffic_anomaly_hour_feature");
+        execute(db, "delete from traffic_anomaly");
+        assertThatThrownBy(() -> execute(db, insert.formatted("CONFIRMED", "null"))).hasMessageContaining("ck_traffic_anomaly_resolution");
+        assertThatThrownBy(() -> execute(db, insert.formatted("OPEN", "now()"))).hasMessageContaining("ck_traffic_anomaly_resolution");
+
+        undoFrom(service, "023-traffic-anomaly");
+
+        assertThat(query(db, "select table_name from information_schema.tables where table_name = 'traffic_anomaly'")).isEmpty();
     }
 
     @Test

@@ -36,4 +36,11 @@ class AnomalyConfiguration {
         return new TrafficAggregator(jdbc, clock, Duration.ofDays(properties.getNewRecipientLookbackDays()),
                 properties.getEmailDomainMinRecipients());
     }
+
+    @Bean
+    AnomalyDetector anomalyDetector(JdbcClient jdbc, Clock clock, AnomalyProperties properties) {
+        AnomalyProperties.Scoring scoring = properties.getScoring();
+        return new AnomalyDetector(new TrafficReader(jdbc), new BaselineScorer(scoring), new AnomalyStore(jdbc), clock,
+                scoring.getBaselineWeeks());
+    }
 }
