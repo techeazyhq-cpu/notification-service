@@ -1,6 +1,6 @@
 # ADR-039: Detecting abnormal tenant traffic, with statistics first and machine learning only if it earns its place
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-10-19
 
 ## Context

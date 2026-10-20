@@ -32,6 +32,8 @@ import DeadLetters from './pages/DeadLetters';
 import Account from './pages/Account';
 import Privacy from './pages/Privacy';
 import AuditLog from './pages/AuditLog';
+import Anomalies from './pages/Anomalies';
+import Traffic from './pages/Traffic';
 
 function Login({ onDone }: Readonly<{ onDone: (result: LoginResult) => void }>) {
   const [user, setUser] = useState('admin');
@@ -104,6 +106,7 @@ export default function App() {
         <NavLink to="/dashboard">Dashboard</NavLink>
         <NavLink to="/messages">Messages</NavLink>
         <NavLink to="/dead-letters">Dead letters</NavLink>
+        <NavLink to="/anomalies">Anomalies</NavLink>
         <NavLink to="/clients">Clients</NavLink>
         <NavLink to="/templates">Templates</NavLink>
         <NavLink to="/providers">Providers</NavLink>
@@ -122,6 +125,8 @@ export default function App() {
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/messages" element={<Messages />} />
           <Route path="/dead-letters" element={<DeadLetters />} />
+          <Route path="/anomalies" element={<Anomalies />} />
+          <Route path="/traffic/:clientId" element={<Traffic />} />
           <Route path="/clients" element={<Clients />} />
           <Route path="/templates" element={<Templates />} />
           <Route path="/providers" element={<Providers />} />

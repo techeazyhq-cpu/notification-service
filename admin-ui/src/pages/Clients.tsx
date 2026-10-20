@@ -17,6 +17,7 @@
  */
 
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { api, Channel, CHANNELS, Client } from '../api';
 import { useLoad } from '../hooks';
 
@@ -109,6 +110,7 @@ export default function Clients() {
                 <td className="mono">{c.apiKeyPrefix}…</td>
                 <td>{signingLabel(c)}</td>
                 <td>
+                  <Link to={`/traffic/${c.id}`}>Traffic</Link>{' '}
                   <button type="button" onClick={() => toggle(c)}>{c.status === 'ACTIVE' ? 'Disable' : 'Enable'}</button>{' '}
                   <button type="button" onClick={() => rotate(c)}>Rotate key</button>{' '}
                   <button type="button" onClick={() => issueSigningSecret(c)}>
