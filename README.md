@@ -32,6 +32,10 @@ node scripts/seed.mjs                          # providers, templates, demo clie
 | Mailpit (captured email) | http://localhost:8025 | none |
 | SMS / WhatsApp / Push catcher | http://localhost:9000 | none |
 
+The catcher's JSON is at `/messages`, filtered by `channel`, `to` (the recipient) and `since` (a `receivedAt`,
+inclusive). Reads allow any origin, so an app under development can poll for its own pushes; clearing and failure
+injection don't.
+
 Stop with `docker compose --profile app down` (add `-v` to also wipe the database and Pulsar data). For UI development
 with hot reload run `npm run dev` in `admin-ui` or `client-ui` instead of the containers (stop the matching container
 first, the ports are the same).
