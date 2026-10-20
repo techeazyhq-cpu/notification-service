@@ -46,6 +46,8 @@ config:
   redis:
     host: redis
     port: 6379
+    # Database index; another index when the Redis server is shared with other applications (ADR-040).
+    database: 0
     # Read the Redis password from the Secret's REDIS_PASSWORD key (Azure Managed Redis, Memorystore with AUTH).
     passwordFromSecret: false
     # PEM file of a private CA that signs the Redis server certificate (Memorystore); enables TLS with that trust.
