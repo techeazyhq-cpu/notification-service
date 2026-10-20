@@ -1,0 +1,79 @@
+# Copyright 2026 Vasantha Kumar
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+# @author Vasantha Kumar <vasantha.kumar@hotmail.com>
+#
+# promtool unit tests for traffic-anomaly.rules.yml. Run: promtool test rules traffic-anomaly.test.yml
+rule_files:
+  - traffic-anomaly.rules.yml
+evaluation_interval: 30s
+
+tests:
+  - name: a high anomaly left open for five minutes alerts once per channel, counted once across instances
+    interval: 1m
+    input_series:
+      - series: 'notification_traffic_anomalies_open{job="notification-admin-api",instance="admin-api-0:9081",channel="SMS",severity="HIGH"}'
+        values: '2x10'
+      - series: 'notification_traffic_anomalies_open{job="notification-admin-api",instance="admin-api-1:9081",channel="SMS",severity="HIGH"}'
+        values: '2x10'
+      - series: 'notification_traffic_anomalies_open{job="notification-admin-api",instance="admin-api-0:9081",channel="EMAIL",severity="HIGH"}'
+        values: '0x10'
+    alert_rule_test:
+      - eval_time: 4m
+        alertname: TrafficAnomalyHigh
+      - eval_time: 6m
+        alertname: TrafficAnomalyHigh
+        exp_alerts:
+          - exp_labels: {severity: critical, channel: SMS}
+            exp_annotations:
+              summary: "2 high-severity traffic anomaly(ies) open on SMS"
+              description: "A tenant's SMS traffic is far outside its own baseline, or reaches a country it has not sent to before. Nothing is blocked automatically: until someone looks, the spend cap or prepaid credit is the only limit."
+              runbook: docs/slo.md#traffic-anomaly-high
+
+  - name: open warnings alone raise nothing
+    interval: 1m
+    input_series:
+      - series: 'notification_traffic_anomalies_open{job="notification-admin-api",instance="admin-api-0:9081",channel="SMS",severity="WARNING"}'
+        values: '5x30'
+      - series: 'notification_traffic_anomalies_open{job="notification-admin-api",instance="admin-api-0:9081",channel="SMS",severity="HIGH"}'
+        values: '0x30'
+    alert_rule_test:
+      - eval_time: 20m
+        alertname: TrafficAnomalyHigh
+
+  - name: a high anomaly decided within five minutes raises nothing
+    interval: 1m
+    input_series:
+      - series: 'notification_traffic_anomalies_open{job="notification-admin-api",instance="admin-api-0:9081",channel="WHATSAPP",severity="HIGH"}'
+        values: '1x3 0x10'
+    alert_rule_test:
+      - eval_time: 8m
+        alertname: TrafficAnomalyHigh
+
+  - name: deciding the anomaly resolves the alert
+    interval: 1m
+    input_series:
+      - series: 'notification_traffic_anomalies_open{job="notification-admin-api",instance="admin-api-0:9081",channel="SMS",severity="HIGH"}'
+        values: '1x10 0x10'
+    alert_rule_test:
+      - eval_time: 8m
+        alertname: TrafficAnomalyHigh
+        exp_alerts:
+          - exp_labels: {severity: critical, channel: SMS}
+            exp_annotations:
+              summary: "1 high-severity traffic anomaly(ies) open on SMS"
+              description: "A tenant's SMS traffic is far outside its own baseline, or reaches a country it has not sent to before. Nothing is blocked automatically: until someone looks, the spend cap or prepaid credit is the only limit."
+              runbook: docs/slo.md#traffic-anomaly-high
+      - eval_time: 13m
+        alertname: TrafficAnomalyHigh

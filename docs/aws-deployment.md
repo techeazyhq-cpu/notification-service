@@ -69,7 +69,8 @@ In this order. Each is a standard Helm chart; pin the versions you have tested.
    `external-secrets`. Terraform has already bound the pod identity to it.
 3. **ingress-nginx** behind an AWS Network Load Balancer, into namespace `ingress-nginx` (the chart's network policies
    admit public traffic from there).
-4. **Prometheus** (kube-prometheus-stack) into namespace `monitoring`, with `notification-slo.rules.yml` loaded.
+4. **Prometheus** (kube-prometheus-stack) into namespace `monitoring`, with `notification-slo.rules.yml` and
+   `traffic-anomaly.rules.yml` loaded.
 5. **Pulsar:**
 
    ```bash

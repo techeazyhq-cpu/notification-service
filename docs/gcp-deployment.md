@@ -65,7 +65,8 @@ In this order, each from its standard Helm chart with versions you have tested:
 1. **cert-manager** (Pulsar's TLS certificates).
 2. **External Secrets Operator** into namespace `external-secrets`.
 3. **ingress-nginx** into namespace `ingress-nginx`, behind a Google Cloud network load balancer.
-4. **Prometheus** (kube-prometheus-stack) into namespace `monitoring`, with `notification-slo.rules.yml` loaded.
+4. **Prometheus** (kube-prometheus-stack) into namespace `monitoring`, with `notification-slo.rules.yml` and
+   `traffic-anomaly.rules.yml` loaded.
 5. **Pulsar:**
 
    ```bash
