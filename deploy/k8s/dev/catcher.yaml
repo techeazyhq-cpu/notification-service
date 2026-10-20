@@ -1,0 +1,42 @@
+# Copyright 2026 Vasantha Kumar
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+# @author Vasantha Kumar <vasantha.kumar@hotmail.com>
+#
+# DEVELOPMENT ONLY: the SMS/WhatsApp/push catcher in the `notification` namespace, for shared infrastructure (ADR-040),
+# where the `common` namespace provides the datastores and Mailpit but no catcher. Standalone, datastores.yaml has it.
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: catcher, namespace: notification}
+spec:
+  selector: {matchLabels: {app: catcher}}
+  template:
+    metadata: {labels: {app: catcher}}
+    spec:
+      automountServiceAccountToken: false
+      containers:
+        - name: catcher
+          image: registry.local/notification-catcher:test
+          imagePullPolicy: Never
+          resources:
+            requests: {cpu: 25m, memory: 32Mi, ephemeral-storage: 32Mi}
+            limits: {memory: 128Mi, ephemeral-storage: 128Mi}
+          ports: [{containerPort: 9000}]
+---
+apiVersion: v1
+kind: Service
+metadata: {name: catcher, namespace: notification}
+spec:
+  selector: {app: catcher}
+  ports: [{port: 9000}]

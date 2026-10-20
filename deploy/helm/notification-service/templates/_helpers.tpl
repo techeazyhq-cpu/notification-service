@@ -62,6 +62,8 @@ capabilities:
   value: {{ $config.redis.host | quote }}
 - name: REDIS_PORT
   value: {{ $config.redis.port | quote }}
+- name: REDIS_DATABASE
+  value: {{ $config.redis.database | quote }}
 {{- if $config.redis.passwordFromSecret }}
 - name: SPRING_DATA_REDIS_PASSWORD
   valueFrom: {secretKeyRef: {name: {{ .Values.secrets.existingSecret }}, key: REDIS_PASSWORD}}
