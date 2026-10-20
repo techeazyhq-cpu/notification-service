@@ -19,7 +19,8 @@
 // Local stand-in for SMS, WhatsApp and Push gateways (like Mailpit is for email). Not for production use.
 // POST /sms | /whatsapp | /push   -> captures the message, replies 200 {"id": "..."}
 // GET  /                          -> web UI (auto-refreshing inbox per channel)
-// GET  /messages[?channel=sms]    -> JSON;  DELETE /messages -> clear
+// GET  /messages[?channel=push&to=<recipient>&since=<receivedAt>] -> JSON, oldest first;  DELETE /messages -> clear
+//      (reads allow any origin, so a web app in development can poll its own pushes, e.g. a dev push relay)
 // POST /admin/fail?status=503&count=3 -> make the next N sends fail with that status (tests retries)
 // Recipients ending in 0400 always get HTTP 400 (tests permanent failure).
 const http = require('node:http');
@@ -32,8 +33,11 @@ const CHANNELS = new Set(['sms', 'whatsapp', 'push']);
 const messages = [];
 let failNext = { count: 0, status: 503 };
 
-const json = (res, status, body) => {
-  res.writeHead(status, { 'Content-Type': 'application/json' });
+// Only reads are open to other origins: a page elsewhere can poll what was caught, but can't clear it or inject failures.
+const READ_CORS = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET', 'Access-Control-Max-Age': '600' };
+
+const json = (res, status, body, headers = {}) => {
+  res.writeHead(status, { 'Content-Type': 'application/json', ...headers });
   res.end(JSON.stringify(body));
 };
 
@@ -87,10 +91,20 @@ const routes = {
     res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
     res.end(page());
   },
-  'GET /health': (req, res) => json(res, 200, { status: 'UP' }),
+  'GET /health': (req, res) => json(res, 200, { status: 'UP' }, READ_CORS),
   'GET /messages': (req, res, params) => {
     const channel = params.get('channel');
-    json(res, 200, channel ? messages.filter((m) => m.channel === channel) : messages);
+    const to = params.get('to');
+    // inclusive, so two messages caught in the same millisecond are never skipped; callers drop ids they have seen.
+    // receivedAt values are ISO-8601 UTC, so they compare as strings.
+    const since = params.get('since');
+    const found = messages.filter((m) => (!channel || m.channel === channel) && (!to || m.to === to)
+      && (!since || m.receivedAt >= since));
+    json(res, 200, found, READ_CORS);
+  },
+  'OPTIONS /messages': (req, res) => {
+    res.writeHead(204, READ_CORS);
+    res.end();
   },
   'DELETE /messages': (req, res) => {
     messages.length = 0;
