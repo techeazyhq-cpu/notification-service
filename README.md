@@ -19,6 +19,19 @@ An introduction to the product for newcomers, with speaker notes:
 
 Requires Docker, and Node 20+ for the seed script and UI.
 
+Every container has a CPU and memory limit sized for an ordinary laptop, so an 8 GB machine with 2 CPUs runs the whole
+stack: it idles at about 2 GB, and the limits cap it at about 5 GB (infra only, about 2.5 GB). Give Docker Desktop at
+least that much memory. No container asks for more than one CPU. To give the services more room, or squeeze them onto a
+smaller machine, set these before `docker compose up`:
+
+| Variable | Default | Applies to |
+|---|---|---|
+| `NS_APP_CPUS` | `1.0` | client-api, admin-api, dispatcher, migration job |
+| `NS_APP_MEM` | `768m` | the same; 75% of it becomes the JVM heap |
+| `NS_PULSAR_MEM` | `1536m` | Pulsar's container limit |
+| `NS_PULSAR_JVM` | `-Xms256m -Xmx512m -XX:MaxDirectMemorySize=256m` | Pulsar's heap and direct memory; keep their sum under `NS_PULSAR_MEM` |
+| `NS_POSTGRES_MEM` | `512m` | Postgres |
+
 ```bash
 docker compose --profile app up -d --build     # postgres, redis, pulsar, mailpit, catcher, 3 services, both UIs
 node scripts/seed.mjs                          # providers, templates, demo client (prints its API key once)
