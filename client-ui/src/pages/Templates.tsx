@@ -17,7 +17,8 @@
  */
 
 import { useEffect, useState } from 'react';
-import { api, CATEGORIES, Category, CATEGORY_LABELS, Channel, CHANNELS, Me, Preview, send, Template, TemplateInput, variablesOf } from '../api';
+import { api, CATEGORIES, Category, CATEGORY_LABELS, Channel, CHANNELS, DraftBrief, DraftingStatus, Me, Preview, send, Template, TemplateDraft, TemplateInput, variablesOf } from '../api';
+import DraftAssistant from '../DraftAssistant';
 import { useDebounced, useLoad } from '../hooks';
 
 const EMPTY: TemplateInput = { name: '', channel: 'SMS', subject: '', body: '', category: 'TRANSACTIONAL' };
@@ -80,6 +81,7 @@ function TemplatePreview({ form, values, onValues }: Readonly<{
 export default function Templates() {
   const me = useLoad(() => api<Me>('/v1/me'));
   const { data, error, reload } = useLoad(() => api<Template[]>('/v1/templates'));
+  const drafting = useLoad(() => api<DraftingStatus>('/v1/templates/drafting'));
   const [form, setForm] = useState<TemplateInput>(EMPTY);
   const [editing, setEditing] = useState<Template | null>(null);
   const [values, setValues] = useState<Record<string, string>>({});
@@ -125,6 +127,13 @@ export default function Templates() {
     }
   }
 
+  function applyDraft(draft: TemplateDraft, brief: DraftBrief) {
+    setForm((current) => ({ ...current, channel: draft.channel, category: brief.category, subject: draft.subject ?? '', body: draft.body }));
+    setValues({});
+    setFormError('');
+    drafting.reload();
+  }
+
   const example = sendExample({ name: form.name || 'my-template', channel: form.channel, variables: variablesOf(form.subject, form.body) });
 
   return (
@@ -137,6 +146,11 @@ export default function Templates() {
         Your own templates can be edited and deleted; shared templates from the platform are read-only, but you can copy them.
         Editing a template only affects requests you send afterwards: requests already accepted keep the text they were sent with.
       </p>
+
+      {drafting.data?.enabled && !readOnly && (
+        <DraftAssistant status={drafting.data} channels={editing ? [editing.channel] : channels}
+          request={(brief) => send<TemplateDraft>('POST', '/v1/templates/drafts', brief)} onDraft={applyDraft} />
+      )}
 
       <form className="card" onSubmit={save}>
         <h3>{heading(editing)}</h3>

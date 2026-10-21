@@ -201,3 +201,14 @@ export function describeAnomaly(anomaly: Anomaly): { actual: string; expected: s
   }
   return { actual: value(anomaly.actual), expected: `${value(anomaly.expected)} (same hour, past weeks)` };
 }
+
+/** AI template drafting (ADR-041): only SMS, e-mail and WhatsApp templates can be drafted. */
+export const DRAFT_CHANNELS = ['SMS', 'EMAIL', 'WHATSAPP'] as const satisfies readonly Channel[];
+export const DRAFT_TONES = ['FRIENDLY', 'PROFESSIONAL', 'FORMAL', 'REASSURING', 'URGENT'] as const;
+export type DraftTone = (typeof DRAFT_TONES)[number];
+export interface DraftingStatus { enabled: boolean; model?: string; tokensLeftThisMonth: number; requestsPerMinute: number }
+export interface DraftBrief { channel: Channel; category: Category; tone: DraftTone; purpose: string; variables: string[] }
+export interface SmsLength { encoding: 'GSM-7' | 'UCS-2'; characters: number; segments: number }
+export interface TemplateDraft {
+  channel: Channel; subject?: string; body: string; variables: string[]; warnings: string[]; smsLength?: SmsLength; model: string;
+}

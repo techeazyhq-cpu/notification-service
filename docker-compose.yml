@@ -34,6 +34,27 @@ x-small: &small
     resources:
       limits: {cpus: "0.25", memory: 128m}
 
+x-svc-env: &svc-env
+  DB_URL: jdbc:postgresql://postgres:5432/notification
+  # DML-only role: these three services never run DDL, so they don't get the schema-owning
+  # notification/notification credentials the migration job uses. See ADR-012.
+  DB_USER: ${DB_APP_USER:-notification_app}
+  DB_PASSWORD: ${DB_APP_PASSWORD:-notification_app}
+  REDIS_HOST: redis
+  PULSAR_URL: pulsar://pulsar:6650
+  VIRTUAL_THREADS_ENABLED: ${VIRTUAL_THREADS_ENABLED:-false}
+  # Encrypts provider secrets (SMTP password, gateway auth header) at rest; must be the same value on every
+  # service, since admin-api encrypts with it and client-api/dispatcher decrypt with it. See ADR-013.
+  SECRETS_ENCRYPTION_KEY: ${SECRETS_ENCRYPTION_KEY:-development-only-change-me}
+  # Encrypts message template variables (names, one-time codes) at rest; the same value on every service.
+  DATA_ENCRYPTION_KEY: ${DATA_ENCRYPTION_KEY:-development-only-change-me}
+  PROVIDER_TRUSTED_HOSTS: ${PROVIDER_TRUSTED_HOSTS:-mailpit,catcher}
+  LOG_FORMAT: ${LOG_FORMAT:-}
+  TRACING_SAMPLING_PROBABILITY: ${TRACING_SAMPLING_PROBABILITY:-1.0}
+  # Without this, a service refuses to start with the default DB_PASSWORD/ADMIN_PASSWORD/keys above
+  # (see notification-core's InsecureDefaults and ADR-013).
+  SPRING_PROFILES_ACTIVE: local
+
 services:
   postgres:
     image: postgres:16-alpine
@@ -123,26 +144,10 @@ services:
     profiles: [app]
     build: { context: ., args: { MODULE: client-api } }
     ports: ["8080:8080", "127.0.0.1:9080:9080"]
-    environment: &svc-env
-      DB_URL: jdbc:postgresql://postgres:5432/notification
-      # DML-only role: these three services never run DDL, so they don't get the schema-owning
-      # notification/notification credentials the migration job uses. See ADR-012.
-      DB_USER: ${DB_APP_USER:-notification_app}
-      DB_PASSWORD: ${DB_APP_PASSWORD:-notification_app}
-      REDIS_HOST: redis
-      PULSAR_URL: pulsar://pulsar:6650
-      VIRTUAL_THREADS_ENABLED: ${VIRTUAL_THREADS_ENABLED:-false}
-      # Encrypts provider secrets (SMTP password, gateway auth header) at rest; must be the same value on every
-      # service, since admin-api encrypts with it and client-api/dispatcher decrypt with it. See ADR-013.
-      SECRETS_ENCRYPTION_KEY: ${SECRETS_ENCRYPTION_KEY:-development-only-change-me}
-      # Encrypts message template variables (names, one-time codes) at rest; the same value on every service.
-      DATA_ENCRYPTION_KEY: ${DATA_ENCRYPTION_KEY:-development-only-change-me}
-      PROVIDER_TRUSTED_HOSTS: ${PROVIDER_TRUSTED_HOSTS:-mailpit,catcher}
-      LOG_FORMAT: ${LOG_FORMAT:-}
-      TRACING_SAMPLING_PROBABILITY: ${TRACING_SAMPLING_PROBABILITY:-1.0}
-      # Without this, a service refuses to start with the default DB_PASSWORD/ADMIN_PASSWORD/keys above
-      # (see notification-core's InsecureDefaults and ADR-013).
-      SPRING_PROFILES_ACTIVE: local
+    environment:
+      <<: *svc-env
+      # Turns on AI template drafting (ADR-041) in the client API and the client UI; unset leaves it off.
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
     depends_on: &svc-deps
       db-migrate: { condition: service_completed_successfully }
       postgres: { condition: service_healthy }
@@ -163,6 +168,8 @@ services:
       ADMIN_REQUIRE_TWO_FACTOR: ${ADMIN_REQUIRE_TWO_FACTOR:-false}
       API_DOCS_ENABLED: ${ADMIN_API_DOCS_ENABLED:-true}
       ANOMALY_AGGREGATION_CRON: ${ANOMALY_AGGREGATION_CRON:-0 5 * * * *}
+      # Turns on AI template drafting (ADR-041) in the admin API and the admin UI; unset leaves it off.
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
     depends_on: *svc-deps
 
   dispatcher:

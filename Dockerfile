@@ -29,10 +29,12 @@ COPY client-api/pom.xml client-api/
 COPY admin-api/pom.xml admin-api/
 COPY dispatcher/pom.xml dispatcher/
 COPY billing/pom.xml billing/
+COPY template-drafting/pom.xml template-drafting/
 COPY db-migration/pom.xml db-migration/
 RUN --mount=type=cache,target=/root/.m2 mvn -q -B dependency:go-offline -pl ${MODULE} -am || true
 COPY notification-core/src notification-core/src
 COPY billing/src billing/src
+COPY template-drafting/src template-drafting/src
 COPY ${MODULE}/src ${MODULE}/src
 RUN --mount=type=cache,target=/root/.m2 mvn -q -B -DskipTests package -pl ${MODULE} -am
 

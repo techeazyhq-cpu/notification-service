@@ -184,10 +184,13 @@ Different purposes need different content, so clients manage their own templates
 | GET / POST | `/v1/templates[/{id}]` | Read one, create one |
 | PUT / DELETE | `/v1/templates/{id}` | Edit or delete an **own** template (shared: `403`; another client's: `404`) |
 | POST | `/v1/templates/preview` | Render with sample values; nothing stored or sent; unresolved placeholders stay visible |
+| GET / POST | `/v1/templates/drafting`, `/v1/templates/drafts` | Optional AI drafting (ADR-041): whether it is on, and a draft from a brief that meets the channel's rules; nothing stored |
 
 Rules: names are 2-64 characters (letters, digits, `.` `-` `_`) and unique per owner; a client cannot take the name of a shared template (`409`, so what a name means is never ambiguous), but its own template wins if an admin later adds a shared one with the same name; the channel cannot be changed after creation; a client may only create templates for channels it is allowed to use; at most 200 per client (`client-api.max-templates-per-client`); body up to 10,000 characters; malformed placeholders (`{{name}`) are rejected. Templates are plain substitution (no expressions), so authors cannot execute anything.
 
 **Content snapshot.** When a request is accepted, the template's subject and body are copied onto the request and the dispatcher renders from that copy (`template_id` remains as a reference only, and becomes `NULL` if the template is deleted). Editing or deleting a template therefore can never change or break a bulk that is already queued, or rewrite history. Verified with a 2,000-recipient bulk whose template was edited and then deleted while 1,960 messages were still queued: all 2,000 went out with the original text. See ADR-002. The admin UI lists every template with its owner for support, but only shared ones can be changed there.
+
+**AI drafting (optional).** With an Anthropic API key configured, administrators and clients can ask Claude for a first draft from a short brief (channel, category, tone, purpose, variable names). Only the brief reaches the model; the reply is checked against the channel's rules (SMS segments, e-mail subject and safe HTML, WhatsApp length, placeholders) and corrected once if needed; the draft fills the editor and is saved only through the endpoints above. A per-caller rate limit and monthly token budgets (platform and per client, in `template_draft_usage`) bound the cost, and every use is audited. The `template-drafting` module holds it, so the dispatcher never depends on it. See ADR-041.
 
 ### 4.5 API playground
 

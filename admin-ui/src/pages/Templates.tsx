@@ -17,13 +17,15 @@
  */
 
 import { useState } from 'react';
-import { api, CATEGORIES, Category, CATEGORY_LABELS, Channel, CHANNELS, Template } from '../api';
+import { api, CATEGORIES, Category, CATEGORY_LABELS, Channel, CHANNELS, DraftBrief, DraftingStatus, Template, TemplateDraft } from '../api';
+import DraftAssistant from '../DraftAssistant';
 import { useLoad } from '../hooks';
 
 const EMPTY = { name: '', channel: 'EMAIL' as Channel, subject: '', body: '', category: 'TRANSACTIONAL' as Category };
 
 export default function Templates() {
   const { data, error, reload } = useLoad(() => api<Template[]>('GET', '/templates'));
+  const drafting = useLoad(() => api<DraftingStatus>('GET', '/templates/drafting'));
   const [form, setForm] = useState(EMPTY);
   const [editing, setEditing] = useState<string | null>(null);
   const [formError, setFormError] = useState('');
@@ -42,12 +44,22 @@ export default function Templates() {
     try { await api('DELETE', `/templates/${t.id}`); reload(); } catch (err) { alert((err as Error).message); }
   }
 
+  function applyDraft(draft: TemplateDraft, brief: DraftBrief) {
+    setForm((current) => ({ ...current, channel: draft.channel, category: brief.category, subject: draft.subject ?? '', body: draft.body }));
+    setFormError('');
+    drafting.reload();
+  }
+
   const edit = (t: Template) => { setEditing(t.id); setForm({ name: t.name, channel: t.channel, subject: t.subject ?? '', body: t.body, category: t.category ?? 'TRANSACTIONAL' }); };
 
   return (
     <>
       <h1>Templates</h1>
       <p className="muted">Shared templates are managed here and visible to every client. Clients create their own templates in the client tracker; those are listed for support and are read-only here.</p>
+      {drafting.data?.enabled && (
+        <DraftAssistant status={drafting.data} channels={CHANNELS}
+          request={(brief) => api<TemplateDraft>('POST', '/templates/drafts', brief)} onDraft={applyDraft} />
+      )}
       <form className="card" onSubmit={save}>
         <div className="row">
           <label>Name<input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required /></label>

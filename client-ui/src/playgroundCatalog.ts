@@ -108,6 +108,15 @@ export const CATALOG: PlaygroundEndpoint[] = [
     body: { name: 'playground-otp', channel: 'SMS', body: 'Your code is {{code}}' },
   },
   {
+    id: 'template-drafting', group: 'Templates', title: 'Is AI drafting available?', method: 'GET', path: '/v1/templates/drafting',
+    description: 'Whether AI template drafting is on for you, and how many tokens of the monthly budget are left.',
+  },
+  {
+    id: 'template-draft', group: 'Templates', title: 'Draft a template with AI', method: 'POST', path: '/v1/templates/drafts',
+    description: 'Returns a draft that meets the rules of its channel; nothing is saved. Spends drafting budget, and only the description is sent to the model.',
+    body: { channel: 'SMS', category: 'TRANSACTIONAL', tone: 'FRIENDLY', purpose: 'Tell the customer their order has shipped and how to track it', variables: ['firstName', 'trackingUrl'] },
+  },
+  {
     id: 'template-delete', group: 'Templates', title: 'Delete a template', method: 'DELETE', path: '/v1/templates/{id}',
     description: 'Deletes one of your own templates. Requests already accepted are not affected.', pathParams: { id: '' },
   },
