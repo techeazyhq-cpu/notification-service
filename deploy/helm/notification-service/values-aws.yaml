@@ -22,7 +22,7 @@ config:
   redis:
     port: 6379
   pulsar:
-    url: pulsar+ssl://pulsar-broker.pulsar.svc.cluster.local:6651
+    url: pulsar+ssl://pulsar-broker.common.svc.cluster.local:6651
     tlsTrustCertsFile: /etc/pulsar-ca/ca.crt
   extraEnv:
     SPRING_DATA_REDIS_SSL_ENABLED: "true"

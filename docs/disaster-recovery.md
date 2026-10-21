@@ -90,7 +90,7 @@ With a managed service, alert on its equivalents instead: failed WAL uploads and
 Critical. The primary's last archive upload failed and nothing has been archived since, for 10 minutes. Every
 minute this lasts adds to the data a point-in-time recovery would lose, beyond the 5-minute objective.
 
-1. `kubectl cnpg status notification-db -n datastores` shows the archiving error and the `ContinuousArchiving`
+1. `kubectl cnpg status notification-db -n common` shows the archiving error and the `ContinuousArchiving`
    condition. The primary's log has the plugin's upload error.
 2. Usual causes: expired or rotated object-store credentials, a deleted or renamed bucket, a changed bucket policy,
    or the network policy or firewall in front of the object store.
@@ -114,14 +114,14 @@ Warning. The newest successful base backup is over 26 hours old (the schedule is
 still possible as long as archiving works, but it replays every WAL segment since the backup, which stretches the
 one-hour recovery objective.
 
-1. `kubectl get backups -n datastores` lists recent attempts. Check the `ScheduledBackup` is not suspended.
-2. Take one now: `kubectl cnpg backup notification-db -n datastores --method plugin --plugin-name
+1. `kubectl get backups -n common` lists recent attempts. Check the `ScheduledBackup` is not suspended.
+2. Take one now: `kubectl cnpg backup notification-db -n common --method plugin --plugin-name
    barman-cloud.cloudnative-pg.io`.
 
 #### Base backup failed
 
 Warning. The latest base backup attempt failed after the last good one. `kubectl describe backup <name> -n
-datastores` gives the reason; the causes overlap with failed archiving. Fix it and take a backup by hand, as above,
+common` gives the reason; the causes overlap with failed archiving. Fix it and take a backup by hand, as above,
 rather than waiting a day for the next scheduled one.
 
 ### Point-in-time recovery

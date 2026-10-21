@@ -349,14 +349,17 @@ Make the **CI** and **Security** checks required in the branch protection rules 
   autoscaling;
 - network policies deny by default.
 
-PostgreSQL, Redis and Pulsar are external. Before installing:
-- create the Secret it references from your secrets manager;
+PostgreSQL, Redis and Pulsar are external to the chart. The cluster has two namespaces, created by
+`kubectl apply -f deploy/k8s/namespaces.yaml` (ADR-042): `common` for the servers that run in the cluster (Pulsar
+always; PostgreSQL, Redis and Mailpit only where they are not managed services) and `notification` for the chart.
+Before installing:
+- create the namespaces, and the Secret the chart references from your secrets manager;
 - set `networkPolicy.datastoreEgress` for your datastores;
 - install as release `notification`.
 
 The chart's `values.yaml` documents every setting. To try it locally on k3s in Docker, follow
-[deploy/k8s/dev/README.md](deploy/k8s/dev/README.md). See ADR-025. To run it in a `notification` namespace on servers
-shared with consent-manager in a `common` namespace, layer `deploy/k8s/dev/values-shared.yaml` on top (ADR-040).
+[deploy/k8s/dev/README.md](deploy/k8s/dev/README.md). See ADR-025. To use a `common` namespace whose servers are
+shared with consent-manager, layer `deploy/k8s/dev/values-shared.yaml` on top (ADR-040).
 
 ### On AWS
 

@@ -24,7 +24,7 @@ apiVersion: postgresql.cnpg.io/v1
 kind: Cluster
 metadata:
   name: notification-db
-  namespace: datastores
+  namespace: common
 spec:
   instances: 3
   imageName: ghcr.io/cloudnative-pg/postgresql:16
@@ -74,7 +74,7 @@ apiVersion: postgresql.cnpg.io/v1
 kind: ScheduledBackup
 metadata:
   name: notification-db-daily
-  namespace: datastores
+  namespace: common
 spec:
   schedule: "0 0 2 * * *"
   immediate: true

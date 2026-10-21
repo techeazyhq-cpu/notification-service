@@ -22,7 +22,7 @@ apiVersion: barmancloud.cnpg.io/v1
 kind: ObjectStore
 metadata:
   name: notification-backups
-  namespace: datastores
+  namespace: common
 spec:
   retentionPolicy: "30d"
   configuration:
