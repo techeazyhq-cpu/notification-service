@@ -121,7 +121,7 @@ export default function AiDrafting() {
     <>
       <h1>AI drafting</h1>
       <p className="muted">
-        The LLM that drafts SMS, e-mail and WhatsApp templates from a short description, in the template editor of this console
+        The LLM that drafts SMS, e-mail, WhatsApp and push templates from a short description, in the template editor of this console
         and of the client tracker. Any provider works: Anthropic, OpenAI, Google Gemini, DeepSeek, a local Ollama or another
         OpenAI-compatible server. Only the description and variable names are sent, never recipients or values. Changes apply
         within ten seconds, without a restart.

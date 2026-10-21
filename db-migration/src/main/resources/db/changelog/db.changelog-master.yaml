@@ -70,3 +70,5 @@ databaseChangeLog:
       file: db/changelog/changes/026-template-drafting-settings.sql
   - include:
       file: db/changelog/changes/027-template-drafting-provider.sql
+  - include:
+      file: db/changelog/changes/028-template-draft-usage-push.sql

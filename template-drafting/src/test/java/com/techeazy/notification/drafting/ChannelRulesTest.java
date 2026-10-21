@@ -225,8 +225,59 @@ class ChannelRulesTest {
     }
 
     @Test
-    void pushAndEmptyBodiesAreRefused() {
-        assertThat(ChannelRules.check(Channel.PUSH, null, "Hi", List.of()).passed()).isFalse();
+    void emptyBodiesAreRefused() {
         assertThat(ChannelRules.check(Channel.SMS, null, " ", List.of()).violations()).contains("The body is empty");
+        assertThat(ChannelRules.check(Channel.PUSH, "Shipped", " ", List.of()).violations())
+                .contains("The body is empty");
+    }
+
+    @Test
+    void everyChannelCanBeDrafted() {
+        assertThat(ChannelRules.SUPPORTED).containsExactlyInAnyOrder(Channel.values());
+    }
+
+    @Test
+    void aPushWithAShortTitleAndShortPlainTextPasses() {
+        ChannelRules.Check check = ChannelRules.check(Channel.PUSH, "Your order has shipped",
+                "Order {{orderId}} is on its way and arrives in 2-3 days.", List.of("orderId"));
+
+        assertThat(check.passed()).isTrue();
+        assertThat(check.warnings()).isEmpty();
+        assertThat(check.smsLength()).isNull();
+    }
+
+    @Test
+    void aPushNeedsATitleOfAtMost65CharactersOnOneLine() {
+        assertThat(ChannelRules.check(Channel.PUSH, null, "On its way.", List.of()).violations())
+                .anyMatch(v -> v.contains("A push notification needs a title"));
+        assertThat(ChannelRules.check(Channel.PUSH, " ", "On its way.", List.of()).violations())
+                .anyMatch(v -> v.contains("needs a title"));
+        assertThat(ChannelRules.check(Channel.PUSH, "t".repeat(65), "On its way.", List.of()).passed()).isTrue();
+        assertThat(ChannelRules.check(Channel.PUSH, "t".repeat(66), "On its way.", List.of()).violations())
+                .anyMatch(v -> v.contains("longer than 65 characters"));
+        assertThat(ChannelRules.check(Channel.PUSH, "Order\nshipped", "On its way.", List.of()).violations())
+                .anyMatch(v -> v.contains("single line"));
+    }
+
+    @Test
+    void aPushBodyIsPlainTextOfAtMost240CharactersWithAWarningOver120() {
+        assertThat(ChannelRules.check(Channel.PUSH, "Shipped", "b".repeat(120), List.of()).warnings()).isEmpty();
+        assertThat(ChannelRules.check(Channel.PUSH, "Shipped", "b".repeat(121), List.of()).warnings())
+                .anyMatch(w -> w.contains("cut off"));
+        assertThat(ChannelRules.check(Channel.PUSH, "Shipped", "b".repeat(240), List.of()).passed()).isTrue();
+        assertThat(ChannelRules.check(Channel.PUSH, "Shipped", "b".repeat(241), List.of()).violations())
+                .anyMatch(v -> v.contains("longer than 240 characters"));
+        assertThat(ChannelRules.check(Channel.PUSH, "Shipped", "<b>On its way</b>", List.of()).violations())
+                .anyMatch(v -> v.contains("Push messages are plain text"));
+        assertThat(ChannelRules.check(Channel.PUSH, "<b>Shipped</b>", "On its way", List.of()).violations())
+                .anyMatch(v -> v.contains("The title must be plain text"));
+    }
+
+    @Test
+    void aPushIsHeldToTheSameInventedDetailRules() {
+        assertThat(ChannelRules.check(Channel.PUSH, "Shipped", "Track it at www.example.com", List.of())
+                .violations()).anyMatch(v -> v.contains("www.example.com"));
+        assertThat(ChannelRules.check(Channel.PUSH, "[Brand] update", "On its way", List.of()).violations())
+                .anyMatch(v -> v.contains("[Brand]"));
     }
 }

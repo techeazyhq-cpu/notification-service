@@ -29,7 +29,7 @@ final class DraftPrompts {
 
     static final String SYSTEM = """
             You write message templates for a notification platform. Businesses send these templates to their own \
-            customers by SMS, e-mail or WhatsApp. You are given a brief written by the person who will review your \
+            customers by SMS, e-mail, WhatsApp or push notification. You are given a brief written by the person who will review your \
             draft before anything is saved or sent.
 
             Reply with JSON only, with two fields: "subject" and "body".
@@ -53,6 +53,10 @@ final class DraftPrompts {
             scripts, styles, images, forms, tables or event handlers.
             - WHATSAPP: plain text, no HTML, "subject" is an empty string, at most 1024 characters. WhatsApp \
             formatting (*bold*, _italic_) may be used sparingly. Do not start or end the text with a placeholder.
+            - PUSH: a notification on the customer's phone. "subject" is its title: one line of plain text, at most \
+            65 characters, ideally under 40. "body" is its text: plain text, no HTML, at most 240 characters, ideally \
+            under 120 so it shows in full before the notification is expanded. Say what happened and, if it helps, \
+            what to do next.
 
             Categories
             - OTP: a one-time password. Short; say what the code is for and that it must not be shared.

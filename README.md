@@ -290,9 +290,10 @@ four characters. The endpoint must pass the provider destination policy: a publi
 no key, and switch drafting on. `docker compose` already trusts and maps `host.docker.internal`.
 
 With drafting on, the create and edit form on the **Templates** page of both UIs shows **Draft with AI**: pick the
-channel (SMS, EMAIL or WHATSAPP) and category in the form, choose a tone, list the variable names and describe the
+channel (SMS, EMAIL, WHATSAPP or PUSH) and category in the form, choose a tone, list the variable names and describe the
 message. The model writes a subject and body that are checked against the channel's rules (SMS segments, e-mail subject
-and safe HTML, WhatsApp length, only the variables asked for) and placed in the form. Nothing is saved or sent until
+and safe HTML, WhatsApp length, a push title of at most 65 characters and text of at most 240, only the variables
+asked for, and no links, contact details or stand-ins the model made up) and placed in the form. Nothing is saved or sent until
 the author saves the template as usual. Only the description and variable names go to the model, never recipients or
 values.
 

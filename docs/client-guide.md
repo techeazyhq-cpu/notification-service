@@ -115,7 +115,8 @@ Open a request to see its details:
 - **Draft with AI** appears in the template form when your operator has turned AI drafting on. Choose the channel and
   category in the form, then pick a tone, list the placeholders the message may use (`firstName, orderId`) and
   describe what the message is for. The draft meets
-  the channel's rules (SMS length, e-mail subject, WhatsApp limits) and fills the editor. Nothing is saved until you
+  the channel's rules (SMS length, e-mail subject, WhatsApp limits, push title and text length) and fills the
+  editor. Nothing is saved until you
   review it and **Create template**. Only your description and the placeholder names are sent to the AI model, so
   leave customer names, numbers and other personal data out of it. Drafting is limited to a few drafts a minute and a
   monthly budget; the panel shows what is left.
@@ -525,13 +526,14 @@ once, then expire it.
 | `DELETE /v1/templates/{id}` | Deletes one. Requests already accepted keep their text |
 | `POST /v1/templates/preview` | Renders a `subject` and `body` with sample `variables`, and lists the placeholders still missing |
 | `GET /v1/templates/drafting` | Whether AI drafting is on for you (`enabled`), the `model`, `tokensLeftThisMonth` and `requestsPerMinute` |
-| `POST /v1/templates/drafts` | Drafts a template with AI from `channel` (`SMS`, `EMAIL`, `WHATSAPP`), optional `category` and `tone` (`FRIENDLY`, `PROFESSIONAL`, `FORMAL`, `REASSURING`, `URGENT`), `purpose` (10–1000 characters) and up to 15 `variables` names. Returns `subject`, `body`, `variables`, `warnings` and, for SMS, `smsLength`. Saves nothing |
+| `POST /v1/templates/drafts` | Drafts a template with AI from `channel` (`SMS`, `EMAIL`, `WHATSAPP`, `PUSH`), optional `category` and `tone` (`FRIENDLY`, `PROFESSIONAL`, `FORMAL`, `REASSURING`, `URGENT`), `purpose` (10–1000 characters) and up to 15 `variables` names. Returns `subject`, `body`, `variables`, `warnings` and, for SMS, `smsLength`. Saves nothing |
 
 A draft meets the channel's rules: SMS at most 3 segments (each placeholder counted as 12 characters), e-mail with a
-one-line subject of at most 150 characters and simple HTML, WhatsApp plain text of at most 1024 characters, and only the
-placeholders you listed (plus `{{recipient}}`). It contains no contact details or values of the AI's own: links point
-only to a placeholder, and e-mail addresses, web addresses, phone and other long numbers, and stand-ins such as
-`[Your Company Name]` are refused. Refusals: `DRAFTING_NOT_AVAILABLE` when drafting is off,
+one-line subject of at most 150 characters and simple HTML, WhatsApp plain text of at most 1024 characters, a push
+notification with a one-line title of at most 65 characters and plain text of at most 240 (a warning above 120, where
+a collapsed notification may cut it off), and only the placeholders you listed (plus `{{recipient}}`). It contains no
+contact details or values of the AI's own: links point only to a placeholder, and e-mail addresses, web addresses,
+phone and other long numbers, and stand-ins such as `[Your Company Name]` are refused. Refusals: `DRAFTING_NOT_AVAILABLE` when drafting is off,
 `RATE_LIMITED` or `DRAFT_BUDGET_EXHAUSTED` over the limits, `DRAFT_DECLINED` when the model declines the description,
 `DRAFT_RULES_NOT_MET` when it could not meet the rules (the message lists them) and `DRAFTING_MODEL_UNAVAILABLE` when it
 cannot be reached. Every request for a draft is recorded in the platform's audit log.

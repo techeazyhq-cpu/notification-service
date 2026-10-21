@@ -64,7 +64,14 @@ ceiling, budgets and rate limit. Three things did not fit how the platform is ru
    and stand-ins left to fill in by hand, such as `[Your Company Name]`. Each violation quotes what was found, so the
    one correction can fix it. The prompt asks for the same. Testing with a small local model showed why: drafts that
    met every earlier rule still carried `support@example.com` in a broken link and a `[Your Company Name]` sign-off.
-8. **Drafting is part of the template editor.** **Draft with AI** sits inside the create and edit form of both UIs,
+8. **Push notification templates can be drafted too** (amending ADR-041, which left push out as "a title and data, not
+   a template text"). A push template is sent as its subject, the notification title, and its body, the text; the
+   data a push carries is given per send, not by the template. So a draft is a title and a text: the title is
+   required, one line of plain text, at most 65 characters, beyond which most lock screens cut it off; the text is
+   plain, at most 240 characters, what an expanded notification shows, with a warning above 120, where a collapsed
+   one may cut it off. The invented-detail rules apply as on every channel. Changeset
+   `028-template-draft-usage-push` lets the drafting ledger record `PUSH`.
+9. **Drafting is part of the template editor.** **Draft with AI** sits inside the create and edit form of both UIs,
    between the channel and category and the subject and body. It uses the form's channel and category, and the draft
    fills the subject and body. While drafting is off, the admin editor says so and links to the settings page; the
    client editor shows nothing, since clients cannot turn it on.
@@ -101,7 +108,8 @@ Negative / accepted:
 
 - Draft quality depends on the model chosen. Small local models break the channel rules more often; the rules and
   the one correction still keep a bad draft out of the editor, at the cost of a second call. Locally,
-  `llama3.2:1b` met the rules in 1 of 5 drafts and `llama3.2:3b` in 8 of 8.
+  `llama3.2:1b` met the rules in 1 of 5 drafts; `llama3.2:3b` in 8 of 8 SMS and e-mail drafts, 9 of 9 after the
+  invented-detail rules, and 6 of 6 WhatsApp drafts.
 - The invented-detail rules can refuse something an author would accept, such as a seven-digit number in the brief's
   own wording or text in square brackets. The draft is refused rather than shown, and the author can write that
   text into the editor by hand.
