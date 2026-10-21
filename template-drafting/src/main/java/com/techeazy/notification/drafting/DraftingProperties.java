@@ -23,13 +23,16 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 import java.time.Duration;
 
 /**
- * Template drafting settings under {@code template-drafting.*} (ADR-041). Drafting is off until an API key is set;
- * every other value has a working default. Settings an administrator saves in the console override the API key,
- * model, effort, token ceiling, budgets and rate limit (ADR-044); the rest are operational and stay here.
+ * Template drafting settings under {@code template-drafting.*} (ADR-041). Drafting is off until the provider can be
+ * reached, with an API key where it needs one; every other value has a working default. Settings an administrator
+ * saves in the console override the provider, base URL, API key, model, effort, token ceiling, budgets and rate limit
+ * (ADR-044); the rest are operational and stay here.
  */
 @ConfigurationProperties(prefix = "template-drafting")
 public class DraftingProperties {
 
+    private LlmProvider provider = LlmProvider.ANTHROPIC;
+    private String baseUrl = "";
     private String apiKey = "";
     private String model = "claude-opus-5-5";
     private String effort = "low";
@@ -42,17 +45,25 @@ public class DraftingProperties {
     private int maxAttempts = 2;
     private Duration settingsCacheTtl = Duration.ofSeconds(10);
 
-    /** The Anthropic API key; blank switches drafting off and the UIs hide it. */
+    /** The LLM provider that writes drafts. */
+    public LlmProvider getProvider() { return provider; }
+    public void setProvider(LlmProvider provider) { this.provider = provider; }
+
+    /** Where the provider is reached; blank for its own endpoint. Required for {@code OPENAI_COMPATIBLE}. */
+    public String getBaseUrl() { return baseUrl; }
+    public void setBaseUrl(String baseUrl) { this.baseUrl = baseUrl; }
+
+    /** The provider's API key; blank switches drafting off for a provider that needs one. */
     public String getApiKey() { return apiKey; }
     public void setApiKey(String apiKey) { this.apiKey = apiKey; }
 
     public boolean hasApiKey() { return apiKey != null && !apiKey.isBlank(); }
 
-    /** The Claude model that writes drafts. */
+    /** The model that writes drafts, as the provider names it. */
     public String getModel() { return model; }
     public void setModel(String model) { this.model = model; }
 
-    /** How much the model thinks before it writes: low, medium, high, xhigh or max. Short templates need little. */
+    /** How much an Anthropic model thinks first: low, medium, high, xhigh or max. Short templates need little. */
     public String getEffort() { return effort; }
     public void setEffort(String effort) { this.effort = effort; }
 

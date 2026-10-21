@@ -78,8 +78,8 @@ class ClaudeDraftModelTest {
 
     @Test
     void theRequestUsesTheModelEffortAndTokenCeilingAnAdministratorChose() {
-        DraftingSettings chosen = new DraftingSettings(true, "sk-ant-test-key", "claude-sonnet-5-5", "medium", 4000,
-                1_000_000, 100_000, 5);
+        DraftingSettings chosen = new DraftingSettings(true, LlmProvider.ANTHROPIC, null, "sk-ant-test-key",
+                "claude-sonnet-5-5", "medium", 4000, 1_000_000, 100_000, 5);
 
         MessageCreateParams request = new ClaudeDraftModel(client, chosen, true).request(PROMPT);
 

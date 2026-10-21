@@ -277,23 +277,31 @@ database while messages are in flight) write to `docs/benchmarks`. Results and a
 
 ## AI template drafting
 
-Optional, and off until an administrator sets it up. In the admin UI, open **AI drafting**, enter an Anthropic API
-key, switch drafting on and save. The page also sets the model, effort, token ceiling, monthly budgets and drafts per
-minute. Changes apply within 10 seconds, without a restart. The key is stored encrypted with the secrets key and never
-shown again, only its last four characters (ADR-044).
+Optional, and off until an administrator sets it up. Any LLM works: Anthropic, OpenAI, Google Gemini, DeepSeek, a
+local Ollama or any other server with an OpenAI-compatible API (vLLM, LM Studio, a gateway). In the admin UI, open
+**AI drafting**, choose the provider and model, add its API key if it needs one, switch drafting on and save. The page
+also sets the base URL, effort (Anthropic), token ceiling, monthly budgets and drafts per minute. Changes apply within
+10 seconds, without a restart. The key is stored encrypted with the secrets key and never shown again, only its last
+four characters. The endpoint must pass the provider destination policy: a public HTTPS host, or one listed in
+`PROVIDER_TRUSTED_HOSTS` (ADR-022, ADR-044).
+
+**Local testing with Ollama:** run Ollama on your machine and pull a model (`ollama pull llama3.1:8b`). On the
+**AI drafting** page choose **Ollama (local)**, base URL `http://host.docker.internal:11434/v1`, model `llama3.1:8b`,
+no key, and switch drafting on. `docker compose` already trusts and maps `host.docker.internal`.
 
 With drafting on, the create and edit form on the **Templates** page of both UIs shows **Draft with AI**: pick the
-channel (SMS, EMAIL or WHATSAPP) and category in the form, choose a tone, list the variable names and describe the
-message. Claude writes a subject and body that are checked against the channel's rules (SMS segments, e-mail subject
-and safe HTML, WhatsApp length, only the variables asked for) and placed in the form. Nothing is saved or sent until
+channel (SMS, EMAIL, WHATSAPP or PUSH) and category in the form, choose a tone, list the variable names and describe the
+message. The model writes a subject and body that are checked against the channel's rules (SMS segments, e-mail subject
+and safe HTML, WhatsApp length, a push title of at most 65 characters and text of at most 240, only the variables
+asked for, and no links, contact details or stand-ins the model made up) and placed in the form. Nothing is saved or sent until
 the author saves the template as usual. Only the description and variable names go to the model, never recipients or
 values.
 
-The environment variables below are the defaults until settings are saved in the console. `ANTHROPIC_API_KEY` still
-works as the key when none is stored (`docker compose` passes it to admin-api and client-api only):
+The environment variables below are the defaults until settings are saved in the console (`docker compose` passes
+them to admin-api and client-api only). `ANTHROPIC_API_KEY` still works as the key when no other is set:
 
 ```bash
-ANTHROPIC_API_KEY=sk-ant-... docker compose --profile app up -d --build
+TEMPLATE_DRAFTING_PROVIDER=OPENAI TEMPLATE_DRAFTING_MODEL=<model> TEMPLATE_DRAFTING_API_KEY=sk-... docker compose --profile app up -d --build
 ```
 
 Cost is bounded by a per-caller rate limit (5 drafts a minute) and monthly token budgets for the platform (2,000,000)
@@ -304,9 +312,11 @@ table. Every use, and every change to the settings, is in the admin audit log. A
 
 | Variable | Default |
 |---|---|
-| `ANTHROPIC_API_KEY` | unset: drafting off until a key is saved in the console |
+| `TEMPLATE_DRAFTING_PROVIDER` | `ANTHROPIC`; or `OPENAI`, `GEMINI`, `DEEPSEEK`, `OLLAMA`, `OPENAI_COMPATIBLE` |
+| `TEMPLATE_DRAFTING_BASE_URL` | the provider's own endpoint; required for `OPENAI_COMPATIBLE` |
+| `TEMPLATE_DRAFTING_API_KEY` | `ANTHROPIC_API_KEY`, else unset: drafting off for a provider that needs a key |
 | `TEMPLATE_DRAFTING_MODEL` | `claude-opus-5-5` |
-| `TEMPLATE_DRAFTING_EFFORT` | `low` |
+| `TEMPLATE_DRAFTING_EFFORT` | `low` (Anthropic only) |
 | `TEMPLATE_DRAFTING_MAX_TOKENS` | `8000` |
 | `TEMPLATE_DRAFTING_MONTHLY_TOKENS` | `2000000` |
 | `TEMPLATE_DRAFTING_CLIENT_MONTHLY_TOKENS` | `200000` |

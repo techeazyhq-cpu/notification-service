@@ -184,10 +184,10 @@ class SecretReencryptionTest {
     }
 
     private static void draftingApiKey(String storedApiKey) {
-        jdbc.sql("INSERT INTO template_drafting_settings (enabled, api_key, model, effort, max_tokens, "
+        jdbc.sql("INSERT INTO template_drafting_settings (enabled, provider, api_key, model, effort, max_tokens, "
                         + "monthly_token_budget, client_monthly_token_budget, requests_per_minute, updated_at, "
-                        + "updated_by) VALUES (true, :key, 'claude-opus-5-5', 'low', 8000, 1000, 100, 5, now(), "
-                        + "'alice')")
+                        + "updated_by) VALUES (true, 'ANTHROPIC', :key, 'claude-opus-5-5', 'low', 8000, 1000, 100, "
+                        + "5, now(), 'alice')")
                 .param("key", storedApiKey).update();
     }
 

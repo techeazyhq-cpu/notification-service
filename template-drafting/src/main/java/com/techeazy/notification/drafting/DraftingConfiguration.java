@@ -19,6 +19,7 @@
 package com.techeazy.notification.drafting;
 
 import com.anthropic.client.okhttp.AnthropicOkHttpClient;
+import com.techeazy.notification.application.ProviderDestinationPolicy;
 import com.techeazy.notification.config.SecretsConfig;
 import com.techeazy.notification.infra.AesGcmCipher;
 import com.techeazy.notification.port.RateLimiter;
@@ -29,12 +30,13 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.jdbc.core.simple.JdbcClient;
 
+import java.net.http.HttpClient;
 import java.time.Clock;
 
 /**
  * Wires template drafting (ADR-041). The service always exists, so the APIs can say whether drafting is on. The
- * settings come from the console, or else the environment (ADR-044), and a Claude client is only built once they hold
- * an API key.
+ * settings come from the console, or else the environment (ADR-044), and name any {@link LlmProvider}; a model is
+ * only built once they can reach one.
  */
 @Configuration
 @EnableConfigurationProperties(DraftingProperties.class)
@@ -54,12 +56,16 @@ class DraftingConfiguration {
 
     @Bean
     TemplateDraftService templateDraftService(DraftingProperties properties, DraftingSettingsStore settings,
-                                              DraftUsageLedger ledger, RateLimiter rateLimiter, MeterRegistry meters) {
-        DraftModels claude = new ClaudeDraftModels(apiKey -> AnthropicOkHttpClient.builder()
-                .apiKey(apiKey)
+                                              DraftUsageLedger ledger, RateLimiter rateLimiter, MeterRegistry meters,
+                                              ProviderDestinationPolicy destinations) {
+        DraftModels models = new LlmDraftModels(current -> AnthropicOkHttpClient.builder()
+                .apiKey(current.apiKey())
+                .baseUrl(current.endpoint())
                 .timeout(properties.getTimeout())
                 .maxRetries(1)
-                .build(), properties.isFallbacks());
-        return new TemplateDraftService(properties, settings, claude, ledger, rateLimiter, Clock.systemUTC(), meters);
+                .build(),
+                HttpClient.newBuilder().connectTimeout(properties.getTimeout()).build(),
+                properties.getTimeout(), properties.isFallbacks(), destinations);
+        return new TemplateDraftService(properties, settings, models, ledger, rateLimiter, Clock.systemUTC(), meters);
     }
 }

@@ -184,7 +184,7 @@ public class TemplateDraftService {
 
     private void validate(DraftRequest request) {
         if (request.channel() == null || !ChannelRules.SUPPORTED.contains(request.channel())) {
-            throw refused(Reason.INVALID_REQUEST, "channel must be SMS, EMAIL or WHATSAPP");
+            throw refused(Reason.INVALID_REQUEST, "channel must be SMS, EMAIL, WHATSAPP or PUSH");
         }
         String purpose = request.purpose();
         if (purpose == null || purpose.length() < PURPOSE_MIN_LENGTH || purpose.length() > PURPOSE_MAX_LENGTH) {

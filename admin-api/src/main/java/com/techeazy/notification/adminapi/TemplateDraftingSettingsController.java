@@ -18,9 +18,13 @@
 
 package com.techeazy.notification.adminapi;
 
+import com.techeazy.notification.application.ProviderDestinationPolicy;
+import com.techeazy.notification.domain.ProviderType;
+import com.techeazy.notification.drafting.DraftingSettings;
 import com.techeazy.notification.drafting.DraftingSettingsChange;
 import com.techeazy.notification.drafting.DraftingSettingsStore;
 import com.techeazy.notification.drafting.DraftingSettingsView;
+import com.techeazy.notification.drafting.LlmProvider;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
@@ -36,11 +40,14 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.util.Map;
+
 /**
- * The AI drafting settings administrators edit in the console (ADR-044): whether drafting is on, the Anthropic API
- * key, the model, its effort and token ceiling, the monthly budgets and the per-minute limit. The key is write-only:
- * it is accepted here and never returned, only a hint of its last characters. Reading is for any administrator,
- * changing for {@code ADMIN}, and every change is in the audit log (ADR-019) without its body.
+ * The AI drafting settings administrators edit in the console (ADR-044): whether drafting is on, the LLM provider and
+ * its base URL, the API key, the model, its effort and token ceiling, the monthly budgets and the per-minute limit.
+ * The endpoint must pass the provider destination policy (ADR-022), like any provider's. The key is write-only: it is
+ * accepted here and never returned, only a hint of its last characters. Reading is for any administrator, changing
+ * for {@code ADMIN}, and every change is in the audit log (ADR-019) without its body.
  */
 @RestController
 @RequestMapping("/api/admin/settings/template-drafting")
@@ -49,10 +56,14 @@ class TemplateDraftingSettingsController {
     /**
      * The settings to save.
      *
+     * @param provider     the LLM provider that writes drafts
+     * @param baseUrl      where it is reached; absent for the provider's own endpoint
      * @param apiKey       a new key, or absent to keep the one in effect
      * @param removeApiKey delete the stored key, so the environment's key, if any, applies again
      */
     record SettingsInput(boolean enabled,
+                         @NotNull LlmProvider provider,
+                         @Size(max = 500) String baseUrl,
                          @Size(max = 512) String apiKey,
                          boolean removeApiKey,
                          @NotNull @Pattern(regexp = "[A-Za-z0-9][A-Za-z0-9._:-]{0,63}") String model,
@@ -63,8 +74,8 @@ class TemplateDraftingSettingsController {
                          @Min(1) @Max(600) int requestsPerMinute) {
 
         DraftingSettingsChange toChange() {
-            return new DraftingSettingsChange(enabled, apiKey, removeApiKey, model, effort, maxTokens,
-                    monthlyTokenBudget, clientMonthlyTokenBudget, requestsPerMinute);
+            return new DraftingSettingsChange(enabled, provider, baseUrl, apiKey, removeApiKey, model, effort,
+                    maxTokens, monthlyTokenBudget, clientMonthlyTokenBudget, requestsPerMinute);
         }
 
         @Override
@@ -74,9 +85,11 @@ class TemplateDraftingSettingsController {
     }
 
     private final DraftingSettingsStore settings;
+    private final ProviderDestinationPolicy destinations;
 
-    TemplateDraftingSettingsController(DraftingSettingsStore settings) {
+    TemplateDraftingSettingsController(DraftingSettingsStore settings, ProviderDestinationPolicy destinations) {
         this.settings = settings;
+        this.destinations = destinations;
     }
 
     @GetMapping
@@ -91,6 +104,18 @@ class TemplateDraftingSettingsController {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                     "Either give a new API key or remove the stored one, not both");
         }
+        String endpoint = endpointOf(change);
+        if (endpoint == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    change.provider() + " needs a base URL, such as https://llm.example.com/v1");
+        }
+        destinations.check(ProviderType.HTTP_JSON, Map.of("url", endpoint));
         return settings.save(change, authentication.getName());
+    }
+
+    private static String endpointOf(DraftingSettingsChange change) {
+        return new DraftingSettings(change.enabled(), change.provider(), change.baseUrl(), null, change.model(),
+                change.effort(), change.maxTokens(), change.monthlyTokenBudget(), change.clientMonthlyTokenBudget(),
+                change.requestsPerMinute()).endpoint();
     }
 }
