@@ -178,6 +178,15 @@ class OpenAiCompatibleDraftModelTest {
     }
 
     @Test
+    void aReplyWithoutChoicesIsTheProvidersErrorNotADraft() {
+        replyBody = "{\"error\":{\"message\":\"model requires more system memory\"}}";
+
+        assertThatThrownBy(() -> model(LlmProvider.OLLAMA, null).complete(PROMPT))
+                .isInstanceOf(DraftModelUnavailableException.class)
+                .hasMessageContaining("model requires more system memory");
+    }
+
+    @Test
     void aRejectedKeyIsReportedAsUnavailable() {
         replyStatus = 401;
         replyBody = "{\"error\":{\"message\":\"Incorrect API key\"}}";

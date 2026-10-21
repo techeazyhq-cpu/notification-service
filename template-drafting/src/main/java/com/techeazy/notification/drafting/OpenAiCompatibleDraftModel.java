@@ -151,12 +151,19 @@ class OpenAiCompatibleDraftModel implements DraftModel {
     }
 
     private JsonNode readBody(HttpResponse<String> response) {
+        JsonNode reply;
         try {
-            return JSON.readTree(response.body());
+            reply = JSON.readTree(response.body());
         } catch (JsonProcessingException unreadable) {
             throw new DraftModelUnavailableException(settings.provider() + " returned a reply that is not JSON",
                     unreadable);
         }
+        if (reply.path("choices").isEmpty()) {
+            String error = reply.path("error").path("message").asText("no choices in the reply");
+            LOG.error("{} answered the drafting request without a draft: {}", settings.provider(), error);
+            throw new DraftModelUnavailableException(settings.provider() + " returned no draft: " + error, null);
+        }
+        return reply;
     }
 
     private static String jsonOf(String content) {
