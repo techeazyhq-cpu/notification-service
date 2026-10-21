@@ -18,10 +18,12 @@
 
 package com.techeazy.notification.adminapi;
 
+import com.techeazy.notification.application.ProviderDestinationPolicy;
 import com.techeazy.notification.drafting.DraftingSettingsChange;
 import com.techeazy.notification.drafting.DraftingSettingsStore;
 import com.techeazy.notification.drafting.DraftingSettingsView;
 import com.techeazy.notification.drafting.DraftingSettingsView.ApiKeySource;
+import com.techeazy.notification.drafting.LlmProvider;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.MediaType;
@@ -30,9 +32,11 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
+import java.net.InetAddress;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -44,14 +48,19 @@ import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 
-/** Administrators read and change the AI drafting settings (ADR-044); the API key goes in and never comes back. */
+/**
+ * Administrators read and change the AI drafting settings (ADR-044): any LLM provider, at an endpoint the destination
+ * policy allows (ADR-022). The API key goes in and never comes back.
+ */
 class TemplateDraftingSettingsControllerTest {
 
     private static final String PATH = "/api/admin/settings/template-drafting";
     private static final String CONSOLE_KEY = "sk-ant-api03-console-secret-9876";
-    private static final DraftingSettingsView SAVED = new DraftingSettingsView(true, ApiKeySource.STORED, "…9876",
-            "claude-sonnet-5-5", "medium", 4000, 1_500_000, 50_000, 3, Instant.parse("2026-10-21T12:00:00Z"),
-            "alice");
+    private static final DraftingSettingsView SAVED = new DraftingSettingsView(true, LlmProvider.ANTHROPIC, null,
+            "https://api.anthropic.com", ApiKeySource.STORED, "…9876", "claude-sonnet-5-5", "medium", 4000,
+            1_500_000, 50_000, 3, Instant.parse("2026-10-21T12:00:00Z"), "alice");
+    private static final ProviderDestinationPolicy DESTINATIONS = new ProviderDestinationPolicy(
+            Set.of("host.docker.internal"), true, host -> List.of(InetAddress.getByName("203.0.113.10")));
 
     private final DraftingSettingsStore store = mock(DraftingSettingsStore.class);
     private final UsernamePasswordAuthenticationToken alice =
@@ -60,7 +69,7 @@ class TemplateDraftingSettingsControllerTest {
 
     @BeforeEach
     void setUp() {
-        mvc = MockMvcBuilders.standaloneSetup(new TemplateDraftingSettingsController(store))
+        mvc = MockMvcBuilders.standaloneSetup(new TemplateDraftingSettingsController(store, DESTINATIONS))
                 .setControllerAdvice(new AdminErrorHandler(Optional::empty)).build();
         when(store.describe()).thenReturn(SAVED);
         when(store.save(any(), anyString())).thenReturn(SAVED);
@@ -72,10 +81,16 @@ class TemplateDraftingSettingsControllerTest {
     }
 
     private static String settings(String apiKeyAndRemoval, String effort, String model, int requestsPerMinute) {
+        return settings("ANTHROPIC", null, apiKeyAndRemoval, effort, model, requestsPerMinute);
+    }
+
+    private static String settings(String provider, String baseUrl, String apiKeyAndRemoval, String effort,
+                                   String model, int requestsPerMinute) {
+        String baseUrlField = baseUrl == null ? "" : "\"baseUrl\":\"" + baseUrl + "\",";
         return """
-                {"enabled":true,%s"model":"%s","effort":"%s","maxTokens":4000,
+                {"enabled":true,"provider":"%s",%s%s"model":"%s","effort":"%s","maxTokens":4000,
                  "monthlyTokenBudget":1500000,"clientMonthlyTokenBudget":50000,"requestsPerMinute":%d}
-                """.formatted(apiKeyAndRemoval, model, effort, requestsPerMinute);
+                """.formatted(provider, baseUrlField, apiKeyAndRemoval, model, effort, requestsPerMinute);
     }
 
     @Test
@@ -94,16 +109,60 @@ class TemplateDraftingSettingsControllerTest {
 
         assertThat(response.getStatus()).isEqualTo(200);
         assertThat(response.getContentAsString()).doesNotContain("console-secret");
-        verify(store).save(new DraftingSettingsChange(true, CONSOLE_KEY, false, "claude-sonnet-5-5", "medium", 4000,
-                1_500_000, 50_000, 3), "alice");
+        verify(store).save(new DraftingSettingsChange(true, LlmProvider.ANTHROPIC, null, CONSOLE_KEY, false,
+                "claude-sonnet-5-5", "medium", 4000, 1_500_000, 50_000, 3), "alice");
     }
 
     @Test
     void withoutAKeyTheStoredOneIsKept() throws Exception {
         save(settings("", "low", "claude-opus-5-5", 5));
 
-        verify(store).save(new DraftingSettingsChange(true, null, false, "claude-opus-5-5", "low", 4000, 1_500_000,
-                50_000, 5), "alice");
+        verify(store).save(new DraftingSettingsChange(true, LlmProvider.ANTHROPIC, null, null, false,
+                "claude-opus-5-5", "low", 4000, 1_500_000, 50_000, 5), "alice");
+    }
+
+    @Test
+    void aLocalOllamaOnATrustedHostIsSavedWithoutAKey() throws Exception {
+        MockHttpServletResponse response = save(settings("OLLAMA", "http://host.docker.internal:11434/v1", "",
+                "low", "llama3.1:8b", 10));
+
+        assertThat(response.getStatus()).isEqualTo(200);
+        verify(store).save(new DraftingSettingsChange(true, LlmProvider.OLLAMA, "http://host.docker.internal:11434/v1",
+                null, false, "llama3.1:8b", "low", 4000, 1_500_000, 50_000, 10), "alice");
+    }
+
+    @Test
+    void aPublicHttpsProviderIsSaved() throws Exception {
+        assertThat(save(settings("OPENAI", null, "\"apiKey\":\"sk-test\",", "low", "gpt-test", 5)).getStatus())
+                .isEqualTo(200);
+        assertThat(save(settings("GEMINI", null, "\"apiKey\":\"key\",", "low", "gemini-test", 5)).getStatus())
+                .isEqualTo(200);
+    }
+
+    @Test
+    void anOpenAiCompatibleProviderNeedsABaseUrl() throws Exception {
+        MockHttpServletResponse response = save(settings("OPENAI_COMPATIBLE", null, "", "low", "my-model", 5));
+
+        assertThat(response.getStatus()).isEqualTo(400);
+        assertThat(response.getContentAsString()).contains("base URL");
+        verify(store, never()).save(any(), anyString());
+    }
+
+    @Test
+    void anEndpointTheDestinationPolicyRefusesIsNotSavedAndTheReasonIsGiven() throws Exception {
+        MockHttpServletResponse response = save(settings("OPENAI_COMPATIBLE", "http://169.254.169.254/v1", "",
+                "low", "my-model", 5));
+
+        assertThat(response.getStatus()).isEqualTo(400);
+        assertThat(response.getContentAsString()).contains("PROVIDER_DESTINATION_REFUSED")
+                .contains("169.254.169.254");
+        verify(store, never()).save(any(), anyString());
+    }
+
+    @Test
+    void anUnknownProviderIsRefused() throws Exception {
+        assertThat(save(settings("SKYNET", null, "", "low", "m", 5)).getStatus()).isEqualTo(400);
+        verify(store, never()).save(any(), anyString());
     }
 
     @Test

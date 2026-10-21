@@ -23,13 +23,17 @@ import java.time.Instant;
 /**
  * The drafting settings as the console shows them (ADR-044): everything but the key itself, which is write-only.
  *
- * @param enabled      whether drafting is on: switched on, and a key is available
+ * @param enabled      whether drafting is on: switched on, and the provider can be reached
+ * @param provider     the LLM provider that writes drafts
+ * @param baseUrl      the base URL saved or configured; blank for the provider's own endpoint
+ * @param endpoint     where drafts are actually sent
  * @param apiKeySource where the key in effect comes from
  * @param apiKeyHint   the last characters of the key in effect, to recognise it; null without one
  * @param updatedAt    when an administrator last saved the settings; null while the environment defaults apply
  * @param updatedBy    who saved them; null while the environment defaults apply
  */
-public record DraftingSettingsView(boolean enabled, ApiKeySource apiKeySource, String apiKeyHint, String model,
+public record DraftingSettingsView(boolean enabled, LlmProvider provider, String baseUrl, String endpoint,
+                                   ApiKeySource apiKeySource, String apiKeyHint, String model,
                                    String effort, long maxTokens, long monthlyTokenBudget,
                                    long clientMonthlyTokenBudget, int requestsPerMinute, Instant updatedAt,
                                    String updatedBy) {
@@ -38,9 +42,9 @@ public record DraftingSettingsView(boolean enabled, ApiKeySource apiKeySource, S
     public enum ApiKeySource {
         /** Saved by an administrator, encrypted in the database. */
         STORED,
-        /** The {@code ANTHROPIC_API_KEY} the service was started with. */
+        /** The key the service was started with: {@code TEMPLATE_DRAFTING_API_KEY} or {@code ANTHROPIC_API_KEY}. */
         ENVIRONMENT,
-        /** No key anywhere: drafting is off. */
+        /** No key anywhere: drafting is off unless the provider needs none. */
         NONE
     }
 }

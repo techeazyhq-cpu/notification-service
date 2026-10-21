@@ -95,8 +95,8 @@ class DraftingSettingsStoreTest {
     }
 
     private static DraftingSettingsChange change(String apiKey, boolean removeApiKey) {
-        return new DraftingSettingsChange(true, apiKey, removeApiKey, "claude-sonnet-5-5", "medium", 4000,
-                1_500_000, 50_000, 3);
+        return new DraftingSettingsChange(true, LlmProvider.ANTHROPIC, null, apiKey, removeApiKey,
+                "claude-sonnet-5-5", "medium", 4000, 1_500_000, 50_000, 3);
     }
 
     @Test
@@ -127,8 +127,8 @@ class DraftingSettingsStoreTest {
         String stored = jdbc.sql("SELECT api_key FROM template_drafting_settings").query(String.class).single();
         assertThat(stored).doesNotContain(CONSOLE_KEY);
         assertThat(cipher.decrypt(stored)).isEqualTo(CONSOLE_KEY);
-        assertThat(store.current()).isEqualTo(new DraftingSettings(true, CONSOLE_KEY, "claude-sonnet-5-5", "medium",
-                4000, 1_500_000, 50_000, 3));
+        assertThat(store.current()).isEqualTo(new DraftingSettings(true, LlmProvider.ANTHROPIC, null, CONSOLE_KEY,
+                "claude-sonnet-5-5", "medium", 4000, 1_500_000, 50_000, 3));
         assertThat(saved.apiKeySource()).isEqualTo(ApiKeySource.STORED);
         assertThat(saved.apiKeyHint()).isEqualTo("…2222");
         assertThat(saved.updatedBy()).isEqualTo("alice");
@@ -157,10 +157,27 @@ class DraftingSettingsStoreTest {
 
     @Test
     void switchedOffInTheConsoleDraftingIsOffDespiteTheEnvironmentKey() {
-        store.save(new DraftingSettingsChange(false, null, false, "claude-opus-5-5", "low", 8000, 1, 1, 5), "alice");
+        store.save(new DraftingSettingsChange(false, LlmProvider.ANTHROPIC, null, null, false, "claude-opus-5-5",
+                "low", 8000, 1, 1, 5), "alice");
 
         assertThat(store.current().active()).isFalse();
         assertThat(store.describe().enabled()).isFalse();
+    }
+
+    @Test
+    void anotherProviderAndEndpointAreSavedAndNeedNoKey() {
+        environment.setApiKey("");
+
+        DraftingSettingsView saved = store.save(new DraftingSettingsChange(true, LlmProvider.OLLAMA,
+                "http://host.docker.internal:11434/v1", null, false, "llama3.1:8b", "low", 2000, 0, 0, 10), "alice");
+
+        assertThat(store.current().provider()).isEqualTo(LlmProvider.OLLAMA);
+        assertThat(store.current().endpoint()).isEqualTo("http://host.docker.internal:11434/v1");
+        assertThat(store.current().active()).isTrue();
+        assertThat(saved.provider()).isEqualTo(LlmProvider.OLLAMA);
+        assertThat(saved.baseUrl()).isEqualTo("http://host.docker.internal:11434/v1");
+        assertThat(saved.enabled()).isTrue();
+        assertThat(saved.apiKeySource()).isEqualTo(ApiKeySource.NONE);
     }
 
     @Test

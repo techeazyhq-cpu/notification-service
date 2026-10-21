@@ -17,12 +17,14 @@
 -- @author Vasantha Kumar <vasantha.kumar@hotmail.com>
 
 --changeset notification:026-template-drafting-settings splitStatements:false
---comment The AI drafting settings an administrator edits in the admin UI (ADR-044): at most one row, which overrides the template-drafting.* defaults from the environment. The API key is encrypted with the secrets key (ADR-037). A new table: nothing existing is locked.
+--comment The AI drafting settings an administrator edits in the admin UI (ADR-044): at most one row, which overrides the template-drafting.* defaults from the environment. Any LLM provider: Anthropic, or an OpenAI-compatible API (OpenAI, Gemini, DeepSeek, Ollama, others) at an optional base URL. The API key is optional and encrypted with the secrets key (ADR-037). A new table: nothing existing is locked.
 --preconditions onFail:MARK_RAN onError:HALT
 --precondition-sql-check expectedResult:0 SELECT count(*) FROM information_schema.tables WHERE table_schema = current_schema() AND table_name = 'template_drafting_settings'
 CREATE TABLE template_drafting_settings (
     id                          BOOLEAN      PRIMARY KEY DEFAULT TRUE,
     enabled                     BOOLEAN      NOT NULL,
+    provider                    VARCHAR(32)  NOT NULL,
+    base_url                    VARCHAR(500),
     api_key                     TEXT,
     model                       VARCHAR(64)  NOT NULL,
     effort                      VARCHAR(8)   NOT NULL,
@@ -33,6 +35,10 @@ CREATE TABLE template_drafting_settings (
     updated_at                  TIMESTAMPTZ  NOT NULL,
     updated_by                  VARCHAR(120) NOT NULL,
     CONSTRAINT ck_template_drafting_settings_single_row CHECK (id),
+    CONSTRAINT ck_template_drafting_settings_provider CHECK (provider IN ('ANTHROPIC', 'OPENAI', 'GEMINI',
+        'DEEPSEEK', 'OLLAMA', 'OPENAI_COMPATIBLE')),
+    CONSTRAINT ck_template_drafting_settings_base_url CHECK (base_url IS NOT NULL
+        OR provider <> 'OPENAI_COMPATIBLE'),
     CONSTRAINT ck_template_drafting_settings_effort CHECK (effort IN ('low', 'medium', 'high', 'xhigh', 'max')),
     CONSTRAINT ck_template_drafting_settings_limits CHECK (max_tokens > 0 AND monthly_token_budget >= 0
         AND client_monthly_token_budget >= 0 AND requests_per_minute > 0)

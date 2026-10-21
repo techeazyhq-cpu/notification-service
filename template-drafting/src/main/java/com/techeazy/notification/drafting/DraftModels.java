@@ -22,7 +22,7 @@ import java.util.Optional;
 
 /**
  * Builds the model that writes drafts for the settings in effect, so a new key, model or effort saved in the console
- * is used by the next draft. {@link ClaudeDraftModels} in the running services.
+ * is used by the next draft. {@link LlmDraftModels} in the running services.
  */
 @FunctionalInterface
 public interface DraftModels {
