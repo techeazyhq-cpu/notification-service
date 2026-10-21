@@ -195,6 +195,15 @@ class SecurityRulesTest {
         assertThat(status(AdminRole.ADMIN, HttpMethod.GET, "/api/admin/administrators")).isEqualTo(404);
     }
 
+    /** Asking for an AI draft spends the drafting budget, so it takes the role that changes templates (ADR-041). */
+    @Test
+    void onlyAnAdminAsksForTemplateDraftsThoughAnyoneSeesWhetherDraftingIsOn() throws Exception {
+        assertThat(status(AdminRole.VIEWER, HttpMethod.GET, "/api/admin/templates/drafting")).isEqualTo(404);
+        assertThat(status(AdminRole.VIEWER, HttpMethod.POST, "/api/admin/templates/drafts")).isEqualTo(403);
+        assertThat(status(AdminRole.OPERATOR, HttpMethod.POST, "/api/admin/templates/drafts")).isEqualTo(403);
+        assertThat(status(AdminRole.ADMIN, HttpMethod.POST, "/api/admin/templates/drafts")).isEqualTo(404);
+    }
+
     /** What a tenant pays is configuration: only an admin sets it, though anyone may read it (ADR-034). */
     @Test
     void onlyAnAdminSetsATenantsOtpPrices() throws Exception {

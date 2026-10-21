@@ -24,11 +24,13 @@ import com.techeazy.notification.billing.domain.InsufficientCreditException;
 import com.techeazy.notification.billing.domain.InvalidBillingDataException;
 import com.techeazy.notification.billing.domain.InvalidBillingStateException;
 import com.techeazy.notification.billing.domain.SpendCapExceededException;
+import com.techeazy.notification.drafting.DraftingException;
 import com.techeazy.notification.error.ErrorBody;
 import com.techeazy.notification.error.ErrorCode;
 import com.techeazy.notification.error.TraceIdSource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.ErrorResponse;
@@ -55,6 +57,17 @@ public class ApiExceptionHandler {
     @ExceptionHandler(ApiException.class)
     ResponseEntity<ErrorBody> api(ApiException e) {
         return respond(e.errorCode(), e.getMessage());
+    }
+
+    @ExceptionHandler(DraftingException.class)
+    ResponseEntity<ErrorBody> drafting(DraftingException e) {
+        ResponseEntity<ErrorBody> response = respond(e.reason().errorCode(), e.describe());
+        if (e.retryAfterSeconds() <= 0) {
+            return response;
+        }
+        return ResponseEntity.status(response.getStatusCode())
+                .header(HttpHeaders.RETRY_AFTER, Long.toString(e.retryAfterSeconds()))
+                .body(response.getBody());
     }
 
     @ExceptionHandler(InsufficientCreditException.class)

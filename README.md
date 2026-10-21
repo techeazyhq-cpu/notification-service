@@ -144,6 +144,7 @@ dashboard counts them, and the client's **Traffic** page charts the spike agains
 | `notification-core` | Domain entities, repositories, Pulsar publisher, Redis rate limiter, outbox sweeper |
 | `db-migration` | One-shot Liquibase job that owns the schema: `update`, `update-sql`, `status`, `validate`, `history`, rollback |
 | `billing` | Plans, postpaid invoices, prepaid credit; clean-architecture module with ArchUnit rules (ADR-004) |
+| `template-drafting` | Optional AI drafting of templates with Claude, used by client-api and admin-api only (ADR-041) |
 | `client-api` / `admin-api` / `dispatcher` | The three Spring Boot deployables |
 | `admin-ui` | React + Vite admin SPA |
 | `client-ui` | React + Vite SPA for API clients: track requests, manage their own templates |
@@ -252,6 +253,36 @@ encrypted, including the storage-level encryption the recipient column needs in 
 `perf/run-benchmark.mjs` (load and bulk) and `perf/chaos-drills.mjs` (kill the dispatcher, the provider, the broker, the
 database while messages are in flight) write to `docs/benchmarks`. Results and analysis:
 [docs/quality-attributes-analysis.md](docs/quality-attributes-analysis.md).
+
+## AI template drafting
+
+Optional, and off unless `ANTHROPIC_API_KEY` is set on admin-api and client-api (`docker compose` passes it to those
+two only). With a key, the **Templates** pages of both UIs show **Draft with AI**: describe the message (channel SMS,
+EMAIL or WHATSAPP, category, tone, purpose and the variable names) and Claude writes a draft that is checked against
+the channel's rules (SMS segments, e-mail subject and safe HTML, WhatsApp length, only the variables asked for) and
+placed in the editor. Nothing is saved or sent until the author saves the template as usual. Only the description and
+variable names go to the model, never recipients or values.
+
+```bash
+ANTHROPIC_API_KEY=sk-ant-... docker compose --profile app up -d --build
+```
+
+Cost is bounded by a per-caller rate limit (5 drafts a minute) and monthly token budgets for the platform (2,000,000)
+and for each client (200,000; `0` keeps drafting for administrators only), tracked in the `template_draft_usage`
+table. Every use is in the admin audit log. API: `GET /api/admin/templates/drafting`, `POST /api/admin/templates/drafts`,
+`GET /v1/templates/drafting`, `POST /v1/templates/drafts`.
+
+| Variable | Default |
+|---|---|
+| `ANTHROPIC_API_KEY` | unset: drafting off |
+| `TEMPLATE_DRAFTING_MODEL` | `claude-opus-5-5` |
+| `TEMPLATE_DRAFTING_EFFORT` | `low` |
+| `TEMPLATE_DRAFTING_MAX_TOKENS` | `8000` |
+| `TEMPLATE_DRAFTING_MONTHLY_TOKENS` | `2000000` |
+| `TEMPLATE_DRAFTING_CLIENT_MONTHLY_TOKENS` | `200000` |
+| `TEMPLATE_DRAFTING_REQUESTS_PER_MINUTE` | `5` |
+
+See ADR-041 and the [client guide](docs/client-guide.md#manage-templates-through-the-api).
 
 ## Push data
 

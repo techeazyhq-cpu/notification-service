@@ -50,6 +50,7 @@ message (`GET /v1/messages/{id}`), next to the provider's own wording in `lastEr
 | [NS-1003](#ns-1003-unsupported-media-type) | `UNSUPPORTED_MEDIA_TYPE` | 415 | no | The content type is not supported |
 | [NS-1004](#ns-1004-not-acceptable) | `NOT_ACCEPTABLE` | 406 | no | The requested response format is not available |
 | [NS-1005](#ns-1005-category-not-allowed) | `CATEGORY_NOT_ALLOWED` | 400 | no | The message category is not allowed here |
+| [NS-1006](#ns-1006-draft-declined) | `DRAFT_DECLINED` | 422 | no | The template brief was declined |
 | [NS-2001](#ns-2001-unauthorized) | `UNAUTHORIZED` | 401 | no | The API key is missing or not valid |
 | [NS-2002](#ns-2002-invalid-credentials) | `INVALID_CREDENTIALS` | 401 | no | The username or password is wrong |
 | [NS-2003](#ns-2003-otp-required) | `OTP_REQUIRED` | 401 | no | A verification code is required |
@@ -64,6 +65,7 @@ message (`GET /v1/messages/{id}`), next to the provider's own wording in `lastEr
 | [NS-2012](#ns-2012-signature-invalid) | `SIGNATURE_INVALID` | 401 | no | The request signature is not valid |
 | [NS-2013](#ns-2013-signature-expired) | `SIGNATURE_EXPIRED` | 401 | no | The request signature has expired |
 | [NS-2014](#ns-2014-request-replayed) | `REQUEST_REPLAYED` | 409 | no | The request was already received |
+| [NS-2015](#ns-2015-drafting-not-available) | `DRAFTING_NOT_AVAILABLE` | 403 | no | Template drafting is not available |
 | [NS-3001](#ns-3001-not-found) | `NOT_FOUND` | 404 | no | The resource does not exist |
 | [NS-3002](#ns-3002-invalid-state) | `INVALID_STATE` | 409 | no | The resource's state does not allow this action |
 | [NS-3003](#ns-3003-template-exists) | `TEMPLATE_EXISTS` | 409 | no | A template with this name already exists |
@@ -77,6 +79,7 @@ message (`GET /v1/messages/{id}`), next to the provider's own wording in `lastEr
 | [NS-4002](#ns-4002-spend-cap-exceeded) | `SPEND_CAP_EXCEEDED` | 402 | no | The monthly spend cap is reached |
 | [NS-4003](#ns-4003-account-suspended) | `ACCOUNT_SUSPENDED` | 403 | no | The billing account is suspended |
 | [NS-5001](#ns-5001-rate-limited) | `RATE_LIMITED` | 429 | yes | The rate limit is exceeded |
+| [NS-5002](#ns-5002-draft-budget-exhausted) | `DRAFT_BUDGET_EXHAUSTED` | 429 | no | The monthly drafting budget is spent |
 | [NS-6001](#ns-6001-delivery-rejected) | `DELIVERY_REJECTED` | n/a (on the message) | no | The provider rejected the message |
 | [NS-6002](#ns-6002-template-variable-missing) | `TEMPLATE_VARIABLE_MISSING` | n/a (on the message) | no | A template variable has no value |
 | [NS-6003](#ns-6003-message-content-missing) | `MESSAGE_CONTENT_MISSING` | n/a (on the message) | no | The message has no content to send |
@@ -85,6 +88,8 @@ message (`GET /v1/messages/{id}`), next to the provider's own wording in `lastEr
 | [NS-6006](#ns-6006-provider-temporarily-failing) | `PROVIDER_TEMPORARILY_FAILING` | n/a (on the message) | yes | The provider is failing; delivery will be retried |
 | [NS-6007](#ns-6007-otp-expired) | `OTP_EXPIRED` | n/a (on the message) | no | The one-time password expired before it could be sent |
 | [NS-8001](#ns-8001-email-not-available) | `EMAIL_NOT_AVAILABLE` | 503 | yes | E-mail is not available |
+| [NS-8002](#ns-8002-drafting-model-unavailable) | `DRAFTING_MODEL_UNAVAILABLE` | 503 | yes | The drafting model is not reachable |
+| [NS-8003](#ns-8003-draft-rules-not-met) | `DRAFT_RULES_NOT_MET` | 502 | yes | The draft did not meet the channel's rules |
 | [NS-9001](#ns-9001-internal-error) | `INTERNAL_ERROR` | 500 | yes | Something went wrong on our side |
 
 ## Request (NS-1xxx)
@@ -130,6 +135,13 @@ message (`GET /v1/messages/{id}`), next to the provider's own wording in `lastEr
 
 - **Cause:** One-time passwords are sent one at a time, so a bulk request cannot have the OTP category.
 - **Resolution:** Send each one-time password as a single request with category OTP.
+
+### NS-1006 DRAFT_DECLINED
+
+**The template brief was declined** · HTTP 422 · not retryable
+
+- **Cause:** The AI model declined to draft a template from this description (ADR-041).
+- **Resolution:** Describe the message differently, or write the template yourself.
 
 ## Access (NS-2xxx)
 
@@ -231,6 +243,13 @@ message (`GET /v1/messages/{id}`), next to the provider's own wording in `lastEr
 - **Cause:** A signed request with this X-Signature-Nonce was already accepted, so this copy is refused as a replay.
 - **Resolution:** Generate a new nonce, and a new signature, for every request, including retries.
 
+### NS-2015 DRAFTING_NOT_AVAILABLE
+
+**Template drafting is not available** · HTTP 403 · not retryable
+
+- **Cause:** AI template drafting is switched off: no model API key is configured, or it is off for clients (ADR-041).
+- **Resolution:** Write the template yourself, or ask the platform administrators to enable drafting.
+
 ## Resource (NS-3xxx)
 
 ### NS-3001 NOT_FOUND
@@ -328,6 +347,13 @@ message (`GET /v1/messages/{id}`), next to the provider's own wording in `lastEr
 - **Cause:** The client sent more requests than its rate limit allows in the current window.
 - **Resolution:** Wait the number of seconds in the Retry-After header, then retry; spread sends over time.
 
+### NS-5002 DRAFT_BUDGET_EXHAUSTED
+
+**The monthly drafting budget is spent** · HTTP 429 · not retryable
+
+- **Cause:** The AI template drafting budget for this calendar month (UTC), the client's or the platform's, is used up.
+- **Resolution:** Write the template yourself, wait for the next month, or ask an administrator to raise the budget.
+
 ## Delivery (NS-6xxx)
 
 ### NS-6001 DELIVERY_REJECTED
@@ -387,6 +413,20 @@ message (`GET /v1/messages/{id}`), next to the provider's own wording in `lastEr
 
 - **Cause:** The e-mail service needed for this action (for example sender verification) is not configured or up.
 - **Resolution:** Retry later; if it persists, the platform team checks the e-mail provider configuration.
+
+### NS-8002 DRAFTING_MODEL_UNAVAILABLE
+
+**The drafting model is not reachable** · HTTP 503 · retryable
+
+- **Cause:** The AI model that drafts templates did not answer, was overloaded or rejected the platform's API key.
+- **Resolution:** Retry in a little while; if it persists, the platform team checks the template-drafting configuration.
+
+### NS-8003 DRAFT_RULES_NOT_MET
+
+**The draft did not meet the channel's rules** · HTTP 502 · retryable
+
+- **Cause:** Every draft the AI model wrote broke the channel's rules (length, subject, markup or placeholders).
+- **Resolution:** Retry, simplify the description or ask for fewer variables; the message lists the rules that were broken.
 
 ## Platform (NS-9xxx)
 

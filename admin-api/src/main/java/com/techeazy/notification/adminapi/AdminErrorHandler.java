@@ -26,11 +26,13 @@ import com.techeazy.notification.billing.domain.InvalidBillingDataException;
 import com.techeazy.notification.billing.domain.InvalidBillingStateException;
 import com.techeazy.notification.billing.domain.InvoiceAlreadyExistsException;
 import com.techeazy.notification.billing.domain.SpendCapExceededException;
+import com.techeazy.notification.drafting.DraftingException;
 import com.techeazy.notification.error.ErrorBody;
 import com.techeazy.notification.error.ErrorCode;
 import com.techeazy.notification.error.TraceIdSource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.security.access.AccessDeniedException;
@@ -106,6 +108,17 @@ public class AdminErrorHandler {
     @ExceptionHandler(AccountSuspendedException.class)
     ResponseEntity<ErrorBody> suspended(AccountSuspendedException e) {
         return respond(ErrorCode.ACCOUNT_SUSPENDED, e.getMessage());
+    }
+
+    @ExceptionHandler(DraftingException.class)
+    ResponseEntity<ErrorBody> drafting(DraftingException e) {
+        ResponseEntity<ErrorBody> response = respond(e.reason().errorCode(), e.describe());
+        if (e.retryAfterSeconds() <= 0) {
+            return response;
+        }
+        return ResponseEntity.status(response.getStatusCode())
+                .header(HttpHeaders.RETRY_AFTER, Long.toString(e.retryAfterSeconds()))
+                .body(response.getBody());
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)

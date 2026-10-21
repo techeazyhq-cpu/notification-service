@@ -112,6 +112,12 @@ Open a request to see its details:
   3. Choose the **Category**. Pick **One-time password** for login and verification codes: every send from the
      template is then an OTP, unless a request says otherwise.
   4. **Create template**.
+- **Draft with AI** appears when your operator has turned AI drafting on. Pick the channel, category and tone, list
+  the placeholders the message may use (`firstName, orderId`) and describe what the message is for. The draft meets
+  the channel's rules (SMS length, e-mail subject, WhatsApp limits) and fills the editor. Nothing is saved until you
+  review it and **Create template**. Only your description and the placeholder names are sent to the AI model, so
+  leave customer names, numbers and other personal data out of it. Drafting is limited to a few drafts a minute and a
+  monthly budget; the panel shows what is left.
 - **Preview** shows the text as a recipient sees it. Type sample values for each placeholder; any still missing are
   listed.
 - **Send with this template** shows the exact request your system should make to send with it.
@@ -517,6 +523,15 @@ once, then expire it.
 | `PUT /v1/templates/{id}` | Changes one. The channel can't change; leaving out `category` keeps the current one |
 | `DELETE /v1/templates/{id}` | Deletes one. Requests already accepted keep their text |
 | `POST /v1/templates/preview` | Renders a `subject` and `body` with sample `variables`, and lists the placeholders still missing |
+| `GET /v1/templates/drafting` | Whether AI drafting is on for you (`enabled`), the `model`, `tokensLeftThisMonth` and `requestsPerMinute` |
+| `POST /v1/templates/drafts` | Drafts a template with AI from `channel` (`SMS`, `EMAIL`, `WHATSAPP`), optional `category` and `tone` (`FRIENDLY`, `PROFESSIONAL`, `FORMAL`, `REASSURING`, `URGENT`), `purpose` (10–1000 characters) and up to 15 `variables` names. Returns `subject`, `body`, `variables`, `warnings` and, for SMS, `smsLength`. Saves nothing |
+
+A draft meets the channel's rules: SMS at most 3 segments (each placeholder counted as 12 characters), e-mail with a
+one-line subject of at most 150 characters and simple HTML, WhatsApp plain text of at most 1024 characters, and only the
+placeholders you listed (plus `{{recipient}}`). Refusals: `DRAFTING_NOT_AVAILABLE` when drafting is off,
+`RATE_LIMITED` or `DRAFT_BUDGET_EXHAUSTED` over the limits, `DRAFT_DECLINED` when the model declines the description,
+`DRAFT_RULES_NOT_MET` when it could not meet the rules (the message lists them) and `DRAFTING_MODEL_UNAVAILABLE` when it
+cannot be reached. Every request for a draft is recorded in the platform's audit log.
 
 ### Errors
 
@@ -596,6 +611,7 @@ curl -X POST "$CLIENT_API/v1/privacy/recipient-report" -H "X-API-Key: $API_KEY" 
 | Recipients per bulk request | 50,000 | Split larger lists |
 | CSV upload size | 20 MB | |
 | Your own templates | 200 | |
+| AI template drafts | 5 per minute; 200,000 tokens a month | Only when your operator turned drafting on. A draft uses a few thousand tokens |
 | OTP validity | 60–900 seconds | Default 300 |
 | Push `data` | 10 pairs; keys 40, values 256 characters | Push only |
 

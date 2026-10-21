@@ -64,3 +64,5 @@ databaseChangeLog:
       file: db/changelog/changes/023-traffic-anomaly.sql
   - include:
       file: db/changelog/changes/024-push-data.sql
+  - include:
+      file: db/changelog/changes/025-template-draft-usage.sql

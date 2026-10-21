@@ -75,6 +75,17 @@ client-api:
   # Browser origins allowed to call the API (the client tracking UI). Comma-separated; empty disables CORS.
   cors-origins: ${CLIENT_API_CORS_ORIGINS:http://localhost:5174}
 
+# AI drafting of message templates (ADR-041). Off unless ANTHROPIC_API_KEY is set; the UI then hides it.
+template-drafting:
+  api-key: ${ANTHROPIC_API_KEY:}
+  model: ${TEMPLATE_DRAFTING_MODEL:claude-opus-5-5}
+  effort: ${TEMPLATE_DRAFTING_EFFORT:low}
+  max-tokens: ${TEMPLATE_DRAFTING_MAX_TOKENS:8000}
+  # Tokens, input and output together, per calendar month (UTC): for all drafting, and for each client.
+  monthly-token-budget: ${TEMPLATE_DRAFTING_MONTHLY_TOKENS:2000000}
+  client-monthly-token-budget: ${TEMPLATE_DRAFTING_CLIENT_MONTHLY_TOKENS:200000}
+  requests-per-minute: ${TEMPLATE_DRAFTING_REQUESTS_PER_MINUTE:5}
+
 management:
   tracing:
     sampling:
