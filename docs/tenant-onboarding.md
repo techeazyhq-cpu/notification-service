@@ -5,7 +5,8 @@ systems. This runbook takes one from first contact to its first delivered messag
 operator, who needs an **`ADMIN`** account in the admin console; step 5 can also be done by an `OPERATOR`. Steps
 7–9 are done by the tenant, with the operator on hand to help.
 
-Every step was checked end to end against the local stack (`docker compose --profile app up`). Each one shows the admin
+Every step was checked end to end against the local stack (`docker compose -f docker-compose.common.yml up -d --wait`, then
+`docker compose --profile app up`). Each one shows the admin
 console path first and the equivalent API call after it, for operators who script onboarding.
 
 | # | Who | Step | Required? |

@@ -13,13 +13,20 @@
 # limitations under the License.
 #
 # @author Vasantha Kumar <vasantha.kumar@hotmail.com>
-# Infra only:            docker compose up -d
-# Infra + all services + both UIs:  docker compose --profile app up -d --build
-name: notification-service
+# The `notification` project (ADR-043): the migration job, the three services, both UIs and the SMS/WhatsApp/push
+# catcher. The servers they use, PostgreSQL, Redis, Pulsar and Mailpit, are the `common` project
+# (docker-compose.common.yml); the services reach them by name on its network, `common`. Start `common` first:
+#
+#   docker compose -f docker-compose.common.yml up -d --wait
+#   docker compose --profile app up -d --build
+#
+# Without --profile app only the catcher starts, for running the services from an IDE.
+name: notification
 
-# Sized so the whole stack runs on an ordinary laptop (8 GB, 2 CPUs): it idles at about 2 GB, the limits cap it at about
-# 5 GB, and none asks for more than one CPU. Override with NS_APP_CPUS / NS_APP_MEM (the Java
-# services and migration job), NS_PULSAR_MEM / NS_PULSAR_JVM (Pulsar) and NS_POSTGRES_MEM (Postgres).
+# Sized so the whole stack, both projects, runs on an ordinary laptop (8 GB, 2 CPUs): it idles at about 2 GB, the
+# limits cap it at about 5 GB, and none asks for more than one CPU. Override with NS_APP_CPUS / NS_APP_MEM (the Java
+# services and migration job) here, and NS_PULSAR_MEM / NS_PULSAR_JVM (Pulsar) and NS_POSTGRES_MEM (Postgres) for
+# docker-compose.common.yml.
 #
 # The Java services give 75% of the limit to the heap (see the Dockerfile) and idle at about 400 MB.
 x-app: &app
@@ -33,6 +40,9 @@ x-small: &small
   deploy:
     resources:
       limits: {cpus: "0.25", memory: 128m}
+
+x-on-common: &on-common
+  networks: [default, common]
 
 x-svc-env: &svc-env
   DB_URL: jdbc:postgresql://postgres:5432/notification
@@ -56,66 +66,6 @@ x-svc-env: &svc-env
   SPRING_PROFILES_ACTIVE: local
 
 services:
-  postgres:
-    image: postgres:16-alpine
-    deploy:
-      resources:
-        limits:
-          cpus: "1.0"
-          memory: ${NS_POSTGRES_MEM:-512m}
-    environment:
-      POSTGRES_DB: notification
-      POSTGRES_USER: notification
-      POSTGRES_PASSWORD: notification
-      DB_APP_USER: ${DB_APP_USER:-notification_app}
-      DB_APP_PASSWORD: ${DB_APP_PASSWORD:-notification_app}
-    ports: ["5432:5432"]
-    volumes:
-      - pgdata:/var/lib/postgresql/data
-      - ./scripts/postgres-init:/docker-entrypoint-initdb.d:ro
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U notification"]
-      interval: 5s
-      retries: 10
-
-  redis:
-    <<: *small
-    image: redis:7-alpine
-    ports: ["6379:6379"]
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 5s
-      retries: 10
-
-  pulsar:
-    image: apachepulsar/pulsar:3.3.3
-    command: sh -c "bin/apply-config-from-env.py conf/standalone.conf && exec bin/pulsar standalone -nfw -nss"
-    # Heap plus direct memory stay well inside the limit, leaving room for metaspace and threads.
-    deploy:
-      resources:
-        limits:
-          cpus: "1.0"
-          memory: ${NS_PULSAR_MEM:-1536m}
-    environment:
-      PULSAR_MEM: ${NS_PULSAR_JVM:--Xms256m -Xmx512m -XX:MaxDirectMemorySize=256m}
-      defaultRetentionTimeInMinutes: "60"
-      defaultRetentionSizeInMB: "1024"
-    ports: ["6650:6650", "8088:8080"]
-    volumes: [pulsardata:/pulsar/data]
-    healthcheck:
-      # Over HTTP: `pulsar-admin` would start a second JVM inside the memory limit on every check.
-      test: ["CMD-SHELL", "curl -fs http://localhost:8080/admin/v2/brokers/health || exit 1"]
-      interval: 10s
-      timeout: 10s
-      retries: 20
-      start_period: 30s
-
-  # Email catcher: SMTP on 1025, web UI on http://localhost:8025
-  mailpit:
-    <<: *small
-    image: axllent/mailpit:latest
-    ports: ["1025:1025", "8025:8025"]
-
   # SMS / WhatsApp / Push catcher: web UI on http://localhost:9000
   catcher:
     <<: *small
@@ -125,7 +75,7 @@ services:
   # One-shot job: applies pending schema changes (Liquibase), then exits. The services start only after it succeeded.
   # Other commands: docker compose run --rm db-migrate status | update-sql | validate | history
   db-migrate:
-    <<: *app
+    <<: [*app, *on-common]
     profiles: [app]
     build: { context: ., args: { MODULE: db-migration } }
     command: ["update"]
@@ -136,11 +86,9 @@ services:
       DB_PASSWORD: notification
       # Without this, the job refuses to run with the default DB_PASSWORD above (see MigrationApplication).
       SPRING_PROFILES_ACTIVE: local
-    depends_on:
-      postgres: { condition: service_healthy }
 
   client-api:
-    <<: *app
+    <<: [*app, *on-common]
     profiles: [app]
     build: { context: ., args: { MODULE: client-api } }
     ports: ["8080:8080", "127.0.0.1:9080:9080"]
@@ -150,12 +98,9 @@ services:
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
     depends_on: &svc-deps
       db-migrate: { condition: service_completed_successfully }
-      postgres: { condition: service_healthy }
-      redis: { condition: service_healthy }
-      pulsar: { condition: service_healthy }
 
   admin-api:
-    <<: *app
+    <<: [*app, *on-common]
     profiles: [app]
     build: { context: ., args: { MODULE: admin-api } }
     ports: ["8081:8081", "127.0.0.1:9081:9081"]
@@ -173,7 +118,7 @@ services:
     depends_on: *svc-deps
 
   dispatcher:
-    <<: *app
+    <<: [*app, *on-common]
     profiles: [app]
     build: { context: ., args: { MODULE: dispatcher } }
     ports: ["127.0.0.1:8082:8082"]
@@ -196,6 +141,7 @@ services:
     ports: ["5174:8080"]
     depends_on: [client-api]
 
-volumes:
-  pgdata:
-  pulsardata:
+networks:
+  common:
+    name: common
+    external: true

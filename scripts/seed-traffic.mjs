@@ -23,14 +23,14 @@
 //   node scripts/seed-traffic.mjs --print      # print the SQL instead of running it
 // Env: ADMIN_URL, ADMIN_USER, ADMIN_PASSWORD, ADMIN_OTP as for seed.mjs; CLIENT_NAME (demo-app);
 //      PSQL, the command that runs psql against the local database
-//      (default: docker compose exec -T postgres psql -U notification -d notification -v ON_ERROR_STOP=1).
+//      (default: docker exec -i common-postgres-1 psql -U notification -d notification -v ON_ERROR_STOP=1).
 // Scoring runs at five past every hour. To see the anomalies at once, start the stack with
 // ANOMALY_AGGREGATION_CRON='0 * * * * *' so it runs every minute. Local use only: it overwrites traffic_hourly rows.
 import { spawnSync } from 'node:child_process';
 
 const ADMIN = process.env.ADMIN_URL || 'http://localhost:8081'; // NOSONAR: plain-HTTP default is for local development only
 const CLIENT_NAME = process.env.CLIENT_NAME || 'demo-app';
-const PSQL = process.env.PSQL || 'docker compose exec -T postgres psql -U notification -d notification -v ON_ERROR_STOP=1';
+const PSQL = process.env.PSQL || 'docker exec -i common-postgres-1 psql -U notification -d notification -v ON_ERROR_STOP=1';
 const WEEKS = 8;
 const HOUR = 3600 * 1000;
 

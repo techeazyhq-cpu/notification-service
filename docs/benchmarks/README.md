@@ -9,12 +9,13 @@ Produced on 2026-09-26; see [../quality-attributes-analysis.md](../quality-attri
 | `chaos-drills-1-2.jsonl` | Dispatcher-killed and provider-outage drills (one JSON result per line, in that order) |
 | `chaos-drills-broker-db.json` | Broker-down and database-restart drills |
 
-Reproduce: start the stack (`docker compose --profile app up -d --build`), then
+Reproduce: start the stack (`docker compose -f docker-compose.common.yml up -d --wait`, then
+`docker compose --profile app up -d --build`), then
 
 ```bash
 RATE=200 node perf/run-benchmark.mjs my-run              # ingest, status reads, 10k bulk
 RATE=750 SKIP_BULK=true node perf/run-benchmark.mjs my-750
-node perf/chaos-drills.mjs my-drills                      # PROJECT=<compose project> if not ns-bench
+node perf/chaos-drills.mjs my-drills                      # PROJECT / INFRA_PROJECT if not notification / common
 ```
 
 Needs Node 20+ and Docker (k6 runs from the `grafana/k6` image). Numbers depend on the machine; compare runs from the
