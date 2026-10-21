@@ -35,7 +35,7 @@ import java.util.Map;
 
 /**
  * POSTs a JSON document to a gateway. Settings: url (required), authHeader (optional, sent as Authorization), timeoutMs.
- * Body: {messageId, channel, to, subject, body}. A JSON response containing "id" is kept as the provider message id.
+ * Body: {messageId, channel, to, subject, body}, plus {@code data} when a push carries key-value pairs. A JSON response containing "id" is kept as the provider message id.
  * 429 and 5xx are transient; other 4xx are permanent.
  */
 @Component
@@ -69,6 +69,9 @@ public class HttpJsonProvider implements ChannelProvider {
         payload.put("to", message.recipient());
         payload.put("subject", message.subject());
         payload.put("body", message.body());
+        if (!message.data().isEmpty()) {
+            payload.put("data", message.data());
+        }
 
         try {
             HttpRequest.Builder req = HttpRequest.newBuilder(URI.create(url))

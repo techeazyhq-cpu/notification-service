@@ -22,6 +22,7 @@ import com.techeazy.notification.domain.Channel;
 import com.techeazy.notification.domain.ProviderConfig;
 import com.techeazy.notification.domain.ProviderType;
 
+import java.util.Map;
 import java.util.UUID;
 
 /** SPI for delivering one rendered message through one kind of provider. */
@@ -30,10 +31,20 @@ public interface ChannelProvider {
     /**
      * {@code fromAddress} and {@code fromName} are the client's own verified sender; both null means the provider's
      * default. {@code htmlBody} is the same content rendered with HTML-escaped variables, for providers that send
-     * the body as HTML; {@code body} is for plain-text delivery.
+     * the body as HTML; {@code body} is for plain-text delivery. {@code data} is a push's key-value pairs for the
+     * client's app, never null (empty when there are none).
      */
     record Outbound(UUID messageId, Channel channel, String recipient, String subject, String body, String fromAddress,
-                    String fromName, String htmlBody) {
+                    String fromName, String htmlBody, Map<String, String> data) {
+
+        public Outbound {
+            data = data == null ? Map.of() : Map.copyOf(data);
+        }
+
+        public Outbound(UUID messageId, Channel channel, String recipient, String subject, String body, String fromAddress,
+                        String fromName, String htmlBody) {
+            this(messageId, channel, recipient, subject, body, fromAddress, fromName, htmlBody, null);
+        }
 
         public Outbound(UUID messageId, Channel channel, String recipient, String subject, String body) {
             this(messageId, channel, recipient, subject, body, null, null, body);

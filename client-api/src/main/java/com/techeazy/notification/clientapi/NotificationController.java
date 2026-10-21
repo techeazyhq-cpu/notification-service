@@ -68,7 +68,7 @@ public class NotificationController {
             @RequestAttribute(ClientAuthFilter.CLIENT_ATTRIBUTE) AuthenticatedClient client,
             @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
             @Valid @RequestBody SendRequest req) {
-        var recipients = List.of(new Recipient(req.recipient(), req.variables()));
+        var recipients = List.of(new Recipient(req.recipient(), req.variables(), req.data()));
         Duration validity = req.validitySeconds() == null ? null : Duration.ofSeconds(req.validitySeconds());
         return respond(ingest.submit(client, new SubmitCommand(RequestKind.SINGLE, req.channel(), req.templateName(),
                 req.subject(), req.body(), recipients, req.clientReference(), idempotencyKey, req.from(),

@@ -57,7 +57,8 @@ import java.util.concurrent.ConcurrentHashMap;
  *
  * <p>The provider signs a JWT with the key and exchanges it for an OAuth 2.0 access token (the service-account flow),
  * caching the token until a minute before it expires; a 401 from FCM drops it so the next attempt gets a fresh one.
- * The subject becomes the notification title and the body its text; the message id travels in {@code data.messageId}.
+ * The subject becomes the notification title and the body its text; the message id travels in {@code data.messageId},
+ * next to the push's own key-value pairs (which can never replace it).
  *
  * <p>Classification: a token FCM no longer knows ({@code UNREGISTERED}, 404), a malformed request or token
  * ({@code INVALID_ARGUMENT}) and a token from another Firebase project ({@code SENDER_ID_MISMATCH}) are permanent;
@@ -220,7 +221,10 @@ public class FcmProvider implements ChannelProvider {
         Map<String, Object> fcmMessage = new LinkedHashMap<>();
         fcmMessage.put("token", message.recipient());
         fcmMessage.put("notification", notification);
-        fcmMessage.put("data", Map.of("messageId", message.messageId().toString()));
+        // The client's own pairs first, so its messageId can never be replaced by one of them.
+        Map<String, String> data = new LinkedHashMap<>(message.data());
+        data.put("messageId", message.messageId().toString());
+        fcmMessage.put("data", data);
         if (link != null && !link.isBlank()) {
             fcmMessage.put("webpush", Map.of("fcm_options", Map.of("link", link.trim())));
         }

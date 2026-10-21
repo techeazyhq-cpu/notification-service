@@ -100,6 +100,52 @@ class IngestServiceTest {
     }
 
     @Test
+    void aPushKeepsItsDataForTheMessage() {
+        AuthenticatedClient pusher = new AuthenticatedClient(UUID.randomUUID(), "acme", Set.of(Channel.PUSH));
+        Recipient device = new Recipient("device-token", Map.of(), Map.of("cnsReqId", "req-42"));
+
+        service.submit(pusher, new SubmitCommand(RequestKind.SINGLE, Channel.PUSH, null, "New request", "Open the app",
+                List.of(device), null, null));
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<Recipient>> recipients = ArgumentCaptor.forClass(List.class);
+        verify(persister).persist(any(), recipients.capture(), any());
+        assertThat(recipients.getValue().get(0).data()).containsEntry("cnsReqId", "req-42");
+    }
+
+    @Test
+    void dataOnAnotherChannelOrWithAReservedKeyIsRefusedBeforeAnythingIsStored() {
+        SubmitCommand smsWithData = new SubmitCommand(RequestKind.SINGLE, Channel.SMS, null, null, "hi",
+                List.of(new Recipient("+14155550101", Map.of(), Map.of("orderId", "1"))), null, null);
+        assertThatThrownBy(() -> service.submit(me, smsWithData)).isInstanceOfSatisfying(ApiException.class,
+                refused -> assertThat(refused.errorCode()).isEqualTo(ErrorCode.INVALID_REQUEST));
+
+        AuthenticatedClient pusher = new AuthenticatedClient(UUID.randomUUID(), "acme", Set.of(Channel.PUSH));
+        SubmitCommand spoofedId = new SubmitCommand(RequestKind.SINGLE, Channel.PUSH, null, null, "hi",
+                List.of(new Recipient("device-token", Map.of(), Map.of("messageId", "x"))), null, null);
+        assertThatThrownBy(() -> service.submit(pusher, spoofedId)).isInstanceOf(ApiException.class)
+                .hasMessageContaining("reserved");
+        verify(persister, never()).persist(any(), any(), any());
+    }
+
+    @Test
+    void aRetryWithTheSameKeyButDifferentDataIsADifferentRequest() {
+        AuthenticatedClient pusher = new AuthenticatedClient(UUID.randomUUID(), "acme", Set.of(Channel.PUSH));
+        NotificationRequest first = new NotificationRequest();
+        first.setIdempotencyKey("key-1");
+        when(requests.findByClientIdAndIdempotencyKey(pusher.id(), "key-1")).thenReturn(Optional.empty());
+        service.submit(pusher, new SubmitCommand(RequestKind.SINGLE, Channel.PUSH, null, null, "hi",
+                List.of(new Recipient("device-token", Map.of(), Map.of("cnsReqId", "a"))), null, "key-1"));
+        first.setPayloadFingerprint(persistedRequest().getPayloadFingerprint());
+        when(requests.findByClientIdAndIdempotencyKey(pusher.id(), "key-1")).thenReturn(Optional.of(first));
+
+        SubmitCommand otherData = new SubmitCommand(RequestKind.SINGLE, Channel.PUSH, null, null, "hi",
+                List.of(new Recipient("device-token", Map.of(), Map.of("cnsReqId", "b"))), null, "key-1");
+        assertThatThrownBy(() -> service.submit(pusher, otherData)).isInstanceOfSatisfying(ApiException.class,
+                refused -> assertThat(refused.errorCode()).isEqualTo(ErrorCode.IDEMPOTENCY_KEY_REUSED));
+    }
+
+    @Test
     void aOneTimePasswordIsStoredAsSuchAndExpiresAfterTheDefaultValidity() {
         service.submit(me, single(MessageCategory.OTP, null));
 

@@ -54,7 +54,12 @@ public final class Dtos {
             @Schema(description = "OTP, TRANSACTIONAL or PROMOTIONAL; defaults to the template's, else TRANSACTIONAL. "
                     + "OTP is delivered with priority and never after its validity.") MessageCategory category,
             @Schema(description = "OTP only: seconds the code stays worth sending, 60-900 (default 300)")
-            @Min(60) @Max(900) Integer validitySeconds) {}
+            @Min(60) @Max(900) Integer validitySeconds,
+            @Schema(description = "PUSH only: up to 10 string pairs the app reads when the notification is opened, "
+                    + "such as an id to open. Keys are 1-40 letters, digits or underscores starting with a letter; "
+                    + "values at most 256 characters; messageId is reserved. FCM delivers them in its data, "
+                    + "next to messageId.", example = "{\"orderId\": \"A-1042\"}")
+            Map<String, String> data) {}
 
     public record BulkRecipient(@NotNull @Size(min = 1, max = 320) String recipient, Map<String, String> variables) {}
 
