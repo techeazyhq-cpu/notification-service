@@ -14,18 +14,15 @@
 #
 # @author Vasantha Kumar <vasantha.kumar@hotmail.com>
 #
-# DEVELOPMENT ONLY: single-replica, non-persistent PostgreSQL, Redis, Pulsar and the two provider catchers, to try
-# the Helm chart on a local cluster (k3s, kind). Production datastores are managed services or operators (ADR-025).
-# Needs the Secret "datastore-credentials" (keys POSTGRES_PASSWORD, DB_APP_PASSWORD) and the ConfigMap
-# "postgres-init" made from scripts/postgres-init; see deploy/k8s/dev/README.md.
-apiVersion: v1
-kind: Namespace
-metadata:
-  name: datastores
----
+# DEVELOPMENT ONLY: single-replica, non-persistent PostgreSQL, Redis, Pulsar and Mailpit in the `common` namespace
+# (ADR-042), to try the Helm chart on a local cluster (k3s, kind). Production datastores are managed services or
+# operators (ADR-025). Apply deploy/k8s/namespaces.yaml first. Needs the Secret "datastore-credentials" (keys
+# POSTGRES_PASSWORD, DB_APP_PASSWORD) and the ConfigMap "postgres-init" made from scripts/postgres-init; see
+# deploy/k8s/dev/README.md. The SMS/WhatsApp/push catcher is a provider stand-in, not a shared server, so it runs in
+# `notification` (catcher.yaml).
 apiVersion: apps/v1
 kind: Deployment
-metadata: {name: postgres, namespace: datastores}
+metadata: {name: postgres, namespace: common}
 spec:
   selector: {matchLabels: {app: postgres}}
   template:
@@ -58,14 +55,14 @@ spec:
 ---
 apiVersion: v1
 kind: Service
-metadata: {name: postgres, namespace: datastores}
+metadata: {name: postgres, namespace: common}
 spec:
   selector: {app: postgres}
   ports: [{port: 5432}]
 ---
 apiVersion: apps/v1
 kind: Deployment
-metadata: {name: redis, namespace: datastores}
+metadata: {name: redis, namespace: common}
 spec:
   selector: {matchLabels: {app: redis}}
   template:
@@ -82,14 +79,14 @@ spec:
 ---
 apiVersion: v1
 kind: Service
-metadata: {name: redis, namespace: datastores}
+metadata: {name: redis, namespace: common}
 spec:
   selector: {app: redis}
   ports: [{port: 6379}]
 ---
 apiVersion: apps/v1
 kind: Deployment
-metadata: {name: pulsar, namespace: datastores}
+metadata: {name: pulsar, namespace: common}
 spec:
   selector: {matchLabels: {app: pulsar}}
   template:
@@ -114,14 +111,14 @@ spec:
 ---
 apiVersion: v1
 kind: Service
-metadata: {name: pulsar, namespace: datastores}
+metadata: {name: pulsar, namespace: common}
 spec:
   selector: {app: pulsar}
   ports: [{port: 6650}]
 ---
 apiVersion: apps/v1
 kind: Deployment
-metadata: {name: mailpit, namespace: datastores}
+metadata: {name: mailpit, namespace: common}
 spec:
   selector: {matchLabels: {app: mailpit}}
   template:
@@ -138,32 +135,22 @@ spec:
 ---
 apiVersion: v1
 kind: Service
-metadata: {name: mailpit, namespace: datastores}
+metadata: {name: mailpit, namespace: common}
 spec:
   selector: {app: mailpit}
   ports: [{name: smtp, port: 1025}, {name: web, port: 8025}]
 ---
-apiVersion: apps/v1
-kind: Deployment
-metadata: {name: catcher, namespace: datastores}
+# The servers in `common` accept connections only from inside `common` and from the namespaces that use them:
+# `notification`, and `consent-manager` when the cluster is shared with it (ADR-040). A port-forward is not affected.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: {name: admit-platform-namespaces, namespace: common}
 spec:
-  selector: {matchLabels: {app: catcher}}
-  template:
-    metadata: {labels: {app: catcher}}
-    spec:
-      automountServiceAccountToken: false
-      containers:
-        - name: catcher
-          image: registry.local/notification-catcher:test
-          imagePullPolicy: Never
-          resources:
-            requests: {cpu: 25m, memory: 32Mi, ephemeral-storage: 32Mi}
-            limits: {memory: 128Mi, ephemeral-storage: 128Mi}
-          ports: [{containerPort: 9000}]
----
-apiVersion: v1
-kind: Service
-metadata: {name: catcher, namespace: datastores}
-spec:
-  selector: {app: catcher}
-  ports: [{port: 9000}]
+  podSelector: {}
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector: {}
+        - namespaceSelector:
+            matchExpressions:
+              - {key: kubernetes.io/metadata.name, operator: In, values: [notification, consent-manager]}

@@ -14,8 +14,8 @@
 #
 # @author Vasantha Kumar <vasantha.kumar@hotmail.com>
 #
-# DEVELOPMENT ONLY: the SMS/WhatsApp/push catcher in the `notification` namespace, for shared infrastructure (ADR-040),
-# where the `common` namespace provides the datastores and Mailpit but no catcher. Standalone, datastores.yaml has it.
+# DEVELOPMENT ONLY: the SMS/WhatsApp/push catcher, a stand-in for real providers, in the `notification` namespace next
+# to the services (ADR-042). `common` holds only the shared servers, standalone (common.yaml) or shared (ADR-040).
 apiVersion: apps/v1
 kind: Deployment
 metadata: {name: catcher, namespace: notification}

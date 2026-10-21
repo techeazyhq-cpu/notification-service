@@ -31,7 +31,14 @@ docker build -t registry.local/notification-admin-ui:test admin-ui && docker bui
 docker save $(docker images --format '{{.Repository}}:{{.Tag}}' | grep '^registry.local/notification-') -o images.tar && docker cp images.tar k3s-notification:/images.tar && docker exec k3s-notification ctr -n k8s.io images import /images.tar && rm images.tar
 ```
 
-## 3. Datastores and secrets
+## 3. Namespaces, servers and secrets
+
+Two namespaces, as everywhere else (ADR-042): `common` for PostgreSQL, Redis, Pulsar and Mailpit, `notification` for
+the platform and the SMS/WhatsApp/push catcher.
+
+```bash
+docker exec -i k3s-notification kubectl apply -f - < deploy/k8s/namespaces.yaml
+```
 
 Generate your own values; the services refuse the project's development defaults (ADR-013). The PostgreSQL
 password is the schema owner's, and the migration job uses it.
@@ -41,23 +48,23 @@ POSTGRES_PASSWORD=$(openssl rand -hex 16) DB_APP_PASSWORD=$(openssl rand -hex 16
 ```
 
 ```bash
-docker exec -i k3s-notification kubectl apply -f - < deploy/k8s/dev/datastores.yaml
+docker exec -i k3s-notification kubectl apply -f - < deploy/k8s/dev/common.yaml
 ```
 
 ```bash
-docker exec k3s-notification kubectl -n datastores create secret generic datastore-credentials --from-literal=POSTGRES_PASSWORD=$POSTGRES_PASSWORD --from-literal=DB_APP_PASSWORD=$DB_APP_PASSWORD
+docker exec -i k3s-notification kubectl apply -f - < deploy/k8s/dev/catcher.yaml
 ```
 
 ```bash
-docker exec -i k3s-notification kubectl -n datastores create configmap postgres-init --from-file=01-create-app-role.sh=/dev/stdin < scripts/postgres-init/01-create-app-role.sh
+docker exec k3s-notification kubectl -n common create secret generic datastore-credentials --from-literal=POSTGRES_PASSWORD=$POSTGRES_PASSWORD --from-literal=DB_APP_PASSWORD=$DB_APP_PASSWORD
 ```
 
 ```bash
-docker exec k3s-notification kubectl -n datastores rollout restart deployment postgres
+docker exec -i k3s-notification kubectl -n common create configmap postgres-init --from-file=01-create-app-role.sh=/dev/stdin < scripts/postgres-init/01-create-app-role.sh
 ```
 
 ```bash
-docker exec k3s-notification kubectl create namespace notification
+docker exec k3s-notification kubectl -n common rollout restart deployment postgres
 ```
 
 ```bash
@@ -78,20 +85,16 @@ The admin UI is at http://admin.notification.localhost:8880, the client UI at ht
 and the API at http://api.notification.localhost:8880 (`*.localhost` resolves to your machine in browsers; for curl
 add `--resolve api.notification.localhost:8880:127.0.0.1`). Sign in as `admin` with the `ADMIN_PASSWORD` you set;
 the first sign-in requires a new password and two-factor authentication (ADR-020). Add an SMS provider with the URL
-`http://catcher.datastores:9000/sms`; `catcher.datastores` is a trusted provider host in these values.
+`http://catcher.notification:9000/sms`; `catcher.notification` and `mailpit.common` are trusted provider hosts in
+these values. `common` admits connections only from `common` itself, `notification` and `consent-manager`.
 
 ## Shared infrastructure
 
-Next to consent-manager, the cluster has three namespaces instead (ADR-040): `common`, with the PostgreSQL, Redis,
-Pulsar, Keycloak and Mailpit both applications use, installed by consent-manager's `common` chart; `consent-manager`;
-and `notification`, with this chart and the SMS/WhatsApp/push catcher. `common` admits traffic only from the other
-two. Skip `datastores.yaml` and its secret and ConfigMap from step 3, install `common` from consent-manager, and then:
-
-```bash
-docker exec -i k3s-notification kubectl apply -f - < deploy/k8s/dev/catcher.yaml
-```
-
-Create `notification-secrets` as in step 3, with `DB_PASSWORD` set to the `notification_app` role's password and
+Next to consent-manager, the same `common` namespace is shared (ADR-040): it holds the PostgreSQL, Redis, Pulsar,
+Keycloak and Mailpit both applications use, installed by consent-manager's `common` chart instead of `common.yaml`,
+and a third namespace, `consent-manager`, sits next to `notification`. Apply `namespaces.yaml` and `catcher.yaml`
+from step 3 but skip `common.yaml` and its secret and ConfigMap, install `common` from consent-manager, and then
+create `notification-secrets` as in step 3, with `DB_PASSWORD` set to the `notification_app` role's password and
 `MIGRATION_DB_PASSWORD` to the `notification` role's, as the `common` chart created them. Then install with
 [values-shared.yaml](values-shared.yaml) on top of the k3s values:
 

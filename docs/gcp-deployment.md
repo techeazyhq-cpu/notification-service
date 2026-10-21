@@ -67,19 +67,25 @@ In this order, each from its standard Helm chart with versions you have tested:
 3. **ingress-nginx** into namespace `ingress-nginx`, behind a Google Cloud network load balancer.
 4. **Prometheus** (kube-prometheus-stack) into namespace `monitoring`, with `notification-slo.rules.yml` and
    `traffic-anomaly.rules.yml` loaded.
-5. **Pulsar:**
+5. **The two namespaces** (ADR-042): `common` for Pulsar, `notification` for the platform.
+
+   ```bash
+   kubectl apply -f deploy/k8s/namespaces.yaml
+   ```
+
+6. **Pulsar**, into `common`:
 
    ```bash
    kubectl apply -f deploy/k8s/pulsar/storage-class-gcp.yaml
    ```
 
    ```bash
-   helm install pulsar apache/pulsar --version 4.7.0 -n pulsar --create-namespace -f deploy/k8s/pulsar/values.yaml --set initialize=true
+   helm install pulsar apache/pulsar --version 4.7.0 -n common -f deploy/k8s/pulsar/values.yaml --set initialize=true
    ```
 
 ## Prepare the namespace
 
-1. **Create the namespace** `notification`.
+1. **The namespace** `notification` exists from step 5 of the platform pieces; everything below goes into it.
 2. **Trust bundles.** Cloud SQL and Memorystore each sign their server certificates with a CA of their own; Terraform
    outputs both:
 

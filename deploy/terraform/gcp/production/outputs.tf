@@ -42,7 +42,7 @@ output "helm_values" {
         },
         {
           to = [{
-            namespaceSelector = { matchLabels = { "kubernetes.io/metadata.name" = "pulsar" } }
+            namespaceSelector = { matchLabels = { "kubernetes.io/metadata.name" = "common" } }
             podSelector       = { matchLabels = { component = "broker" } }
           }]
           ports = [{ protocol = "TCP", port = 6651 }]

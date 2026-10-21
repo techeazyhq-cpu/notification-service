@@ -14,7 +14,7 @@
 #
 # @author Vasantha Kumar <vasantha.kumar@hotmail.com>
 #
-# DEVELOPMENT ONLY: values for trying the chart on a local k3s with deploy/k8s/dev/datastores.yaml and images built
+# DEVELOPMENT ONLY: values for trying the chart on a local k3s with deploy/k8s/dev/common.yaml and images built
 # locally and imported into the cluster (see deploy/k8s/dev/README.md).
 image:
   registry: registry.local
@@ -23,12 +23,12 @@ image:
 
 config:
   database:
-    url: jdbc:postgresql://postgres.datastores:5432/notification
+    url: jdbc:postgresql://postgres.common:5432/notification
   redis:
-    host: redis.datastores
+    host: redis.common
   pulsar:
-    url: pulsar://pulsar.datastores:6650
-  providerTrustedHosts: catcher.datastores,mailpit.datastores
+    url: pulsar://pulsar.common:6650
+  providerTrustedHosts: catcher.notification,mailpit.common
   tracingSamplingProbability: "1.0"
   clientApiPublicBaseUrl: http://api.notification.localhost:8880
   clientApiCorsOrigins: http://app.notification.localhost:8880
@@ -64,7 +64,7 @@ networkPolicy:
   datastoreEgress:
     - to:
         - namespaceSelector:
-            matchLabels: {kubernetes.io/metadata.name: datastores}
+            matchLabels: {kubernetes.io/metadata.name: common}
       ports:
         - {protocol: TCP, port: 5432}
         - {protocol: TCP, port: 6379}
@@ -73,10 +73,13 @@ networkPolicy:
     trustedInternalEgress:
       - to:
           - namespaceSelector:
-              matchLabels: {kubernetes.io/metadata.name: datastores}
+              matchLabels: {kubernetes.io/metadata.name: common}
             podSelector:
-              matchExpressions:
-                - {key: app, operator: In, values: [catcher, mailpit]}
+              matchLabels: {app: mailpit}
+        ports:
+          - {protocol: TCP, port: 1025}
+      - to:
+          - podSelector:
+              matchLabels: {app: catcher}
         ports:
           - {protocol: TCP, port: 9000}
-          - {protocol: TCP, port: 1025}

@@ -70,19 +70,25 @@ In this order, each from its standard Helm chart with versions you have tested:
 3. **ingress-nginx** into namespace `ingress-nginx`, behind an Azure Standard load balancer.
 4. **Prometheus** (kube-prometheus-stack) into namespace `monitoring`, with `notification-slo.rules.yml` and
    `traffic-anomaly.rules.yml` loaded.
-5. **Pulsar:**
+5. **The two namespaces** (ADR-042): `common` for Pulsar, `notification` for the platform.
+
+   ```bash
+   kubectl apply -f deploy/k8s/namespaces.yaml
+   ```
+
+6. **Pulsar**, into `common`:
 
    ```bash
    kubectl apply -f deploy/k8s/pulsar/storage-class-azure.yaml
    ```
 
    ```bash
-   helm install pulsar apache/pulsar --version 4.7.0 -n pulsar --create-namespace -f deploy/k8s/pulsar/values.yaml --set initialize=true
+   helm install pulsar apache/pulsar --version 4.7.0 -n common -f deploy/k8s/pulsar/values.yaml --set initialize=true
    ```
 
 ## Prepare the namespace
 
-1. **Create the namespace** `notification`.
+1. **The namespace** `notification` exists from step 5 of the platform pieces; everything below goes into it.
 2. **Trust bundles.** Flexible Server certificates chain to DigiCert Global Root G2 and Microsoft RSA Root CA 2017; put
    both in one bundle:
 
@@ -99,7 +105,7 @@ In this order, each from its standard Helm chart with versions you have tested:
    ```
 
    ```bash
-   kubectl -n pulsar get secret pulsar-ca-tls -o jsonpath='{.data.ca\.crt}' | base64 -d > ca.crt
+   kubectl -n common get secret pulsar-ca-tls -o jsonpath='{.data.ca\.crt}' | base64 -d > ca.crt
    ```
 
    ```bash
