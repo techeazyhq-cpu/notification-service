@@ -529,7 +529,9 @@ once, then expire it.
 
 A draft meets the channel's rules: SMS at most 3 segments (each placeholder counted as 12 characters), e-mail with a
 one-line subject of at most 150 characters and simple HTML, WhatsApp plain text of at most 1024 characters, and only the
-placeholders you listed (plus `{{recipient}}`). Refusals: `DRAFTING_NOT_AVAILABLE` when drafting is off,
+placeholders you listed (plus `{{recipient}}`). It contains no contact details or values of the AI's own: links point
+only to a placeholder, and e-mail addresses, web addresses, phone and other long numbers, and stand-ins such as
+`[Your Company Name]` are refused. Refusals: `DRAFTING_NOT_AVAILABLE` when drafting is off,
 `RATE_LIMITED` or `DRAFT_BUDGET_EXHAUSTED` over the limits, `DRAFT_DECLINED` when the model declines the description,
 `DRAFT_RULES_NOT_MET` when it could not meet the rules (the message lists them) and `DRAFTING_MODEL_UNAVAILABLE` when it
 cannot be reached. Every request for a draft is recorded in the platform's audit log.

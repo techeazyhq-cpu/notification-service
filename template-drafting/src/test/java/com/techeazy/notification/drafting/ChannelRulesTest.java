@@ -146,6 +146,85 @@ class ChannelRulesTest {
     }
 
     @Test
+    void anEmailLinkMustPointToAPlaceholder() {
+        assertThat(ChannelRules.check(Channel.EMAIL, "Shipped", "<p><a href=\"{{trackingUrl}}\">Track it</a></p>",
+                List.of("trackingUrl")).passed()).isTrue();
+        assertThat(ChannelRules.check(Channel.EMAIL, "Shipped", "<p><a href='{{ trackingUrl }}'>Track it</a></p>",
+                List.of("trackingUrl")).passed()).isTrue();
+
+        assertThat(ChannelRules.check(Channel.EMAIL, "Shipped", "<p><a href='email: ''>Contact us</a></p>",
+                List.of()).violations()).anyMatch(v -> v.contains("must point to a placeholder"));
+        assertThat(ChannelRules.check(Channel.EMAIL, "Shipped", "<a href=\"https://shop.example.com/track\">Track</a>",
+                List.of()).violations()).anyMatch(v -> v.contains("must point to a placeholder"));
+        assertThat(ChannelRules.check(Channel.EMAIL, "Shipped", "<a href=\"{{url}}/track\">Track</a>",
+                List.of("url")).violations()).anyMatch(v -> v.contains("must point to a placeholder"));
+    }
+
+    @Test
+    void inventedEmailAddressesAreAViolationOnEveryChannel() {
+        String body = "Questions? Write to support@example.com and we will help.";
+
+        for (Channel channel : List.of(Channel.SMS, Channel.WHATSAPP)) {
+            assertThat(ChannelRules.check(channel, null, body, List.of()).violations())
+                    .anyMatch(v -> v.contains("e-mail address") && v.contains("support@example.com"));
+        }
+        assertThat(ChannelRules.check(Channel.EMAIL, "Shipped", "<p>" + body + "</p>", List.of()).violations())
+                .anyMatch(v -> v.contains("support@example.com"));
+    }
+
+    @Test
+    void inventedUrlsAreAViolation() {
+        assertThat(ChannelRules.check(Channel.SMS, null, "Track it at https://track.example.com/123 today",
+                List.of()).violations()).anyMatch(v -> v.contains("link") && v.contains("https://track.example.com"));
+        assertThat(ChannelRules.check(Channel.WHATSAPP, null, "See www.example.com for details", List.of())
+                .violations()).anyMatch(v -> v.contains("www.example.com"));
+    }
+
+    @Test
+    void inventedPhoneNumbersAndOtherLongNumbersAreAViolation() {
+        assertThat(ChannelRules.check(Channel.SMS, null, "Call us on +1 (555) 010-2030 if it is late.", List.of())
+                .violations()).anyMatch(v -> v.contains("number") && v.contains("+1 (555) 010-2030"));
+        assertThat(ChannelRules.check(Channel.SMS, null, "Your order 1234567 has shipped.", List.of())
+                .violations()).anyMatch(v -> v.contains("1234567"));
+    }
+
+    @Test
+    void shortNumbersRangesAndAmountsAreNotPhoneNumbers() {
+        assertThat(ChannelRules.check(Channel.SMS, null,
+                "Your order {{orderId}} arrives in 2-3 days. You earned 1,000 points, valid for 30 days.",
+                List.of("orderId")).passed()).isTrue();
+    }
+
+    @Test
+    void bracketedStandInsAreAViolation() {
+        ChannelRules.Check check = ChannelRules.check(Channel.EMAIL, "Shipped",
+                "Dear {{firstName}},<br>Your order has shipped.<br>Best regards,<br>[Your Company Name]",
+                List.of("firstName"));
+
+        assertThat(check.violations()).anyMatch(v -> v.contains("stand-in") && v.contains("[Your Company Name]"));
+        assertThat(ChannelRules.check(Channel.SMS, null, "Hi [Customer], your order has shipped.", List.of())
+                .passed()).isFalse();
+    }
+
+    @Test
+    void theSubjectIsCheckedForInventedDetailsToo() {
+        assertThat(ChannelRules.check(Channel.EMAIL, "Order [ORDER-ID] has shipped", "<p>On its way.</p>", List.of())
+                .violations()).anyMatch(v -> v.contains("[ORDER-ID]"));
+    }
+
+    @Test
+    void theDraftsTheLocalModelWroteAreJudgedAsAReviewerWould() {
+        assertThat(ChannelRules.check(Channel.EMAIL, "Order Shipment Notification",
+                "Dear {{firstName}},<br>Your order has shipped and will arrive in 2-3 business days. If you have any "
+                        + "questions, please contact us at <a href='email: ''>support@example.com</a>.<br>Best "
+                        + "regards, <strong>Order Fulfillment Team</strong>", List.of("firstName", "orderId"))
+                .passed()).isFalse();
+        assertThat(ChannelRules.check(Channel.EMAIL, "Shipment Notification",
+                "<p>Your order {{orderId}} has shipped and will arrive in 2-3 business days.</p>",
+                List.of("firstName", "orderId")).passed()).isTrue();
+    }
+
+    @Test
     void pushAndEmptyBodiesAreRefused() {
         assertThat(ChannelRules.check(Channel.PUSH, null, "Hi", List.of()).passed()).isFalse();
         assertThat(ChannelRules.check(Channel.SMS, null, " ", List.of()).violations()).contains("The body is empty");

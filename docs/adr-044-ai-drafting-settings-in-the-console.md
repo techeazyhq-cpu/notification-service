@@ -58,7 +58,13 @@ ceiling, budgets and rate limit. Three things did not fit how the platform is ru
    10 seconds (`template-drafting.settings-cache-ttl`), so a change reaches every instance within that time, and the
    instance that saved it at once. One Anthropic SDK client is kept per key and endpoint and replaced when they
    change. The replaced client is not closed, because a draft may still be running on it.
-7. **Drafting is part of the template editor.** **Draft with AI** sits inside the create and edit form of both UIs,
+7. **The channel rules also reject what a model made up** (amending ADR-041 §6), on every channel, in the subject and
+   the body, with placeholders ignored: a link whose `href` is not exactly one placeholder; e-mail addresses; web
+   addresses (`http://`, `https://`, `www.`); phone and other long numbers (seven or more digits, however grouped);
+   and stand-ins left to fill in by hand, such as `[Your Company Name]`. Each violation quotes what was found, so the
+   one correction can fix it. The prompt asks for the same. Testing with a small local model showed why: drafts that
+   met every earlier rule still carried `support@example.com` in a broken link and a `[Your Company Name]` sign-off.
+8. **Drafting is part of the template editor.** **Draft with AI** sits inside the create and edit form of both UIs,
    between the channel and category and the subject and body. It uses the form's channel and category, and the draft
    fills the subject and body. While drafting is off, the admin editor says so and links to the settings page; the
    client editor shows nothing, since clients cannot turn it on.
@@ -94,7 +100,11 @@ find drafting in the template editor and choose the channel and category once.
 Negative / accepted:
 
 - Draft quality depends on the model chosen. Small local models break the channel rules more often; the rules and
-  the one correction still keep a bad draft out of the editor, at the cost of a second call.
+  the one correction still keep a bad draft out of the editor, at the cost of a second call. Locally,
+  `llama3.2:1b` met the rules in 1 of 5 drafts and `llama3.2:3b` in 8 of 8.
+- The invented-detail rules can refuse something an author would accept, such as a seven-digit number in the brief's
+  own wording or text in square brackets. The draft is refused rather than shown, and the author can write that
+  text into the editor by hand.
 - Providers differ at the edges of the shared API: some ignore the JSON schema, some report no token usage (counted
   as 0, so a provider that hides usage is not held to the budgets), and some reasoning models need settings
   this page does not offer. `OPENAI_COMPATIBLE` asks only for a JSON object, the least that every server supports.

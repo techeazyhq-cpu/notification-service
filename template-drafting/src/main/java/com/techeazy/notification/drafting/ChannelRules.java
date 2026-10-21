@@ -58,6 +58,15 @@ public final class ChannelRules {
             "(?i)<\\s*(script|style|iframe|object|embed|form|input|link|meta|base)\\b|\\son[a-z]+\\s*=|javascript:");
     private static final Pattern STARTS_WITH_PLACEHOLDER = Pattern.compile("^\\s*\\{\\{");
     private static final Pattern ENDS_WITH_PLACEHOLDER = Pattern.compile("}}[\\s.!?]*$");
+    private static final Pattern LINK_TARGET =
+            Pattern.compile("(?i)\\bhref\\s*=\\s*(?:\"([^\"]*)\"|'([^']*)'|([^\\s>]+))");
+    private static final Pattern ONLY_A_PLACEHOLDER = Pattern.compile("^\\s*\\{\\{\\s*[\\w.\\-]+\\s*}}\\s*$");
+    private static final Pattern EMAIL_ADDRESS = Pattern.compile("[\\w.+-]+@[\\w-]+(?:\\.[\\w-]+)+");
+    private static final Pattern WEB_ADDRESS = Pattern.compile("(?i)\\b(?:https?://|www\\.)[^\\s<>\"']+");
+    /** Seven or more digits, however they are grouped: a phone number, account or order number, or a date. */
+    private static final Pattern LONG_NUMBER = Pattern.compile("\\+?\\d(?:[\\s().-]*\\d){6,}");
+    private static final Pattern BRACKETED_STAND_IN = Pattern.compile("\\[[^\\[\\]\\n]{1,60}]");
+    private static final int MAX_EXAMPLES = 3;
 
     /**
      * How long an SMS is.
@@ -95,6 +104,8 @@ public final class ChannelRules {
             return new Check(violations, warnings, null);
         }
         checkPlaceholders(subject, body, allowedVariables, violations, warnings);
+        checkLinkTargets(body, violations);
+        checkInventedDetails(subject, body, violations);
         SmsLength smsLength = null;
         switch (channel) {
             case SMS -> smsLength = checkSms(subject, body, violations, warnings);
@@ -133,6 +144,56 @@ public final class ChannelRules {
         if (!unused.isEmpty()) {
             warnings.add("Does not use: " + String.join(", ", unused));
         }
+    }
+
+    /** A link may only lead where a placeholder says, so the model cannot send customers to an address it made up. */
+    private static void checkLinkTargets(String body, List<String> violations) {
+        Matcher link = LINK_TARGET.matcher(body);
+        List<String> invented = new ArrayList<>();
+        while (link.find()) {
+            String target = link.group(1) != null ? link.group(1) : link.group(2) != null ? link.group(2)
+                    : link.group(3);
+            if (!ONLY_A_PLACEHOLDER.matcher(target).matches()) {
+                invented.add(target.strip());
+            }
+        }
+        if (!invented.isEmpty()) {
+            violations.add("A link must point to a placeholder, such as href=\"{{trackingUrl}}\", not: "
+                    + examples(invented));
+        }
+    }
+
+    /**
+     * Contact details and values a placeholder should supply, which the model may only have made up: e-mail addresses,
+     * web addresses, phone and other long numbers, and stand-ins such as "[Your Company Name]" left to fill in by
+     * hand. Placeholders and HTML tags are removed first, so neither {@code {{supportEmail}}} nor a link's target,
+     * which {@link #checkLinkTargets} judges, counts.
+     */
+    private static void checkInventedDetails(String subject, String body, List<String> violations) {
+        String text = HTML_TAG.matcher(PLACEHOLDER.matcher((subject == null ? "" : subject) + "\n" + body)
+                .replaceAll(" ")).replaceAll(" ");
+        reportFound(EMAIL_ADDRESS, text, "Contains an e-mail address the brief did not give; use a placeholder or "
+                + "leave it out: ", violations);
+        reportFound(WEB_ADDRESS, text, "Contains a link the brief did not give; use a placeholder: ", violations);
+        reportFound(LONG_NUMBER, text, "Contains a phone number or other number a placeholder should supply: ",
+                violations);
+        reportFound(BRACKETED_STAND_IN, text, "Contains a stand-in to fill in by hand; use a placeholder or write "
+                + "around it: ", violations);
+    }
+
+    private static void reportFound(Pattern pattern, String text, String violation, List<String> violations) {
+        Matcher found = pattern.matcher(text);
+        List<String> matches = new ArrayList<>();
+        while (found.find()) {
+            matches.add(found.group().strip());
+        }
+        if (!matches.isEmpty()) {
+            violations.add(violation + examples(matches));
+        }
+    }
+
+    private static String examples(List<String> found) {
+        return String.join(", ", found.stream().distinct().limit(MAX_EXAMPLES).toList());
     }
 
     private static SmsLength checkSms(String subject, String body, List<String> violations, List<String> warnings) {

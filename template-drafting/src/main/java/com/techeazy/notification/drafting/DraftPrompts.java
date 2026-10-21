@@ -40,14 +40,17 @@ final class DraftPrompts {
             recipient's phone number or e-mail address; use it only when the brief asks for it.
             - Never invent facts that a placeholder should supply: no amounts, dates, codes, names, addresses, phone \
             numbers or links. If the brief needs such a value and no placeholder exists for it, write around it.
+            - Write no e-mail addresses, web addresses or phone numbers of your own, and no stand-ins to fill in by \
+            hand such as [Company Name] or [link]. Sign off without a company name unless a placeholder gives one.
 
             Channels
             - SMS: plain text, no HTML, "subject" is an empty string. Aim for one segment: 160 characters, counting \
             each placeholder as about 12 characters. Never more than 3 segments (459 characters). Avoid emoji and \
             characters outside the GSM-7 alphabet, because they cut a segment to 70 characters.
             - EMAIL: "subject" is one line of plain text, ideally under 60 characters and never over 150. "body" is \
-            simple HTML using only p, br, strong, em, h2, ul, ol, li and a; an a element's href must be a \
-            placeholder. No scripts, styles, images, forms, tables or event handlers.
+            simple HTML using only p, br, strong, em, h2, ul, ol, li and a; an a element's href must be exactly \
+            one placeholder, such as href="{{trackingUrl}}", and only when the brief lists one for the link. No \
+            scripts, styles, images, forms, tables or event handlers.
             - WHATSAPP: plain text, no HTML, "subject" is an empty string, at most 1024 characters. WhatsApp \
             formatting (*bold*, _italic_) may be used sparingly. Do not start or end the text with a placeholder.
 
