@@ -75,3 +75,6 @@ a.stat:hover { border-color: var(--accent); }
 .legend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 5px; }
 @media (max-width: 720px) { .shell { grid-template-columns: 1fr; } nav { flex-direction: row; flex-wrap: wrap; position: static; height: auto; } nav h2 { width: 100%; } }
 .status-block { display: block; margin: 1em 0; }
+
+/* Draft with AI inside the template editor (ADR-044). */
+.draft-panel { margin-top: 12px; padding: 12px; border: 1px dashed var(--accent); border-radius: 8px; background: var(--bg); }

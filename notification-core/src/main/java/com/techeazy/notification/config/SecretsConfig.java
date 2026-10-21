@@ -43,6 +43,13 @@ public class SecretsConfig {
     public static final String PROVIDER_SETTINGS = "provider-settings";
     public static final String CLIENT_SIGNING_SECRET = "client-signing-secret";
     public static final String MESSAGE_VARIABLES = "message-variables";
+    public static final String TEMPLATE_DRAFTING_API_KEY = "template-drafting-api-key";
+
+    /**
+     * The bean name of the cipher for the AI drafting API key an administrator stores (ADR-044). Always inject it by
+     * this name: the personal-data encryptor is an {@code AesGcmCipher} too.
+     */
+    public static final String TEMPLATE_DRAFTING_API_KEY_CIPHER = "templateDraftingApiKeyCipher";
 
     private static final SecureRandom RANDOM = new SecureRandom();
 
@@ -91,6 +98,14 @@ public class SecretsConfig {
                                               @Value("${notification.secrets-key-previous:}") List<String> previousSecretsKeys) {
         return new ClientSigningSecrets(cipher(env, "notification.secrets-key", secretsKey, previousSecretsKeys,
                 CLIENT_SIGNING_SECRET));
+    }
+
+    @Bean(TEMPLATE_DRAFTING_API_KEY_CIPHER)
+    AesGcmCipher templateDraftingApiKeyCipher(
+            Environment env,
+            @Value("${notification.secrets-key:" + DEFAULT_SECRETS_KEY + "}") String secretsKey,
+            @Value("${notification.secrets-key-previous:}") List<String> previousSecretsKeys) {
+        return cipher(env, "notification.secrets-key", secretsKey, previousSecretsKeys, TEMPLATE_DRAFTING_API_KEY);
     }
 
     private static AesGcmCipher cipher(Environment env, String property, String key, List<String> previousKeys,

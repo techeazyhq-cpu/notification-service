@@ -17,6 +17,7 @@
  */
 
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { api, CATEGORIES, Category, CATEGORY_LABELS, Channel, CHANNELS, DraftBrief, DraftingStatus, Template, TemplateDraft } from '../api';
 import DraftAssistant from '../DraftAssistant';
 import { useLoad } from '../hooks';
@@ -56,11 +57,8 @@ export default function Templates() {
     <>
       <h1>Templates</h1>
       <p className="muted">Shared templates are managed here and visible to every client. Clients create their own templates in the client tracker; those are listed for support and are read-only here.</p>
-      {drafting.data?.enabled && (
-        <DraftAssistant status={drafting.data} channels={CHANNELS}
-          request={(brief) => api<TemplateDraft>('POST', '/templates/drafts', brief)} onDraft={applyDraft} />
-      )}
       <form className="card" onSubmit={save}>
+        <h3>{editing ? 'Edit template' : 'Create template'}</h3>
         <div className="row">
           <label>Name<input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required /></label>
           <label><span>Channel</span>
@@ -73,8 +71,11 @@ export default function Templates() {
               {CATEGORIES.map((c) => <option key={c} value={c}>{CATEGORY_LABELS[c]}</option>)}
             </select>
           </label>
-          <label style={{ flex: 1 }}>Subject / title<input value={form.subject} onChange={(e) => setForm({ ...form, subject: e.target.value })} /></label>
         </div>
+        <DraftAssistant status={drafting.data ?? undefined} channel={form.channel} category={form.category}
+          request={(brief) => api<TemplateDraft>('POST', '/templates/drafts', brief)} onDraft={applyDraft}
+          unavailable={<>✨ Draft with AI is off. Set up the LLM on the <Link to="/settings/ai-drafting">AI drafting</Link> page to write templates from a short description.</>} />
+        <label style={{ marginTop: 12 }}>Subject / title<input value={form.subject} onChange={(e) => setForm({ ...form, subject: e.target.value })} /></label>
         <label style={{ marginTop: 12 }}>Body — use {'{{variable}}'} placeholders; {'{{recipient}}'} is always available
           <textarea value={form.body} onChange={(e) => setForm({ ...form, body: e.target.value })} required />
         </label>

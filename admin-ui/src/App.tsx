@@ -34,6 +34,7 @@ import Privacy from './pages/Privacy';
 import AuditLog from './pages/AuditLog';
 import Anomalies from './pages/Anomalies';
 import Traffic from './pages/Traffic';
+import AiDrafting from './pages/AiDrafting';
 
 function Login({ onDone }: Readonly<{ onDone: (result: LoginResult) => void }>) {
   const [user, setUser] = useState('admin');
@@ -111,6 +112,7 @@ export default function App() {
         <NavLink to="/templates">Templates</NavLink>
         <NavLink to="/providers">Providers</NavLink>
         <NavLink to="/rate-limits">Rate limits</NavLink>
+        <NavLink to="/settings/ai-drafting">AI drafting</NavLink>
         <NavLink to="/billing/plans">Billing plans</NavLink>
         <NavLink to="/billing/accounts">Billing accounts</NavLink>
         <NavLink to="/billing/invoices">Invoices</NavLink>
@@ -131,6 +133,7 @@ export default function App() {
           <Route path="/templates" element={<Templates />} />
           <Route path="/providers" element={<Providers />} />
           <Route path="/rate-limits" element={<RateLimits />} />
+          <Route path="/settings/ai-drafting" element={<AiDrafting />} />
           <Route path="/billing/plans" element={<BillingPlans />} />
           <Route path="/billing/accounts" element={<BillingAccounts />} />
           <Route path="/billing/invoices" element={<BillingInvoices />} />

@@ -204,6 +204,16 @@ class SecurityRulesTest {
         assertThat(status(AdminRole.ADMIN, HttpMethod.POST, "/api/admin/templates/drafts")).isEqualTo(404);
     }
 
+    /** The drafting settings hold the API key and set what drafting may spend: only an admin changes them (ADR-044). */
+    @Test
+    void onlyAnAdminChangesTheDraftingSettingsThoughAViewerMayReadThem() throws Exception {
+        String settings = "/api/admin/settings/template-drafting";
+        assertThat(status(AdminRole.VIEWER, HttpMethod.GET, settings)).isEqualTo(404);
+        assertThat(status(AdminRole.VIEWER, HttpMethod.PUT, settings)).isEqualTo(403);
+        assertThat(status(AdminRole.OPERATOR, HttpMethod.PUT, settings)).isEqualTo(403);
+        assertThat(status(AdminRole.ADMIN, HttpMethod.PUT, settings)).isEqualTo(404);
+    }
+
     /** What a tenant pays is configuration: only an admin sets it, though anyone may read it (ADR-034). */
     @Test
     void onlyAnAdminSetsATenantsOtpPrices() throws Exception {

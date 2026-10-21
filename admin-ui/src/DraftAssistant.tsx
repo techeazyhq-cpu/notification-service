@@ -16,28 +16,31 @@
  * @author Vasantha Kumar <vasantha.kumar@hotmail.com>
  */
 
-import { useState } from 'react';
-import { CATEGORIES, Category, CATEGORY_LABELS, Channel, DRAFT_CHANNELS, DRAFT_TONES, DraftBrief, DraftingStatus, DraftTone, TemplateDraft } from './api';
+import { ReactNode, useState } from 'react';
+import { Category, Channel, DRAFT_CHANNELS, DRAFT_TONES, DraftBrief, DraftingStatus, DraftTone, TemplateDraft } from './api';
 import { parseVariables, smsSummary } from './draftLogic';
 
 const TONE_LABELS: Record<DraftTone, string> = {
   FRIENDLY: 'Friendly', PROFESSIONAL: 'Professional', FORMAL: 'Formal', REASSURING: 'Reassuring', URGENT: 'Urgent',
 };
 
+const PURPOSE_MIN_LENGTH = 10;
+
 /**
- * Asks the AI for a template draft from a short brief (ADR-041). The draft only fills the editor: nothing is saved
- * until the author reviews it and saves the template. Rendered only when the API says drafting is on.
+ * Draft with AI, inside the template editor (ADR-041, ADR-044): the author describes the message and the AI writes a
+ * subject and body for the channel and category chosen in the editor. The draft only fills the editor; nothing is
+ * saved until the author reviews it and saves the template. It is not a form of its own, since it sits in the
+ * editor's form. While drafting is off it shows {@code unavailable}, if given, and otherwise nothing.
  */
-export default function DraftAssistant({ status, channels, request, onDraft }: Readonly<{
-  status: DraftingStatus;
-  channels: readonly Channel[];
+export default function DraftAssistant({ status, channel, category, request, onDraft, unavailable }: Readonly<{
+  status?: DraftingStatus;
+  channel: Channel;
+  category: Category;
   request: (brief: DraftBrief) => Promise<TemplateDraft>;
   onDraft: (draft: TemplateDraft, brief: DraftBrief) => void;
+  unavailable?: ReactNode;
 }>) {
-  const usable = DRAFT_CHANNELS.filter((c) => channels.includes(c));
   const [open, setOpen] = useState(false);
-  const [channel, setChannel] = useState<Channel>(usable[0] ?? 'SMS');
-  const [category, setCategory] = useState<Category>('TRANSACTIONAL');
   const [tone, setTone] = useState<DraftTone>('PROFESSIONAL');
   const [purpose, setPurpose] = useState('');
   const [variables, setVariables] = useState('');
@@ -45,14 +48,17 @@ export default function DraftAssistant({ status, channels, request, onDraft }: R
   const [error, setError] = useState('');
   const [draft, setDraft] = useState<TemplateDraft | null>(null);
 
-  if (usable.length === 0) return null;
-  const selected = usable.includes(channel as (typeof DRAFT_CHANNELS)[number]) ? channel : usable[0];
+  if (!status?.enabled) return unavailable ? <div className="draft-panel muted">{unavailable}</div> : null;
+  const draftable = (DRAFT_CHANNELS as readonly Channel[]).includes(channel);
 
-  async function submit(e: React.SubmitEvent<HTMLFormElement>) {
-    e.preventDefault();
+  async function generate() {
+    if (purpose.trim().length < PURPOSE_MIN_LENGTH) {
+      setError(`Describe the message in at least ${PURPOSE_MIN_LENGTH} characters.`);
+      return;
+    }
     setBusy(true);
     setError('');
-    const brief: DraftBrief = { channel: selected, category, tone, purpose: purpose.trim(), variables: parseVariables(variables) };
+    const brief: DraftBrief = { channel, category, tone, purpose: purpose.trim(), variables: parseVariables(variables) };
     try {
       const result = await request(brief);
       setDraft(result);
@@ -66,29 +72,19 @@ export default function DraftAssistant({ status, channels, request, onDraft }: R
   }
 
   return (
-    <form className="card" onSubmit={submit}>
+    <div className="draft-panel">
       <div className="spread">
-        <h3>Draft with AI</h3>
-        <button type="button" onClick={() => setOpen(!open)} aria-expanded={open}>{open ? 'Hide' : 'Describe a message'}</button>
+        <span><b>✨ Draft with AI</b> <span className="muted">writes the subject and body below for you</span></span>
+        <button type="button" onClick={() => setOpen(!open)} aria-expanded={open}>{open ? 'Hide' : 'Describe the message'}</button>
       </div>
-      {open && (
+      {open && !draftable && <p className="muted">AI drafting covers SMS, EMAIL and WHATSAPP templates. Pick one of those channels above.</p>}
+      {open && draftable && (
         <>
           <p className="muted">
-            Describe the message and the AI ({status.model}) writes a draft that meets the channel's rules. Only this description
-            and the variable names are sent, so leave out customer names, numbers and other personal data. The draft fills the
-            editor below; nothing is saved until you review it and save the template.
+            Drafting a {channel} template with {status.model}. Only this description and the variable names are sent, so leave out
+            customer names, numbers and other personal data. Nothing is saved until you review the draft and save the template.
           </p>
           <div className="row">
-            <label><span>Channel</span>
-              <select value={selected} onChange={(e) => setChannel(e.target.value as Channel)}>
-                {usable.map((c) => <option key={c}>{c}</option>)}
-              </select>
-            </label>
-            <label><span>Category</span>
-              <select value={category} onChange={(e) => setCategory(e.target.value as Category)}>
-                {CATEGORIES.map((c) => <option key={c} value={c}>{CATEGORY_LABELS[c]}</option>)}
-              </select>
-            </label>
             <label><span>Tone</span>
               <select value={tone} onChange={(e) => setTone(e.target.value as DraftTone)}>
                 {DRAFT_TONES.map((t) => <option key={t} value={t}>{TONE_LABELS[t]}</option>)}
@@ -100,23 +96,23 @@ export default function DraftAssistant({ status, channels, request, onDraft }: R
           </div>
           <label style={{ marginTop: 12 }}>
             <span>What is the message for?</span>
-            <textarea value={purpose} onChange={(e) => setPurpose(e.target.value)} required minLength={10} maxLength={1000}
+            <textarea value={purpose} onChange={(e) => setPurpose(e.target.value)} maxLength={1000}
               placeholder="Tell the customer their order has shipped and that the tracking link is below." />
           </label>
           <div className="row" style={{ marginTop: 12 }}>
-            <button type="submit" className="primary" disabled={busy}>{busy ? 'Drafting…' : 'Draft template'}</button>
+            <button type="button" className="primary" disabled={busy} onClick={generate}>{busy ? 'Drafting…' : 'Generate draft'}</button>
             <span className="muted">{status.tokensLeftThisMonth.toLocaleString()} tokens left this month, {status.requestsPerMinute} drafts a minute</span>
             {error && <span className="error" role="alert">{error}</span>}
           </div>
           {draft && (
             <div className="notice" style={{ marginTop: 12 }}>
-              <b>Draft placed in the editor below.</b> Review and edit it, then save the template.
+              <b>Draft placed in the subject and body below.</b> Review and edit it, then save the template.
               {draft.smsLength && <div>SMS length: {smsSummary(draft.smsLength)}.</div>}
               {draft.warnings.length > 0 && <ul>{draft.warnings.map((w) => <li key={w}>{w}</li>)}</ul>}
             </div>
           )}
         </>
       )}
-    </form>
+    </div>
   );
 }

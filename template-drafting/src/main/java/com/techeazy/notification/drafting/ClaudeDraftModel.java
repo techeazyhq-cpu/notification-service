@@ -42,8 +42,9 @@ import java.util.stream.Collectors;
 
 /**
  * Asks Claude for a draft through the official Anthropic Java SDK. The reply is constrained to a JSON object with a
- * {@code subject} and a {@code body} (structured outputs), so it is parsed rather than scraped from prose. With
- * {@link DraftingProperties#isFallbacks()} a declined brief is retried by the API on its recommended fallback model.
+ * {@code subject} and a {@code body} (structured outputs), so it is parsed rather than scraped from prose. The model,
+ * effort and token ceiling come from the {@link DraftingSettings} in effect (ADR-044). With fallbacks on
+ * ({@link DraftingProperties#isFallbacks()}) a declined brief is retried by the API on its recommended fallback model.
  */
 class ClaudeDraftModel implements DraftModel {
 
@@ -61,11 +62,13 @@ class ClaudeDraftModel implements DraftModel {
             .build();
 
     private final AnthropicClient client;
-    private final DraftingProperties properties;
+    private final DraftingSettings settings;
+    private final boolean fallbacks;
 
-    ClaudeDraftModel(AnthropicClient client, DraftingProperties properties) {
+    ClaudeDraftModel(AnthropicClient client, DraftingSettings settings, boolean fallbacks) {
         this.client = client;
-        this.properties = properties;
+        this.settings = settings;
+        this.fallbacks = fallbacks;
     }
 
     @Override
@@ -96,15 +99,15 @@ class ClaudeDraftModel implements DraftModel {
 
     MessageCreateParams request(Prompt prompt) {
         MessageCreateParams.Builder builder = MessageCreateParams.builder()
-                .model(properties.getModel())
-                .maxTokens(properties.getMaxTokens())
+                .model(settings.model())
+                .maxTokens(settings.maxTokens())
                 .system(prompt.system())
                 .addUserMessage(prompt.user())
                 .outputConfig(OutputConfig.builder()
-                        .effort(OutputConfig.Effort.of(properties.getEffort()))
+                        .effort(OutputConfig.Effort.of(settings.effort()))
                         .format(JsonOutputFormat.builder().schema(DRAFT_SCHEMA).build())
                         .build());
-        if (properties.isFallbacks()) {
+        if (fallbacks) {
             builder.putAdditionalHeader("anthropic-beta", FALLBACK_BETA)
                     .putAdditionalBodyProperty("fallbacks", JsonValue.from("default"));
         }
@@ -115,7 +118,7 @@ class ClaudeDraftModel implements DraftModel {
         try {
             return client.messages().create(params);
         } catch (UnauthorizedException | PermissionDeniedException rejected) {
-            LOG.error("The Anthropic API rejected the configured key (template-drafting.api-key)");
+            LOG.error("The Anthropic API rejected the drafting API key; replace it on the AI drafting settings page");
             throw new DraftModelUnavailableException("The API key was rejected", rejected);
         } catch (RateLimitException limited) {
             throw new DraftModelUnavailableException("The Anthropic API rate limit was reached", limited);

@@ -209,6 +209,21 @@ export type DraftTone = (typeof DRAFT_TONES)[number];
 export interface DraftingStatus { enabled: boolean; model?: string; tokensLeftThisMonth: number; requestsPerMinute: number }
 export interface DraftBrief { channel: Channel; category: Category; tone: DraftTone; purpose: string; variables: string[] }
 export interface SmsLength { encoding: 'GSM-7' | 'UCS-2'; characters: number; segments: number }
+
+/** The AI drafting settings administrators edit (ADR-044). The API key is write-only: only a hint comes back. */
+export const DRAFTING_EFFORTS = ['low', 'medium', 'high', 'xhigh', 'max'] as const;
+export type DraftingEffort = (typeof DRAFTING_EFFORTS)[number];
+export interface DraftingSettingsLimits {
+  model: string; effort: DraftingEffort; maxTokens: number; monthlyTokenBudget: number;
+  clientMonthlyTokenBudget: number; requestsPerMinute: number;
+}
+export interface DraftingSettings extends DraftingSettingsLimits {
+  enabled: boolean; apiKeySource: 'STORED' | 'ENVIRONMENT' | 'NONE'; apiKeyHint?: string;
+  updatedAt?: string; updatedBy?: string;
+}
+export interface DraftingSettingsInput extends DraftingSettingsLimits {
+  enabled: boolean; apiKey?: string; removeApiKey: boolean;
+}
 export interface TemplateDraft {
   channel: Channel; subject?: string; body: string; variables: string[]; warnings: string[]; smsLength?: SmsLength; model: string;
 }
