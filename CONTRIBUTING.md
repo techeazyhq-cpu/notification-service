@@ -63,8 +63,9 @@ You need:
 ```bash
 git clone https://github.com/techeazyhq-cpu/notification-service.git
 cd notification-service
-docker compose --profile app up -d --build   # datastores, the three services and both UIs
-node scripts/seed.mjs                        # providers, templates and a demo client (prints its API key once)
+docker compose -f docker-compose.common.yml up -d --wait   # PostgreSQL, Redis, Pulsar, Mailpit (project `common`)
+docker compose --profile app up -d --build                 # the three services and both UIs (project `notification`)
+node scripts/seed.mjs                                      # providers, templates and a demo client (prints its API key once)
 ```
 
 The [README](README.md) lists the local URLs and sign-ins. It also explains how to run a service from your IDE against

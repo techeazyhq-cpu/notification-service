@@ -20,6 +20,7 @@
 1. Start the stack and seed it:
 
    ```bash
+   docker compose -f docker-compose.common.yml up -d --wait
    docker compose --profile app up -d --build
    ```
 

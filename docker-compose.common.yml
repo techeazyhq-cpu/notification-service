@@ -1,0 +1,107 @@
+# Copyright 2026 Vasantha Kumar
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+# @author Vasantha Kumar <vasantha.kumar@hotmail.com>
+#
+# The `common` project (ADR-043): the servers the platform depends on, PostgreSQL, Redis, Pulsar and Mailpit, on the
+# network `common`. The services are the `notification` project in docker-compose.yml and join that network. Start
+# this first and wait until it is healthy:
+#
+#   docker compose -f docker-compose.common.yml up -d --wait
+#
+# ONE AT A TIME: consent-manager's infra/common/compose.yml is also a project named `common`, with services of the same
+# names on the same network. Never run both: stop the other one first (`docker compose -p common down`, without -v,
+# keeps its data). With consent-manager's `common` running instead, use docker-compose.shared.yml (ADR-040).
+#
+# Volumes have names of their own, so they never mix with consent-manager's. `down -v` on this file deletes the database
+# and the broker's data.
+name: common
+
+x-small: &small
+  deploy:
+    resources:
+      limits: {cpus: "0.25", memory: 128m}
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: ${NS_POSTGRES_MEM:-512m}
+    environment:
+      POSTGRES_DB: notification
+      POSTGRES_USER: notification
+      POSTGRES_PASSWORD: notification
+      DB_APP_USER: ${DB_APP_USER:-notification_app}
+      DB_APP_PASSWORD: ${DB_APP_PASSWORD:-notification_app}
+    ports: ["5432:5432"]
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./scripts/postgres-init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U notification"]
+      interval: 5s
+      retries: 10
+
+  redis:
+    <<: *small
+    image: redis:7-alpine
+    ports: ["6379:6379"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      retries: 10
+
+  pulsar:
+    image: apachepulsar/pulsar:3.3.3
+    command: sh -c "bin/apply-config-from-env.py conf/standalone.conf && exec bin/pulsar standalone -nfw -nss"
+    # Heap plus direct memory stay well inside the limit, leaving room for metaspace and threads.
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: ${NS_PULSAR_MEM:-1536m}
+    environment:
+      PULSAR_MEM: ${NS_PULSAR_JVM:--Xms256m -Xmx512m -XX:MaxDirectMemorySize=256m}
+      defaultRetentionTimeInMinutes: "60"
+      defaultRetentionSizeInMB: "1024"
+    ports: ["6650:6650", "8088:8080"]
+    volumes: [pulsardata:/pulsar/data]
+    # Lets the bookie close its ledgers on `docker compose stop`; a kill mid-write can leave a ledger it cannot read.
+    stop_grace_period: 60s
+    healthcheck:
+      # Over HTTP: `pulsar-admin` would start a second JVM inside the memory limit on every check.
+      test: ["CMD-SHELL", "curl -fs http://localhost:8080/admin/v2/brokers/health || exit 1"]
+      interval: 10s
+      timeout: 10s
+      retries: 20
+      start_period: 30s
+
+  # Email catcher: SMTP on 1025, web UI on http://localhost:8025
+  mailpit:
+    <<: *small
+    image: axllent/mailpit:latest
+    ports: ["1025:1025", "8025:8025"]
+
+networks:
+  default:
+    name: common
+
+volumes:
+  pgdata:
+    name: notification-pgdata
+  pulsardata:
+    name: notification-pulsardata

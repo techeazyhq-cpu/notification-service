@@ -26,7 +26,7 @@
 #   https://app.localhost          (client-ui, was :5174)
 # dispatcher (:8082) is not fronted: it has no client- or admin-facing HTTP surface, only actuator/health for
 # operators on the internal network.
-name: notification-service
+name: notification
 
 services:
   traefik:

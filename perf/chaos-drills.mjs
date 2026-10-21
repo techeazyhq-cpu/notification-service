@@ -6,7 +6,8 @@
 // checks the promises the design makes: an accepted request is never lost, a provider outage does not fail messages,
 // a broker or database outage does not stop ingest from accepting, and everything is eventually delivered.
 //   node perf/chaos-drills.mjs [label]
-// Env: ADMIN_URL, CLIENT_URL, CATCHER_URL (http://localhost:9000), PROJECT (Compose project name, default ns-bench),
+// Env: ADMIN_URL, CLIENT_URL, CATCHER_URL (http://localhost:9000), PROJECT (the services' Compose project, default
+//      notification), INFRA_PROJECT (the project running Pulsar and PostgreSQL, default common; ADR-043),
 //      ONLY (comma-separated drill names to run, default all),
 //      DISPATCHER_URL (http://localhost:8082), ADMIN_USER/ADMIN_PASSWORD.
 import { execFileSync } from 'node:child_process';
@@ -17,7 +18,8 @@ const ADMIN = process.env.ADMIN_URL || 'http://localhost:8081'; // NOSONAR: loca
 const CLIENT = process.env.CLIENT_URL || 'http://localhost:8080'; // NOSONAR: local drill target
 const CATCHER = process.env.CATCHER_URL || 'http://localhost:9000'; // NOSONAR: local drill target
 const DISPATCHER = process.env.DISPATCHER_URL || 'http://localhost:8082'; // NOSONAR: local drill target
-const PROJECT = process.env.PROJECT || 'ns-bench';
+const PROJECT = process.env.PROJECT || 'notification';
+const INFRA_PROJECT = process.env.INFRA_PROJECT || 'common';
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 async function call(method, url, headers, body) {
@@ -31,6 +33,7 @@ function docker(...args) {
 }
 
 const container = (service) => `${PROJECT}-${service}-1`;
+const infraContainer = (service) => `${INFRA_PROJECT}-${service}-1`;
 
 const login = await call('POST', ADMIN + '/api/admin/auth/login', {}, { username: process.env.ADMIN_USER || 'admin', password: process.env.ADMIN_PASSWORD || 'admin' });
 const admin = { Authorization: 'Bearer ' + login.body.token };
@@ -113,14 +116,14 @@ await drill('provider-outage', async () => {
 });
 
 await drill('broker-down-during-ingest', async () => {
-  docker('stop', container('pulsar'));
+  docker('stop', infraContainer('pulsar'));
   const sent = [];
   for (let i = 0; i < 100; i++) {
     const r = await call('POST', CLIENT + '/v1/notifications', headers, { channel: 'SMS', recipient: nextRecipients(1)[0].recipient, templateName: 'otp-sms', variables: { code: '1' } });
     sent.push({ status: r.status, id: r.body?.requestId });
   }
   const acceptedWhileDown = sent.filter((s) => s.status === 202).length;
-  docker('start', container('pulsar'));
+  docker('start', infraContainer('pulsar'));
   const startedAt = Date.now();
   const drained = await waitEmpty(900);
   let sentCount = 0;
@@ -134,7 +137,7 @@ await drill('database-restart-during-ingest', async () => {
   let firstRejectAt = null;
   let lastRejectAt = null;
   const started = Date.now();
-  const restart = (async () => { await sleep(10000); docker('restart', container('postgres')); })();
+  const restart = (async () => { await sleep(10000); docker('restart', infraContainer('postgres')); })();
   while (Date.now() - started < 60000) {
     try {
       const r = await call('POST', CLIENT + '/v1/notifications', headers, { channel: 'SMS', recipient: nextRecipients(1)[0].recipient, templateName: 'otp-sms', variables: { code: '1' } });

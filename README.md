@@ -22,7 +22,8 @@ Requires Docker, and Node 20+ for the seed script and UI.
 Every container has a CPU and memory limit sized for an ordinary laptop, so an 8 GB machine with 2 CPUs runs the whole
 stack: it idles at about 2 GB, and the limits cap it at about 5 GB (infra only, about 2.5 GB). Give Docker Desktop at
 least that much memory. No container asks for more than one CPU. To give the services more room, or squeeze them onto a
-smaller machine, set these before `docker compose up`:
+smaller machine, set these before `docker compose up` (the `NS_PULSAR_*` and `NS_POSTGRES_MEM` ones for
+`docker-compose.common.yml`):
 
 | Variable | Default | Applies to |
 |---|---|---|
@@ -32,10 +33,18 @@ smaller machine, set these before `docker compose up`:
 | `NS_PULSAR_JVM` | `-Xms256m -Xmx512m -XX:MaxDirectMemorySize=256m` | Pulsar's heap and direct memory; keep their sum under `NS_PULSAR_MEM` |
 | `NS_POSTGRES_MEM` | `512m` | Postgres |
 
+The stack is two Compose projects, like the two Kubernetes namespaces (ADR-043): `common` runs PostgreSQL, Redis,
+Pulsar and Mailpit on a Docker network named `common`, and `notification` runs the migration job, the three services,
+both UIs and the catcher, joined to that network. Start `common` first:
+
 ```bash
-docker compose --profile app up -d --build     # postgres, redis, pulsar, mailpit, catcher, 3 services, both UIs
-node scripts/seed.mjs                          # providers, templates, demo client (prints its API key once)
+docker compose -f docker-compose.common.yml up -d --wait   # postgres, redis, pulsar, mailpit
+docker compose --profile app up -d --build                 # migration, 3 services, both UIs, catcher
+node scripts/seed.mjs                                      # providers, templates, demo client (prints its API key once)
 ```
+
+Only one `common` may exist on a machine: consent-manager's own `infra/common/compose.yml` is also a project named
+`common`. If it is running, stop it first (`docker compose -p common down`, without `-v`), or use it instead as below.
 
 | What | URL | Sign-in |
 |---|---|---|
@@ -49,21 +58,24 @@ The catcher's JSON is at `/messages`, filtered by `channel`, `to` (the recipient
 inclusive). Reads allow any origin, so an app under development can poll for its own pushes; clearing and failure
 injection don't.
 
-Stop with `docker compose --profile app down` (add `-v` to also wipe the database and Pulsar data). For UI development
+Stop the services with `docker compose --profile app down`; the database and broker keep running, so the services can
+be rebuilt and restarted on their own. Stop those with `docker compose -f docker-compose.common.yml down` (add `-v` to
+also wipe the database and Pulsar data, volumes `notification-pgdata` and `notification-pulsardata`). For UI development
 with hot reload run `npm run dev` in `admin-ui` or `client-ui` instead of the containers (stop the matching container
 first, the ports are the same).
 
-Infra only (run services from your IDE): `docker compose up -d`, then `mvn -q -DskipTests package` and
+Infra only (run services from your IDE): `docker compose -f docker-compose.common.yml up -d --wait` (and
+`docker compose up -d catcher` for the SMS catcher), then `mvn -q -DskipTests package` and
 `java -jar client-api/target/client-api-*.jar` (likewise `admin-api`, `dispatcher`). If the dispatcher runs on your host,
 seed with `SMTP_HOST=localhost CATCHER_URL=http://localhost:9000 node scripts/seed.mjs`, and start admin-api,
 client-api and the dispatcher with `PROVIDER_TRUSTED_HOSTS=localhost` so they accept those local providers.
 
 ### On servers shared with consent-manager
 
-Running standalone, as above, the stack starts its own Postgres, Redis, Pulsar and Mailpit. Next to
-[consent-manager](https://github.com/techeazyhq-cpu/consent-manager), which needs the same servers, it can use theirs
-instead: consent-manager's `common` compose project (its `infra/common/compose.yml`) runs one of each on a Docker
-network named `common`. Start that first, then:
+Running standalone, as above, `docker-compose.common.yml` provides the `common` project. Next to
+[consent-manager](https://github.com/techeazyhq-cpu/consent-manager), which needs the same servers, use theirs instead:
+consent-manager's `common` compose project (its `infra/common/compose.yml`) runs one of each on the same network,
+`common`. Start that first, leave this repository's `common` down, then:
 
 ```bash
 docker compose -f docker-compose.yml -f docker-compose.shared.yml --profile app up -d --build
@@ -73,11 +85,10 @@ docker compose -f docker-compose.yml -f docker-compose.shared.yml --profile app 
 ADMIN_URL=http://localhost:18081 node scripts/seed.mjs
 ```
 
-[docker-compose.shared.yml](docker-compose.shared.yml) makes a compose project of its own, `notification`, so the
-standalone `notification-service` project's containers and volumes are left alone. It starts only the catcher, the
-migration job, the three services and both UIs, each with a CPU and memory limit, and joins them to `common`, where
-they use database `notification`, Redis database `2` and Pulsar namespace `public/default`. Host ports move clear of
-consent-manager's:
+The `notification` project is the same in both cases: the catcher, the migration job, the three services and both UIs,
+joined to `common`, where they use database `notification` and Pulsar namespace `public/default`.
+[docker-compose.shared.yml](docker-compose.shared.yml) only switches to Redis database `2` and moves the host ports
+clear of consent-manager's:
 
 | What | Standalone | Shared |
 |---|---|---|
@@ -91,7 +102,8 @@ consent-manager's:
 | Mailpit | http://localhost:8025 | http://localhost:8025 (common's) |
 
 Stop with the same `-f` options and `--profile app down`; that never stops the shared servers. On Kubernetes the same
-split is three namespaces; see [deploy/k8s/dev/README.md](deploy/k8s/dev/README.md#shared-infrastructure). See ADR-040.
+split is the `common` and `notification` namespaces, plus `consent-manager`; see
+[deploy/k8s/dev/README.md](deploy/k8s/dev/README.md#shared-infrastructure). See ADR-040 and ADR-043.
 
 ## Try it
 
@@ -190,7 +202,7 @@ start against a missing or outdated schema. Changesets live in `db-migration/src
 
 The migration job and the three services connect as different, least-privilege database roles: `db-migrate` owns the
 schema (`notification`, full DDL), while `client-api`, `admin-api` and `dispatcher` connect as `notification_app`, which
-can only read and write rows, never alter or drop anything. `docker compose up -d` creates `notification_app`
+can only read and write rows, never alter or drop anything. Starting `common` creates `notification_app`
 automatically (`scripts/postgres-init/01-create-app-role.sh`, run once by the Postgres image on a fresh volume); against
 an existing database, an operator runs that script's SQL by hand once. See ADR-012.
 
@@ -242,9 +254,18 @@ ADR-016.
 
 ## Encrypting the datastore connections
 
-`docker compose -f docker-compose.yml -f docker-compose.encrypted.yml --profile app up -d --build` turns on TLS for
-every hop between the services and PostgreSQL, Redis and Pulsar (plaintext connections are refused) using a private CA
-generated on first start; combine it with `docker-compose.tls.yml` to also encrypt the public edge. Message template
+Start each project with its encrypted overlay to turn on TLS for every hop between the services and PostgreSQL, Redis
+and Pulsar (plaintext connections are refused), using a private CA generated on first start:
+
+```bash
+docker compose -f docker-compose.common.yml -f docker-compose.common.encrypted.yml up -d --wait
+```
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.encrypted.yml --profile app up -d --build
+```
+
+Combine it with `docker-compose.tls.yml` to also encrypt the public edge; combine it with `docker-compose.tls.yml` to also encrypt the public edge. Message template
 variables are additionally encrypted in the database (`DATA_ENCRYPTION_KEY`). See ADR-017 for what is and is not
 encrypted, including the storage-level encryption the recipient column needs in production.
 

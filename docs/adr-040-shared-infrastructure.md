@@ -1,6 +1,7 @@
 # ADR-040: Running on servers shared with consent-manager
 
-- **Status:** Accepted; the `common` and `notification` namespaces are now the layout everywhere (ADR-042)
+- **Status:** Accepted; the `common` and `notification` namespaces are now the layout everywhere (ADR-042), and the
+  Compose projects too (ADR-043)
 - **Date:** 2026-10-20
 
 ## Context
