@@ -21,6 +21,7 @@ package com.techeazy.notification.clientapi;
 import jakarta.servlet.http.HttpServletRequest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpHeaders;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Component;
@@ -50,6 +51,7 @@ class DraftAuditTrail {
     private final JdbcClient jdbc;
     private final Clock clock;
 
+    @Autowired
     DraftAuditTrail(JdbcClient jdbc) {
         this(jdbc, Clock.systemUTC());
     }
