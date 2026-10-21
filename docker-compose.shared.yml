@@ -25,19 +25,7 @@
 # management 18082, catcher 19000, admin UI 15173, client UI 15174. Mailpit is common's, on http://localhost:8025.
 name: notification
 
-# The services' images give 75% of the limit to the heap and idle at about 400 MB: 768 MB leaves headroom.
-x-app: &app
-  deploy:
-    resources:
-      limits:
-        cpus: "${NS_APP_CPUS:-1.0}"
-        memory: ${NS_APP_MEM:-768m}
-
-x-small: &small
-  deploy:
-    resources:
-      limits: {cpus: "0.25", memory: 128m}
-
+# CPU and memory limits come from docker-compose.yml.
 x-shared-env: &shared-env
   DB_URL: jdbc:postgresql://postgres:5432/notification
   REDIS_HOST: redis
@@ -57,42 +45,39 @@ services:
   mailpit: { profiles: [standalone-only] }
 
   catcher:
-    <<: *small
     ports: !override ["19000:9000"]
 
   db-migrate:
-    <<: [*app, *on-common]
+    <<: *on-common
     environment:
       DB_URL: jdbc:postgresql://postgres:5432/notification
     depends_on: !reset []
 
   client-api:
-    <<: [*app, *on-common]
+    <<: *on-common
     ports: !override ["18080:8080", "127.0.0.1:19080:9080"]
     environment: *shared-env
     depends_on: !override
       db-migrate: { condition: service_completed_successfully }
 
   admin-api:
-    <<: [*app, *on-common]
+    <<: *on-common
     ports: !override ["18081:8081", "127.0.0.1:19081:9081"]
     environment: *shared-env
     depends_on: !override
       db-migrate: { condition: service_completed_successfully }
 
   dispatcher:
-    <<: [*app, *on-common]
+    <<: *on-common
     ports: !override ["127.0.0.1:18082:8082"]
     environment: *shared-env
     depends_on: !override
       db-migrate: { condition: service_completed_successfully }
 
   admin-ui:
-    <<: *small
     ports: !override ["15173:8080"]
 
   client-ui:
-    <<: *small
     ports: !override ["15174:8080"]
 
 networks:
