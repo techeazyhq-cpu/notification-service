@@ -94,7 +94,7 @@ services:
     ports: ["8080:8080", "127.0.0.1:9080:9080"]
     environment:
       <<: *svc-env
-      # Turns on AI template drafting (ADR-041) in the client API and the client UI; unset leaves it off.
+      # Default key for AI template drafting (ADR-041); a key saved on the admin UI's AI drafting page wins (ADR-044).
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
     depends_on: &svc-deps
       db-migrate: { condition: service_completed_successfully }
@@ -113,7 +113,7 @@ services:
       ADMIN_REQUIRE_TWO_FACTOR: ${ADMIN_REQUIRE_TWO_FACTOR:-false}
       API_DOCS_ENABLED: ${ADMIN_API_DOCS_ENABLED:-true}
       ANOMALY_AGGREGATION_CRON: ${ANOMALY_AGGREGATION_CRON:-0 5 * * * *}
-      # Turns on AI template drafting (ADR-041) in the admin API and the admin UI; unset leaves it off.
+      # Default key for AI template drafting (ADR-041); a key saved on the admin UI's AI drafting page wins (ADR-044).
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
     depends_on: *svc-deps
 

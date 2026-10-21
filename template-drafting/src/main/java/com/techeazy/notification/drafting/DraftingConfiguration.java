@@ -19,19 +19,22 @@
 package com.techeazy.notification.drafting;
 
 import com.anthropic.client.okhttp.AnthropicOkHttpClient;
+import com.techeazy.notification.config.SecretsConfig;
+import com.techeazy.notification.infra.AesGcmCipher;
 import com.techeazy.notification.port.RateLimiter;
 import io.micrometer.core.instrument.MeterRegistry;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.jdbc.core.simple.JdbcClient;
 
 import java.time.Clock;
-import java.util.Optional;
 
 /**
- * Wires template drafting (ADR-041). The service always exists, so the APIs can say whether drafting is on; the
- * Claude client is only built when {@code template-drafting.api-key} is set.
+ * Wires template drafting (ADR-041). The service always exists, so the APIs can say whether drafting is on. The
+ * settings come from the console, or else the environment (ADR-044), and a Claude client is only built once they hold
+ * an API key.
  */
 @Configuration
 @EnableConfigurationProperties(DraftingProperties.class)
@@ -43,19 +46,20 @@ class DraftingConfiguration {
     }
 
     @Bean
-    TemplateDraftService templateDraftService(DraftingProperties properties, DraftUsageLedger ledger,
-                                              RateLimiter rateLimiter, MeterRegistry meters) {
-        return new TemplateDraftService(properties, claude(properties), ledger, rateLimiter, Clock.systemUTC(), meters);
+    DraftingSettingsStore draftingSettingsStore(JdbcClient jdbc, DraftingProperties properties,
+                                                @Qualifier(SecretsConfig.TEMPLATE_DRAFTING_API_KEY_CIPHER)
+                                                AesGcmCipher apiKeyCipher) {
+        return new DraftingSettingsStore(jdbc, apiKeyCipher, properties, Clock.systemUTC());
     }
 
-    private static Optional<DraftModel> claude(DraftingProperties properties) {
-        if (!properties.hasApiKey()) {
-            return Optional.empty();
-        }
-        return Optional.of(new ClaudeDraftModel(AnthropicOkHttpClient.builder()
-                .apiKey(properties.getApiKey())
+    @Bean
+    TemplateDraftService templateDraftService(DraftingProperties properties, DraftingSettingsStore settings,
+                                              DraftUsageLedger ledger, RateLimiter rateLimiter, MeterRegistry meters) {
+        DraftModels claude = new ClaudeDraftModels(apiKey -> AnthropicOkHttpClient.builder()
+                .apiKey(apiKey)
                 .timeout(properties.getTimeout())
                 .maxRetries(1)
-                .build(), properties));
+                .build(), properties.isFallbacks());
+        return new TemplateDraftService(properties, settings, claude, ledger, rateLimiter, Clock.systemUTC(), meters);
     }
 }

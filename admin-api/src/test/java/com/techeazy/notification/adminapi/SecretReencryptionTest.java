@@ -78,6 +78,10 @@ class SecretReencryptionTest {
             new AesGcmCipher(NEW_SECRETS_KEY, List.of(OLD_SECRETS_KEY), SecretsConfig.PROVIDER_SETTINGS, RANDOM));
     private final AesGcmCipher newTwoFactor = new AesGcmCipher(NEW_TWO_FACTOR_KEY, List.of(OLD_TWO_FACTOR_KEY),
             AuthConfiguration.TWO_FACTOR_SECRET, RANDOM);
+    private final AesGcmCipher oldDraftingApiKey = new AesGcmCipher(OLD_SECRETS_KEY, List.of(),
+            SecretsConfig.TEMPLATE_DRAFTING_API_KEY, RANDOM);
+    private final AesGcmCipher newDraftingApiKey = new AesGcmCipher(NEW_SECRETS_KEY, List.of(OLD_SECRETS_KEY),
+            SecretsConfig.TEMPLATE_DRAFTING_API_KEY, RANDOM);
 
     private SecretReencryption reencryption;
 
@@ -99,7 +103,8 @@ class SecretReencryptionTest {
         jdbc.sql("DELETE FROM client").update();
         jdbc.sql("DELETE FROM provider_config").update();
         jdbc.sql("DELETE FROM admin_user").update();
-        reencryption = new SecretReencryption(jdbc, newSigning, newProviders, newTwoFactor);
+        jdbc.sql("DELETE FROM template_drafting_settings").update();
+        reencryption = new SecretReencryption(jdbc, newSigning, newProviders, newTwoFactor, newDraftingApiKey);
     }
 
     @Test
@@ -107,10 +112,11 @@ class SecretReencryptionTest {
         UUID client = client(oldSigning.encryptForStorage("nss_signing"));
         UUID provider = provider(oldProviders.encryptForStorage(Map.of("host", "smtp.example.com", "password", "pw")));
         UUID admin = admin(oldTwoFactor.encrypt("JBSWY3DPEHPK3PXP"));
+        draftingApiKey(oldDraftingApiKey.encrypt("sk-ant-drafting"));
 
         SecretReencryption.Report report = reencryption.run();
 
-        assertThat(report).isEqualTo(new SecretReencryption.Report(1, 1, 1));
+        assertThat(report).isEqualTo(new SecretReencryption.Report(1, 1, 1, 1));
         String signing = jdbc.sql("SELECT signing_secret FROM client WHERE id = :id").param("id", client).query(String.class).single();
         assertThat(newSigning.needsReencryption(signing)).isFalse();
         assertThat(onlyCurrentKey(SecretsConfig.CLIENT_SIGNING_SECRET).decryptForUse(signing)).isEqualTo("nss_signing");
@@ -120,15 +126,19 @@ class SecretReencryptionTest {
         String totp = jdbc.sql("SELECT totp_secret FROM admin_user WHERE id = :id").param("id", admin).query(String.class).single();
         assertThat(new AesGcmCipher(NEW_TWO_FACTOR_KEY, List.of(), AuthConfiguration.TWO_FACTOR_SECRET, RANDOM).decrypt(totp))
                 .isEqualTo("JBSWY3DPEHPK3PXP");
+        String draftingKey = jdbc.sql("SELECT api_key FROM template_drafting_settings").query(String.class).single();
+        assertThat(new AesGcmCipher(NEW_SECRETS_KEY, List.of(), SecretsConfig.TEMPLATE_DRAFTING_API_KEY, RANDOM)
+                .decrypt(draftingKey)).isEqualTo("sk-ant-drafting");
     }
 
     @Test
     void aSecondRunFindsNothingLeftSoThePreviousKeysCanBeRemoved() {
         client(oldSigning.encryptForStorage("nss_signing"));
         admin(oldTwoFactor.encrypt("JBSWY3DPEHPK3PXP"));
+        draftingApiKey(oldDraftingApiKey.encrypt("sk-ant-drafting"));
         reencryption.run();
 
-        assertThat(reencryption.run()).isEqualTo(new SecretReencryption.Report(0, 0, 0));
+        assertThat(reencryption.run()).isEqualTo(new SecretReencryption.Report(0, 0, 0, 0));
     }
 
     @Test
@@ -171,6 +181,14 @@ class SecretReencryptionTest {
                         + "VALUES (:id, :name, '{bcrypt}x', :secret, true, 'ADMIN', now())")
                 .param("id", id).param("name", "a-" + id).param("secret", totpSecret).update();
         return id;
+    }
+
+    private static void draftingApiKey(String storedApiKey) {
+        jdbc.sql("INSERT INTO template_drafting_settings (enabled, api_key, model, effort, max_tokens, "
+                        + "monthly_token_budget, client_monthly_token_budget, requests_per_minute, updated_at, "
+                        + "updated_by) VALUES (true, :key, 'claude-opus-5-5', 'low', 8000, 1000, 100, 5, now(), "
+                        + "'alice')")
+                .param("key", storedApiKey).update();
     }
 
     private static Map<String, String> providerSettings(UUID id) {

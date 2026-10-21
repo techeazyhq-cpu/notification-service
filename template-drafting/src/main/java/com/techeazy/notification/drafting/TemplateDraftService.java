@@ -38,11 +38,13 @@ import java.util.UUID;
 import java.util.regex.Pattern;
 
 /**
- * Drafts a template from an author's brief (ADR-041). In order: drafting must be on for the caller, the brief must
- * be valid, the caller must be within its per-minute rate limit, and the platform's and (for a client) the client's
- * monthly token budgets must not be spent. The model's reply is then checked against the channel's rules; a reply
- * that breaks them is sent back once with the broken rules listed, and if the correction breaks them too no draft is
- * returned. Every call that reached the model is written to the {@link DraftUsageLedger} with its tokens.
+ * Drafts a template from an author's brief (ADR-041). The settings in effect are read for every call, so a change an
+ * administrator saves in the console applies to the next draft (ADR-044). In order: drafting must be on for the
+ * caller, the brief must be valid, the caller must be within its per-minute rate limit, and the platform's and (for a
+ * client) the client's monthly token budgets must not be spent. The model's reply is then checked against the
+ * channel's rules; a reply that breaks them is sent back once with the broken rules listed, and if the correction
+ * breaks them too no draft is returned. Every call that reached the model is written to the
+ * {@link DraftUsageLedger} with its tokens.
  *
  * <p>Nothing is saved as a template and nothing is sent: the author saves the draft through the template endpoints.
  */
@@ -58,17 +60,19 @@ public class TemplateDraftService {
     private static final Pattern VARIABLE_NAME = Pattern.compile("^[A-Za-z][A-Za-z0-9_.\\-]{0,39}$");
 
     private final DraftingProperties properties;
-    private final DraftModel model;
+    private final DraftingSettingsSource settings;
+    private final DraftModels models;
     private final DraftUsageLedger ledger;
     private final RateLimiter rateLimiter;
     private final Clock clock;
     private final MeterRegistry meters;
     private final Counter tokens;
 
-    public TemplateDraftService(DraftingProperties properties, Optional<DraftModel> model, DraftUsageLedger ledger,
-                                RateLimiter rateLimiter, Clock clock, MeterRegistry meters) {
+    public TemplateDraftService(DraftingProperties properties, DraftingSettingsSource settings, DraftModels models,
+                                DraftUsageLedger ledger, RateLimiter rateLimiter, Clock clock, MeterRegistry meters) {
         this.properties = properties;
-        this.model = model.orElse(null);
+        this.settings = settings;
+        this.models = models;
         this.ledger = ledger;
         this.rateLimiter = rateLimiter;
         this.clock = clock;
@@ -78,45 +82,57 @@ public class TemplateDraftService {
                 .register(meters);
     }
 
-    /** Whether this caller may draft at all: a model is configured and, for a client, clients have a budget. */
+    /**
+     * Whether this caller may draft at all: drafting is switched on with a key, a model can be built from the
+     * settings and, for a client, clients have a budget.
+     */
     public boolean enabledFor(DraftActor actor) {
-        return model != null && (!actor.isClient() || properties.getClientMonthlyTokenBudget() > 0);
+        return modelFor(actor, settings.current()).isPresent();
     }
 
     public DraftingStatus status(DraftActor actor) {
-        if (!enabledFor(actor)) {
-            return new DraftingStatus(false, null, 0, properties.getRequestsPerMinute());
+        DraftingSettings current = settings.current();
+        if (modelFor(actor, current).isEmpty()) {
+            return new DraftingStatus(false, null, 0, current.requestsPerMinute());
         }
-        return new DraftingStatus(true, properties.getModel(), tokensLeft(actor), properties.getRequestsPerMinute());
+        return new DraftingStatus(true, current.model(), tokensLeft(actor, current), current.requestsPerMinute());
     }
 
     public TemplateDraft draft(DraftActor actor, DraftRequest request) {
-        if (!enabledFor(actor)) {
-            throw refused(Reason.DISABLED, "Template drafting is not available");
-        }
+        DraftingSettings current = settings.current();
+        DraftModel model = modelFor(actor, current)
+                .orElseThrow(() -> refused(Reason.DISABLED, "Template drafting is not available"));
         validate(request);
         RateLimiter.Decision decision = rateLimiter.tryAcquire(actor.rateLimitKey(),
-                properties.getRequestsPerMinute() / 60.0, properties.getRequestsPerMinute());
+                current.requestsPerMinute() / 60.0, current.requestsPerMinute());
         if (!decision.allowed()) {
             long retryAfter = Math.max(1, (decision.waitMillis() + 999) / 1000);
             count(Reason.RATE_LIMITED.name());
             throw new DraftingException(Reason.RATE_LIMITED, "Too many drafts; try again in " + retryAfter + " s",
                     List.of(), retryAfter);
         }
-        if (tokensLeft(actor) <= 0) {
+        if (tokensLeft(actor, current) <= 0) {
             throw refused(Reason.BUDGET_EXHAUSTED, actor.isClient()
                     ? "This month's drafting budget is spent; it renews on the first of next month (UTC)"
-                    : "The platform's drafting budget for this month is spent; raise "
-                            + "template-drafting.monthly-token-budget or wait for next month (UTC)");
+                    : "The platform's drafting budget for this month is spent; raise the monthly budget on the "
+                            + "AI drafting settings page or wait for next month (UTC)");
         }
-        return attempt(actor, request);
+        return attempt(actor, request, model, current);
     }
 
-    private TemplateDraft attempt(DraftActor actor, DraftRequest request) {
+    private Optional<DraftModel> modelFor(DraftActor actor, DraftingSettings current) {
+        if (!current.active() || (actor.isClient() && current.clientMonthlyTokenBudget() <= 0)) {
+            return Optional.empty();
+        }
+        return models.forSettings(current);
+    }
+
+    private TemplateDraft attempt(DraftActor actor, DraftRequest request, DraftModel model,
+                                  DraftingSettings current) {
         DraftModel.Prompt prompt = new DraftModel.Prompt(DraftPrompts.SYSTEM, DraftPrompts.brief(request));
         long inputTokens = 0;
         long outputTokens = 0;
-        String servedBy = properties.getModel();
+        String servedBy = current.model();
         List<String> violations = List.of();
         for (int attempt = 1; attempt <= Math.max(1, properties.getMaxAttempts()); attempt++) {
             DraftModel.Reply reply;
@@ -190,14 +206,14 @@ public class TemplateDraftService {
         }
     }
 
-    private long tokensLeft(DraftActor actor) {
+    private long tokensLeft(DraftActor actor, DraftingSettings current) {
         Instant monthStart = YearMonth.now(clock.withZone(ZoneOffset.UTC)).atDay(1).atStartOfDay(ZoneOffset.UTC)
                 .toInstant();
-        long platformLeft = properties.getMonthlyTokenBudget() - ledger.tokensSince(monthStart);
+        long platformLeft = current.monthlyTokenBudget() - ledger.tokensSince(monthStart);
         if (!actor.isClient()) {
             return Math.max(0, platformLeft);
         }
-        long clientLeft = properties.getClientMonthlyTokenBudget() - ledger.tokensSince(actor.clientId(), monthStart);
+        long clientLeft = current.clientMonthlyTokenBudget() - ledger.tokensSince(actor.clientId(), monthStart);
         return Math.max(0, Math.min(platformLeft, clientLeft));
     }
 

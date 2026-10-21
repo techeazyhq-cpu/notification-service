@@ -51,6 +51,8 @@ class TemplateDraftServiceTest {
     private final ScriptedModel model = new ScriptedModel();
     private final InMemoryLedger ledger = new InMemoryLedger();
     private final DraftingProperties properties = new DraftingProperties();
+    private final List<DraftingSettings> settingsGivenToTheModel = new ArrayList<>();
+    private boolean switchedOn = true;
     private RateLimiter.Decision rateDecision = RateLimiter.Decision.GRANTED;
     private final RateLimiter rateLimiter = (key, rate, burst, reserve) -> rateDecision;
 
@@ -59,8 +61,40 @@ class TemplateDraftServiceTest {
     }
 
     private TemplateDraftService service(Optional<DraftModel> withModel) {
-        return new TemplateDraftService(properties, withModel, ledger, rateLimiter, Clock.fixed(NOW, ZoneOffset.UTC),
-                new SimpleMeterRegistry());
+        properties.setApiKey("sk-ant-test-key");
+        DraftingSettingsSource settings = () -> DraftingSettings.from(properties).withEnabled(switchedOn);
+        DraftModels models = current -> {
+            settingsGivenToTheModel.add(current);
+            return withModel;
+        };
+        return new TemplateDraftService(properties, settings, models, ledger, rateLimiter,
+                Clock.fixed(NOW, ZoneOffset.UTC), new SimpleMeterRegistry());
+    }
+
+    @Test
+    void theSettingsAreReadForEveryDraftSoAChangeInTheConsoleAppliesAtOnce() {
+        TemplateDraftService service = service();
+        model.replies.add(reply(null, "Hi {{firstName}}, see you at {{time}}.", 1, 1));
+        service.draft(ADMIN, SMS_BRIEF);
+
+        properties.setModel("claude-sonnet-5-5");
+        properties.setRequestsPerMinute(9);
+
+        assertThat(service.status(ADMIN).model()).isEqualTo("claude-sonnet-5-5");
+        assertThat(service.status(ADMIN).requestsPerMinute()).isEqualTo(9);
+        assertThat(settingsGivenToTheModel.getFirst().model()).isEqualTo("claude-opus-5-5");
+        assertThat(settingsGivenToTheModel.getLast().model()).isEqualTo("claude-sonnet-5-5");
+    }
+
+    @Test
+    void switchedOffInTheConsoleDraftingIsOffEvenWithAKey() {
+        switchedOn = false;
+
+        assertThat(service().status(ADMIN).enabled()).isFalse();
+        assertThatThrownBy(() -> service().draft(ADMIN, SMS_BRIEF))
+                .isInstanceOfSatisfying(DraftingException.class,
+                        e -> assertThat(e.reason()).isEqualTo(Reason.DISABLED));
+        assertThat(model.prompts).isEmpty();
     }
 
     @Test

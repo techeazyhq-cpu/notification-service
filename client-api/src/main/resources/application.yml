@@ -75,7 +75,8 @@ client-api:
   # Browser origins allowed to call the API (the client tracking UI). Comma-separated; empty disables CORS.
   cors-origins: ${CLIENT_API_CORS_ORIGINS:http://localhost:5174}
 
-# AI drafting of message templates (ADR-041). Off unless ANTHROPIC_API_KEY is set; the UI then hides it.
+# AI drafting of message templates (ADR-041). These are the defaults until an administrator saves settings on the
+# admin UI's AI drafting page (ADR-044); without a key in either place drafting is off.
 template-drafting:
   api-key: ${ANTHROPIC_API_KEY:}
   model: ${TEMPLATE_DRAFTING_MODEL:claude-opus-5-5}

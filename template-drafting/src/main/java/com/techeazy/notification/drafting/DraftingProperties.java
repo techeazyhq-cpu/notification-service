@@ -24,7 +24,8 @@ import java.time.Duration;
 
 /**
  * Template drafting settings under {@code template-drafting.*} (ADR-041). Drafting is off until an API key is set;
- * every other value has a working default.
+ * every other value has a working default. Settings an administrator saves in the console override the API key,
+ * model, effort, token ceiling, budgets and rate limit (ADR-044); the rest are operational and stay here.
  */
 @ConfigurationProperties(prefix = "template-drafting")
 public class DraftingProperties {
@@ -39,6 +40,7 @@ public class DraftingProperties {
     private long clientMonthlyTokenBudget = 200_000;
     private int requestsPerMinute = 5;
     private int maxAttempts = 2;
+    private Duration settingsCacheTtl = Duration.ofSeconds(10);
 
     /** The Anthropic API key; blank switches drafting off and the UIs hide it. */
     public String getApiKey() { return apiKey; }
@@ -81,4 +83,8 @@ public class DraftingProperties {
     /** Calls to the model per draft: the first, plus corrections when a reply breaks the channel's rules. */
     public int getMaxAttempts() { return maxAttempts; }
     public void setMaxAttempts(int maxAttempts) { this.maxAttempts = maxAttempts; }
+
+    /** How long each instance keeps the settings it read from the database before reading them again. */
+    public Duration getSettingsCacheTtl() { return settingsCacheTtl; }
+    public void setSettingsCacheTtl(Duration settingsCacheTtl) { this.settingsCacheTtl = settingsCacheTtl; }
 }

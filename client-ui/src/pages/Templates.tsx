@@ -147,11 +147,6 @@ export default function Templates() {
         Editing a template only affects requests you send afterwards: requests already accepted keep the text they were sent with.
       </p>
 
-      {drafting.data?.enabled && !readOnly && (
-        <DraftAssistant status={drafting.data} channels={editing ? [editing.channel] : channels}
-          request={(brief) => send<TemplateDraft>('POST', '/v1/templates/drafts', brief)} onDraft={applyDraft} />
-      )}
-
       <form className="card" onSubmit={save}>
         <h3>{heading(editing)}</h3>
         <div className="row">
@@ -170,10 +165,14 @@ export default function Templates() {
               {CATEGORIES.map((c) => <option key={c} value={c}>{CATEGORY_LABELS[c]}</option>)}
             </select>
           </label>
-          <label style={{ flex: 1 }}><span>Subject / title (required for EMAIL)</span>
-            <input value={form.subject ?? ''} onChange={(e) => setForm({ ...form, subject: e.target.value })} maxLength={500} disabled={readOnly} />
-          </label>
         </div>
+        {!readOnly && (
+          <DraftAssistant status={drafting.data ?? undefined} channel={form.channel} category={form.category}
+            request={(brief) => send<TemplateDraft>('POST', '/v1/templates/drafts', brief)} onDraft={applyDraft} />
+        )}
+        <label style={{ marginTop: 12 }}><span>Subject / title (required for EMAIL)</span>
+          <input value={form.subject ?? ''} onChange={(e) => setForm({ ...form, subject: e.target.value })} maxLength={500} disabled={readOnly} />
+        </label>
         <label style={{ marginTop: 12 }}>
           <span>Body: use <code>{'{{variable}}'}</code> for values you supply per recipient</span>
           <textarea value={form.body} onChange={(e) => setForm({ ...form, body: e.target.value })} required maxLength={10000} disabled={readOnly} />

@@ -277,12 +277,20 @@ database while messages are in flight) write to `docs/benchmarks`. Results and a
 
 ## AI template drafting
 
-Optional, and off unless `ANTHROPIC_API_KEY` is set on admin-api and client-api (`docker compose` passes it to those
-two only). With a key, the **Templates** pages of both UIs show **Draft with AI**: describe the message (channel SMS,
-EMAIL or WHATSAPP, category, tone, purpose and the variable names) and Claude writes a draft that is checked against
-the channel's rules (SMS segments, e-mail subject and safe HTML, WhatsApp length, only the variables asked for) and
-placed in the editor. Nothing is saved or sent until the author saves the template as usual. Only the description and
-variable names go to the model, never recipients or values.
+Optional, and off until an administrator sets it up. In the admin UI, open **AI drafting**, enter an Anthropic API
+key, switch drafting on and save. The page also sets the model, effort, token ceiling, monthly budgets and drafts per
+minute. Changes apply within 10 seconds, without a restart. The key is stored encrypted with the secrets key and never
+shown again, only its last four characters (ADR-044).
+
+With drafting on, the create and edit form on the **Templates** page of both UIs shows **Draft with AI**: pick the
+channel (SMS, EMAIL or WHATSAPP) and category in the form, choose a tone, list the variable names and describe the
+message. Claude writes a subject and body that are checked against the channel's rules (SMS segments, e-mail subject
+and safe HTML, WhatsApp length, only the variables asked for) and placed in the form. Nothing is saved or sent until
+the author saves the template as usual. Only the description and variable names go to the model, never recipients or
+values.
+
+The environment variables below are the defaults until settings are saved in the console. `ANTHROPIC_API_KEY` still
+works as the key when none is stored (`docker compose` passes it to admin-api and client-api only):
 
 ```bash
 ANTHROPIC_API_KEY=sk-ant-... docker compose --profile app up -d --build
@@ -290,12 +298,13 @@ ANTHROPIC_API_KEY=sk-ant-... docker compose --profile app up -d --build
 
 Cost is bounded by a per-caller rate limit (5 drafts a minute) and monthly token budgets for the platform (2,000,000)
 and for each client (200,000; `0` keeps drafting for administrators only), tracked in the `template_draft_usage`
-table. Every use is in the admin audit log. API: `GET /api/admin/templates/drafting`, `POST /api/admin/templates/drafts`,
-`GET /v1/templates/drafting`, `POST /v1/templates/drafts`.
+table. Every use, and every change to the settings, is in the admin audit log. API:
+`GET|PUT /api/admin/settings/template-drafting`, `GET /api/admin/templates/drafting`,
+`POST /api/admin/templates/drafts`, `GET /v1/templates/drafting`, `POST /v1/templates/drafts`.
 
 | Variable | Default |
 |---|---|
-| `ANTHROPIC_API_KEY` | unset: drafting off |
+| `ANTHROPIC_API_KEY` | unset: drafting off until a key is saved in the console |
 | `TEMPLATE_DRAFTING_MODEL` | `claude-opus-5-5` |
 | `TEMPLATE_DRAFTING_EFFORT` | `low` |
 | `TEMPLATE_DRAFTING_MAX_TOKENS` | `8000` |
@@ -303,7 +312,7 @@ table. Every use is in the admin audit log. API: `GET /api/admin/templates/draft
 | `TEMPLATE_DRAFTING_CLIENT_MONTHLY_TOKENS` | `200000` |
 | `TEMPLATE_DRAFTING_REQUESTS_PER_MINUTE` | `5` |
 
-See ADR-041 and the [client guide](docs/client-guide.md#manage-templates-through-the-api).
+See ADR-041, ADR-044 and the [client guide](docs/client-guide.md#manage-templates-through-the-api).
 
 ## Push data
 

@@ -22,6 +22,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.techeazy.notification.adminapi.auth.AuthConfiguration;
+import com.techeazy.notification.config.SecretsConfig;
 import com.techeazy.notification.infra.AesGcmCipher;
 import com.techeazy.notification.infra.ClientSigningSecrets;
 import com.techeazy.notification.infra.ProviderSecrets;
@@ -39,7 +40,8 @@ import java.util.UUID;
 
 /**
  * Rewrites the stored secrets that are still in the earlier format or under a previous key with the current key
- * (ADR-037): client signing secrets, provider settings and administrators' two-factor secrets. It runs when the admin
+ * (ADR-037): client signing secrets, provider settings, administrators' two-factor secrets and the AI drafting API key
+ * (ADR-044). It runs when the admin
  * API starts and then every hour, so after a key rotation the previous key can be removed from configuration once a
  * run reports nothing left. Each row is replaced only if it still holds what was read, so concurrent runs on several
  * instances, or an administrator's edit in between, never lose a change.
@@ -54,9 +56,9 @@ class SecretReencryption {
     private static final TypeReference<Map<String, String>> SETTINGS = new TypeReference<>() { };
 
     /** How many rows a run rewrote, per kind of secret. */
-    record Report(int signingSecrets, int providerSettings, int twoFactorSecrets) {
+    record Report(int signingSecrets, int providerSettings, int twoFactorSecrets, int draftingApiKeys) {
         int total() {
-            return signingSecrets + providerSettings + twoFactorSecrets;
+            return signingSecrets + providerSettings + twoFactorSecrets + draftingApiKeys;
         }
     }
 
@@ -64,14 +66,17 @@ class SecretReencryption {
     private final ClientSigningSecrets signingSecrets;
     private final ProviderSecrets providerSecrets;
     private final AesGcmCipher twoFactorCipher;
+    private final AesGcmCipher draftingApiKeyCipher;
     private final ObjectMapper json = new ObjectMapper();
 
     SecretReencryption(JdbcClient jdbc, ClientSigningSecrets signingSecrets, ProviderSecrets providerSecrets,
-                       @Qualifier(AuthConfiguration.TWO_FACTOR_CIPHER) AesGcmCipher twoFactorCipher) {
+                       @Qualifier(AuthConfiguration.TWO_FACTOR_CIPHER) AesGcmCipher twoFactorCipher,
+                       @Qualifier(SecretsConfig.TEMPLATE_DRAFTING_API_KEY_CIPHER) AesGcmCipher draftingApiKeyCipher) {
         this.jdbc = jdbc;
         this.signingSecrets = signingSecrets;
         this.providerSecrets = providerSecrets;
         this.twoFactorCipher = twoFactorCipher;
+        this.draftingApiKeyCipher = draftingApiKeyCipher;
     }
 
     @EventListener(ApplicationReadyEvent.class)
@@ -86,10 +91,11 @@ class SecretReencryption {
     }
 
     Report run() {
-        Report report = new Report(signingSecrets(), providerSettings(), twoFactorSecrets());
+        Report report = new Report(signingSecrets(), providerSettings(), twoFactorSecrets(), draftingApiKeys());
         if (report.total() > 0) {
             LOG.info("Re-encrypted under the current keys: {} client signing secret(s), {} provider setting(s), "
-                    + "{} two-factor secret(s)", report.signingSecrets(), report.providerSettings(), report.twoFactorSecrets());
+                    + "{} two-factor secret(s), {} drafting API key(s)", report.signingSecrets(),
+                    report.providerSettings(), report.twoFactorSecrets(), report.draftingApiKeys());
         }
         return report;
     }
@@ -121,6 +127,19 @@ class SecretReencryption {
                 rewritten += jdbc.sql("UPDATE admin_user SET totp_secret = :new WHERE id = :id AND totp_secret = :old")
                         .param("new", twoFactorCipher.encrypt(twoFactorCipher.decrypt(row.getValue())))
                         .param("id", row.getKey()).param("old", row.getValue()).update();
+            }
+        }
+        return rewritten;
+    }
+
+    private int draftingApiKeys() {
+        int rewritten = 0;
+        for (String stored : jdbc.sql("SELECT api_key FROM template_drafting_settings WHERE api_key IS NOT NULL")
+                .query(String.class).list()) {
+            if (draftingApiKeyCipher.needsReencryption(stored)) {
+                rewritten += jdbc.sql("UPDATE template_drafting_settings SET api_key = :new WHERE api_key = :old")
+                        .param("new", draftingApiKeyCipher.encrypt(draftingApiKeyCipher.decrypt(stored)))
+                        .param("old", stored).update();
             }
         }
         return rewritten;

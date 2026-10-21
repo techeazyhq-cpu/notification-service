@@ -42,8 +42,8 @@ class ClaudeDraftModelTest {
 
     private final AnthropicClient client = mock(AnthropicClient.class);
     private final MessageService messages = mock(MessageService.class);
-    private final DraftingProperties properties = new DraftingProperties();
-    private final ClaudeDraftModel model = new ClaudeDraftModel(client, properties);
+    private final DraftingSettings settings = DraftingSettings.from(new DraftingProperties());
+    private final ClaudeDraftModel model = new ClaudeDraftModel(client, settings, true);
 
     @BeforeEach
     void setUp() {
@@ -70,10 +70,22 @@ class ClaudeDraftModelTest {
                 .containsExactly(ClaudeDraftModel.FALLBACK_BETA);
         assertThat(model.request(PROMPT)._additionalBodyProperties()).containsEntry("fallbacks", JsonValue.from("default"));
 
-        properties.setFallbacks(false);
+        ClaudeDraftModel withoutFallbacks = new ClaudeDraftModel(client, settings, false);
 
-        assertThat(model.request(PROMPT)._additionalHeaders().values("anthropic-beta")).isEmpty();
-        assertThat(model.request(PROMPT)._additionalBodyProperties()).doesNotContainKey("fallbacks");
+        assertThat(withoutFallbacks.request(PROMPT)._additionalHeaders().values("anthropic-beta")).isEmpty();
+        assertThat(withoutFallbacks.request(PROMPT)._additionalBodyProperties()).doesNotContainKey("fallbacks");
+    }
+
+    @Test
+    void theRequestUsesTheModelEffortAndTokenCeilingAnAdministratorChose() {
+        DraftingSettings chosen = new DraftingSettings(true, "sk-ant-test-key", "claude-sonnet-5-5", "medium", 4000,
+                1_000_000, 100_000, 5);
+
+        MessageCreateParams request = new ClaudeDraftModel(client, chosen, true).request(PROMPT);
+
+        assertThat(request.model().asString()).isEqualTo("claude-sonnet-5-5");
+        assertThat(request.maxTokens()).isEqualTo(4000);
+        assertThat(request.outputConfig().orElseThrow().effort()).contains(OutputConfig.Effort.MEDIUM);
     }
 
     @Test

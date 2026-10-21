@@ -112,8 +112,9 @@ Open a request to see its details:
   3. Choose the **Category**. Pick **One-time password** for login and verification codes: every send from the
      template is then an OTP, unless a request says otherwise.
   4. **Create template**.
-- **Draft with AI** appears when your operator has turned AI drafting on. Pick the channel, category and tone, list
-  the placeholders the message may use (`firstName, orderId`) and describe what the message is for. The draft meets
+- **Draft with AI** appears in the template form when your operator has turned AI drafting on. Choose the channel and
+  category in the form, then pick a tone, list the placeholders the message may use (`firstName, orderId`) and
+  describe what the message is for. The draft meets
   the channel's rules (SMS length, e-mail subject, WhatsApp limits) and fills the editor. Nothing is saved until you
   review it and **Create template**. Only your description and the placeholder names are sent to the AI model, so
   leave customer names, numbers and other personal data out of it. Drafting is limited to a few drafts a minute and a
