@@ -36,7 +36,8 @@ ceiling, budgets and rate limit. Three things did not fit how the platform is ru
    platform's and each client's monthly token budget and the drafts per minute.
    `GET /api/admin/settings/template-drafting` reads them (any administrator); `PUT` changes them (role `ADMIN`, like
    other configuration). Every change is in the audit log (ADR-019), without its body.
-3. **One row, `template_drafting_settings`** (changeset `026-template-drafting-settings`), with checks that only one
+3. **One row, `template_drafting_settings`** (changesets `026-template-drafting-settings` and, for the provider and
+   base URL, `027-template-drafting-provider`; a row saved before 027 stays on Anthropic), with checks that only one
    row exists, the provider is known and `OPENAI_COMPATIBLE` has a base URL. With no row, the environment applies:
    `TEMPLATE_DRAFTING_PROVIDER` (default `ANTHROPIC`), `TEMPLATE_DRAFTING_BASE_URL`, `TEMPLATE_DRAFTING_API_KEY`
    (falling back to `ANTHROPIC_API_KEY`, so ADR-041 deployments keep working unchanged) and the other
