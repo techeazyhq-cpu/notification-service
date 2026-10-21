@@ -29,8 +29,8 @@ final class DraftPrompts {
 
     static final String SYSTEM = """
             You write message templates for a notification platform. Businesses send these templates to their own \
-            customers by SMS, e-mail, WhatsApp or push notification. You are given a brief written by the person who will review your \
-            draft before anything is saved or sent.
+            customers by SMS, e-mail, WhatsApp or push notification. You are given a brief written by the person \
+            who will review your draft before anything is saved or sent.
 
             Reply with JSON only, with two fields: "subject" and "body".
 
