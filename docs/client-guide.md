@@ -404,10 +404,29 @@ Optional fields:
 | `from` | E-mail only: a verified sender address. Your default sender is used if you leave it out |
 | `category` | `TRANSACTIONAL`, `PROMOTIONAL` or `OTP`. Defaults to the template's category, else `TRANSACTIONAL` |
 | `validitySeconds` | OTP only: 60–900, default 300 |
+| `data` | Push only: string pairs your app reads when the notification is opened. See [Send a push your app can act on](#send-a-push-your-app-can-act-on) |
 
 The answer is **`202 Accepted`**: the request is stored durably and will be delivered. It holds the `requestId`, and
 for a single send the `messageIds`. Delivery happens in the background: follow it as in
 [Follow delivery](#follow-delivery).
+
+### Send a push your app can act on
+
+A push shows its `subject` as the title and its `body` as the text. To tell your app what to open when the person
+taps it, add `data`: a few string pairs delivered with the notification, not shown to the person.
+
+```bash
+curl -X POST "$CLIENT_API/v1/notifications" -H "X-API-Key: $API_KEY" -H "Content-Type: application/json"   -d '{"channel":"PUSH","recipient":"<device token>","subject":"New request","body":"Open the app to review it","data":{"orderId":"A-1042"}}'
+```
+
+- **Where it arrives:** through Firebase Cloud Messaging, in the message's `data`, next to `messageId` (the
+  platform's id of the message). Your app reads `data.orderId` from the notification it opens.
+- **Rules:** at most 10 pairs. Keys are 1–40 letters, digits or underscores and start with a letter; values are
+  strings of up to 256 characters. `messageId`, `from`, `message_type`, `collapse_key` and `notification` are
+  reserved. A request breaking a rule is refused with `INVALID_REQUEST`, and so is `data` on any channel but `PUSH`.
+- **Keep it small and opaque:** push data passes through the device's push service and sits on the lock screen's
+  notification. Put an id there, not personal data, and let the app fetch the rest after it signs in. The platform
+  stores it encrypted, like `variables`, and erases it with them.
 
 ### Send one-time passwords
 
@@ -578,6 +597,7 @@ curl -X POST "$CLIENT_API/v1/privacy/recipient-report" -H "X-API-Key: $API_KEY" 
 | CSV upload size | 20 MB | |
 | Your own templates | 200 | |
 | OTP validity | 60–900 seconds | Default 300 |
+| Push `data` | 10 pairs; keys 40, values 256 characters | Push only |
 
 ### A minimal integration checklist
 

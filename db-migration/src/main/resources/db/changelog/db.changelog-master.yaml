@@ -62,3 +62,5 @@ databaseChangeLog:
       file: db/changelog/changes/022-traffic-hourly.sql
   - include:
       file: db/changelog/changes/023-traffic-anomaly.sql
+  - include:
+      file: db/changelog/changes/024-push-data.sql

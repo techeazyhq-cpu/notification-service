@@ -240,6 +240,13 @@ encrypted, including the storage-level encryption the recipient column needs in 
 database while messages are in flight) write to `docs/benchmarks`. Results and analysis:
 [docs/quality-attributes-analysis.md](docs/quality-attributes-analysis.md).
 
+## Push data
+
+A single `PUSH` send may carry `"data"`: up to 10 string pairs (keys 1–40 letters, digits or underscores; values up to
+256 characters) the client's app reads when the notification is tapped, such as an id to open. FCM delivers them in
+its `data` next to `messageId`, which they cannot replace; they are stored encrypted and erased with the variables.
+See ADR-038 and the [client guide](docs/client-guide.md#send-a-push-your-app-can-act-on).
+
 ## One-time passwords
 
 Send a one-time password with `"category": "OTP"` (and optionally `"validitySeconds"`, 60–900, default 300) on a

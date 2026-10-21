@@ -42,7 +42,13 @@ import java.util.UUID;
 @Component
 public class IngestPersister {
 
-    public record Recipient(String address, java.util.Map<String, String> variables) {}
+    /** {@code data} is a push's optional key-value pairs for the client's app (PUSH only); null for none. */
+    public record Recipient(String address, java.util.Map<String, String> variables, java.util.Map<String, String> data) {
+
+        public Recipient(String address, java.util.Map<String, String> variables) {
+            this(address, variables, null);
+        }
+    }
 
     private static final int FLUSH_EVERY = 500;
 
@@ -71,6 +77,7 @@ public class IngestPersister {
             m.setRecipient(r.address());
             m.setRecipientFingerprint(fingerprints.of(r.address()));
             m.setVariables(r.variables() == null ? new HashMap<>() : new HashMap<>(r.variables()));
+            m.setPushData(r.data() == null || r.data().isEmpty() ? null : new HashMap<>(r.data()));
             m.setStatus(MessageStatus.PENDING);
             m.setCategory(request.getCategory());
             m.setExpiresAt(request.getExpiresAt());

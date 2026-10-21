@@ -62,7 +62,7 @@ class MigrationServiceTest {
                     "012-message-category", "013-otp-sweep-index", "014-billing-otp-price",
                     "015-sent-usage-by-category", "016-message-event-log", "017-recipient-fingerprint-index",
                     "018-fingerprint-backfill-index", "019-signed-requests", "020-idempotency-payload-fingerprint", "021-inflight-usage-index",
-                    "022-traffic-hourly", "023-traffic-anomaly");
+                    "022-traffic-hourly", "023-traffic-anomaly", "024-push-data");
     private static final String NOT_COMPARED = "('databasechangelog','databasechangeloglock','flyway_schema_history',"
             + "'billing_plan','billing_plan_rate','billing_account','credit_ledger_entry','credit_hold','invoice','invoice_line','invoice_payment','admin_user','admin_recovery_code','admin_session','client_sender','admin_audit_event','billing_account_otp_price','message_event','api_request_nonce','traffic_hourly','traffic_anomaly')";
     private static final List<String> BILLING_TABLES =
@@ -451,6 +451,24 @@ class MigrationServiceTest {
     }
 
     @Test
+    void pushDataIsANullableColumnThatRollsBackCleanly() throws Exception {
+        String db = newDatabase();
+        MigrationService service = service(db, true);
+        service.update();
+        seed(db);
+
+        assertThat(query(db, "select is_nullable || ' ' || data_type from information_schema.columns "
+                + "where table_name = 'notification_message' and column_name = 'push_data'")).containsExactly("YES jsonb");
+        List<String> messages = query(db, "select id::text from notification_message order by id");
+
+        undoFrom(service, "024-push-data");
+
+        assertThat(query(db, "select column_name from information_schema.columns "
+                + "where table_name = 'notification_message' and column_name = 'push_data'")).isEmpty();
+        assertThat(query(db, "select id::text from notification_message order by id")).isEqualTo(messages); // messages survive
+    }
+
+    @Test
     void theFingerprintIndexesAreBuiltValidAndRollBackCleanly() throws Exception {
         String db = newDatabase();
         MigrationService service = service(db, true);
@@ -711,7 +729,7 @@ class MigrationServiceTest {
                 + "where table_schema='public' and column_name not in "
                 + "('sender_email','sender_name','erased_at','failure_kind',"
                 + "'reprocess_count','error_code','category','expires_at','recipient_fingerprint','template_name',"
-                + "'signing_secret','signing_required','payload_fingerprint') and table_name not in " + NOT_COMPARED));
+                + "'signing_secret','signing_required','payload_fingerprint','push_data') and table_name not in " + NOT_COMPARED));
         lines.addAll(query(database, "select 'idx ' || tablename || ' ' || indexdef from pg_indexes "
                 + "where schemaname='public' and indexname not in ('ix_message_sent_usage','ix_message_erase_due',"
                 + "'ix_request_erase_due','ix_request_idempotency_due','ix_message_dead_letters',"

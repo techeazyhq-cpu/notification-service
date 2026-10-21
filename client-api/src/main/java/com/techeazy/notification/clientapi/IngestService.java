@@ -243,6 +243,13 @@ public class IngestService {
                 fields.add(name);
                 fields.add(value);
             });
+            if (recipient.data() != null && !recipient.data().isEmpty()) {
+                fields.add("data");
+                new TreeMap<>(recipient.data()).forEach((name, value) -> {
+                    fields.add(name);
+                    fields.add(value);
+                });
+            }
         }
         return payloadFingerprints.of(fields);
     }
@@ -314,6 +321,7 @@ public class IngestService {
         List<String> problems = new ArrayList<>();
         for (int i = 0; i < recipients.size() && problems.size() < 10; i++) {
             String reason = RecipientValidator.check(channel, recipients.get(i).address());
+            if (reason == null) reason = PushDataValidator.check(channel, recipients.get(i).data());
             if (reason != null) problems.add("recipient #" + (i + 1) + ": " + reason);
         }
         if (!problems.isEmpty()) {

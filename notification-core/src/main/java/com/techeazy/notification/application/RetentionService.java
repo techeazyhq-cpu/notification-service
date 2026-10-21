@@ -60,7 +60,7 @@ public class RetentionService {
     private static final String ERASE_FINISHED_MESSAGES = """
             WITH erased AS (
                 UPDATE notification_message
-                SET recipient = :erased, variables = '{}'::jsonb, last_error = NULL, erased_at = :now
+                SET recipient = :erased, variables = '{}'::jsonb, push_data = NULL, last_error = NULL, erased_at = :now
                 WHERE id IN (SELECT id FROM notification_message
                              WHERE erased_at IS NULL AND status IN ('SENT','FAILED') AND updated_at < :cutoff
                              ORDER BY updated_at LIMIT :batch)
@@ -78,7 +78,7 @@ public class RetentionService {
     private static final String ERASE_RECIPIENT_MESSAGES = """
             WITH erased AS (
                 UPDATE notification_message
-                SET recipient = :erased, variables = '{}'::jsonb, last_error = NULL, erased_at = :now
+                SET recipient = :erased, variables = '{}'::jsonb, push_data = NULL, last_error = NULL, erased_at = :now
                 WHERE lower(recipient) = lower(:recipient) AND (CAST(:client AS uuid) IS NULL OR client_id = :client)
                   AND status IN ('SENT','FAILED') AND erased_at IS NULL
                 RETURNING id, client_id)

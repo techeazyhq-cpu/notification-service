@@ -84,4 +84,29 @@ class HttpJsonProviderTest {
                 .isInstanceOf(PermanentSendException.class).hasMessageContaining("HTTP 302");
         assertThat(internalHits.get()).isZero();
     }
+
+    @Test
+    void aPushesDataIsPostedNextToItsContent() throws Exception {
+        StringBuilder received = new StringBuilder();
+        HttpServer gateway = HttpServer.create(new InetSocketAddress(InetAddress.getLoopbackAddress(), 0), 0);
+        gateway.createContext("/send", exchange -> {
+            received.append(new String(exchange.getRequestBody().readAllBytes(), java.nio.charset.StandardCharsets.UTF_8));
+            exchange.sendResponseHeaders(200, -1);
+            exchange.close();
+        });
+        gateway.start();
+        try {
+            ProviderConfig config = new ProviderConfig();
+            config.setType(ProviderType.HTTP_JSON);
+            config.getSettings().put("url", "http://127.0.0.1:" + gateway.getAddress().getPort() + "/send");
+            Outbound push = new Outbound(UUID.randomUUID(), Channel.PUSH, "device-token", "New request", "Open the app",
+                    null, null, "Open the app", java.util.Map.of("cnsReqId", "req-42"));
+
+            new HttpJsonProvider(new ObjectMapper()).send(config, push);
+
+            assertThat(new ObjectMapper().readTree(received.toString()).at("/data/cnsReqId").asText()).isEqualTo("req-42");
+        } finally {
+            gateway.stop(0);
+        }
+    }
 }

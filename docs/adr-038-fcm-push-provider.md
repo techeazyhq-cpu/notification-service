@@ -17,6 +17,12 @@ addressed by a device token the client app obtains from the Firebase SDK.
    (`POST /v1/projects/{projectId}/messages:send`). The recipient is the device token; the subject becomes the
    notification title, the body its text, and the message id goes in `data.messageId`. An optional `link` setting
    is the https page a web notification opens when clicked.
+   - *Amended 2026-10-20:* a single `PUSH` send may carry its own `data`, up to 10 string pairs (keys 1–40 letters,
+     digits or underscores; values up to 256 characters; FCM's and the service's own names reserved), so the client's
+     app can open the right screen when the notification is tapped. The pairs go into FCM's `data` next to
+     `messageId`, which they can never replace. They are stored per message, encrypted like the variables
+     (`notification_message.push_data`), erased with them, and part of the idempotency fingerprint. `HTTP_JSON`
+     providers receive them as `data` in the posted JSON.
 2. **It authenticates as a Google service account, with no new dependency.**
    - Settings `projectId`, `clientEmail` and `privateKey` come from a service account key with the *Firebase Cloud
      Messaging API Admin* role. `privateKey` is the PKCS #8 PEM as the key file holds it.

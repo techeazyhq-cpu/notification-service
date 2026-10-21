@@ -188,6 +188,30 @@ class FcmProviderTest {
     }
 
     @Test
+    void thePushesOwnDataTravelsNextToTheMessageIdWhichItCannotReplace() throws Exception {
+        UUID id = UUID.randomUUID();
+        Outbound withData = new Outbound(id, Channel.PUSH, DEVICE_TOKEN, "New consent request", "Open the app", null,
+                null, "Open the app", Map.of("cnsReqId", "req-42", "messageId", "spoofed"));
+
+        provider.send(config(Map.of()), withData);
+
+        JsonNode data = JSON.readTree(sendRequests.get(0).body()).at("/message/data");
+        assertThat(data.get("cnsReqId").asText()).isEqualTo("req-42");
+        assertThat(data.get("messageId").asText()).isEqualTo(id.toString());
+        assertThat(data.size()).isEqualTo(2);
+    }
+
+    @Test
+    void withoutDataOnlyTheMessageIdIsSent() throws Exception {
+        UUID id = UUID.randomUUID();
+        provider.send(config(Map.of()), push(id));
+
+        JsonNode data = JSON.readTree(sendRequests.get(0).body()).at("/message/data");
+        assertThat(data.size()).isEqualTo(1);
+        assertThat(data.get("messageId").asText()).isEqualTo(id.toString());
+    }
+
+    @Test
     void reusesTheAccessTokenUntilAMinuteBeforeItExpires() {
         ProviderConfig config = config(Map.of());
         provider.send(config, push(UUID.randomUUID()));
