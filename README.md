@@ -32,6 +32,10 @@ node scripts/seed.mjs                          # providers, templates, demo clie
 | Mailpit (captured email) | http://localhost:8025 | none |
 | SMS / WhatsApp / Push catcher | http://localhost:9000 | none |
 
+The catcher's JSON is at `/messages`, filtered by `channel`, `to` (the recipient) and `since` (a `receivedAt`,
+inclusive). Reads allow any origin, so an app under development can poll for its own pushes; clearing and failure
+injection don't.
+
 Stop with `docker compose --profile app down` (add `-v` to also wipe the database and Pulsar data). For UI development
 with hot reload run `npm run dev` in `admin-ui` or `client-ui` instead of the containers (stop the matching container
 first, the ports are the same).
@@ -40,6 +44,41 @@ Infra only (run services from your IDE): `docker compose up -d`, then `mvn -q -D
 `java -jar client-api/target/client-api-*.jar` (likewise `admin-api`, `dispatcher`). If the dispatcher runs on your host,
 seed with `SMTP_HOST=localhost CATCHER_URL=http://localhost:9000 node scripts/seed.mjs`, and start admin-api,
 client-api and the dispatcher with `PROVIDER_TRUSTED_HOSTS=localhost` so they accept those local providers.
+
+### On servers shared with consent-manager
+
+Running standalone, as above, the stack starts its own Postgres, Redis, Pulsar and Mailpit. Next to
+[consent-manager](https://github.com/techeazyhq-cpu/consent-manager), which needs the same servers, it can use theirs
+instead: consent-manager's `common` compose project (its `infra/common/compose.yml`) runs one of each on a Docker
+network named `common`. Start that first, then:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.shared.yml --profile app up -d --build
+```
+
+```bash
+ADMIN_URL=http://localhost:18081 node scripts/seed.mjs
+```
+
+[docker-compose.shared.yml](docker-compose.shared.yml) makes a compose project of its own, `notification`, so the
+standalone `notification-service` project's containers and volumes are left alone. It starts only the catcher, the
+migration job, the three services and both UIs, each with a CPU and memory limit, and joins them to `common`, where
+they use database `notification`, Redis database `2` and Pulsar namespace `public/default`. Host ports move clear of
+consent-manager's:
+
+| What | Standalone | Shared |
+|---|---|---|
+| Client API | http://localhost:8080 | http://localhost:18080 |
+| Admin API | http://localhost:8081 | http://localhost:18081 |
+| Dispatcher health and metrics | http://localhost:8082 | http://localhost:18082 |
+| Client and admin API health and metrics | `:9080`, `:9081` | `:19080`, `:19081` |
+| SMS / WhatsApp / Push catcher | http://localhost:9000 | http://localhost:19000 |
+| Admin UI | http://localhost:5173 | http://localhost:15173 |
+| Client UI | http://localhost:5174 | http://localhost:15174 |
+| Mailpit | http://localhost:8025 | http://localhost:8025 (common's) |
+
+Stop with the same `-f` options and `--profile app down`; that never stops the shared servers. On Kubernetes the same
+split is three namespaces; see [deploy/k8s/dev/README.md](deploy/k8s/dev/README.md#shared-infrastructure). See ADR-040.
 
 ## Try it
 
@@ -272,7 +311,8 @@ PostgreSQL, Redis and Pulsar are external. Before installing:
 - install as release `notification`.
 
 The chart's `values.yaml` documents every setting. To try it locally on k3s in Docker, follow
-[deploy/k8s/dev/README.md](deploy/k8s/dev/README.md). See ADR-025.
+[deploy/k8s/dev/README.md](deploy/k8s/dev/README.md). See ADR-025. To run it in a `notification` namespace on servers
+shared with consent-manager in a `common` namespace, layer `deploy/k8s/dev/values-shared.yaml` on top (ADR-040).
 
 ### On AWS
 

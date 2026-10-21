@@ -1,0 +1,101 @@
+# Copyright 2026 Vasantha Kumar
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+# @author Vasantha Kumar <vasantha.kumar@hotmail.com>
+#
+# Shared infrastructure (ADR-040): the services run on the Postgres, Redis, Pulsar and Mailpit of the `common` compose
+# project, which consent-manager owns (its infra/common/compose.yml), instead of starting their own. Start `common`
+# first, then:
+#
+#   docker compose -f docker-compose.yml -f docker-compose.shared.yml --profile app up -d --build
+#
+# A project of its own, `notification`, so it never touches the standalone `notification-service` project's containers
+# or volumes. Host ports are moved clear of consent-manager's: client API 18080, admin API 18081, dispatcher
+# management 18082, catcher 19000, admin UI 15173, client UI 15174. Mailpit is common's, on http://localhost:8025.
+name: notification
+
+# The services' images give 75% of the limit to the heap and idle at about 400 MB: 768 MB leaves headroom.
+x-app: &app
+  deploy:
+    resources:
+      limits:
+        cpus: "${NS_APP_CPUS:-1.0}"
+        memory: ${NS_APP_MEM:-768m}
+
+x-small: &small
+  deploy:
+    resources:
+      limits: {cpus: "0.25", memory: 128m}
+
+x-shared-env: &shared-env
+  DB_URL: jdbc:postgresql://postgres:5432/notification
+  REDIS_HOST: redis
+  # consent-manager uses 0 and its sandbox 1
+  REDIS_DATABASE: "2"
+  PULSAR_URL: pulsar://pulsar:6650
+  PROVIDER_TRUSTED_HOSTS: ${PROVIDER_TRUSTED_HOSTS:-mailpit,catcher}
+
+x-on-common: &on-common
+  networks: [default, common]
+
+services:
+  # Provided by `common`: never started here.
+  postgres: { profiles: [standalone-only] }
+  redis: { profiles: [standalone-only] }
+  pulsar: { profiles: [standalone-only] }
+  mailpit: { profiles: [standalone-only] }
+
+  catcher:
+    <<: *small
+    ports: !override ["19000:9000"]
+
+  db-migrate:
+    <<: [*app, *on-common]
+    environment:
+      DB_URL: jdbc:postgresql://postgres:5432/notification
+    depends_on: !reset []
+
+  client-api:
+    <<: [*app, *on-common]
+    ports: !override ["18080:8080", "127.0.0.1:19080:9080"]
+    environment: *shared-env
+    depends_on: !override
+      db-migrate: { condition: service_completed_successfully }
+
+  admin-api:
+    <<: [*app, *on-common]
+    ports: !override ["18081:8081", "127.0.0.1:19081:9081"]
+    environment: *shared-env
+    depends_on: !override
+      db-migrate: { condition: service_completed_successfully }
+
+  dispatcher:
+    <<: [*app, *on-common]
+    ports: !override ["127.0.0.1:18082:8082"]
+    environment: *shared-env
+    depends_on: !override
+      db-migrate: { condition: service_completed_successfully }
+
+  admin-ui:
+    <<: *small
+    ports: !override ["15173:8080"]
+
+  client-ui:
+    <<: *small
+    ports: !override ["15174:8080"]
+
+networks:
+  common:
+    name: common
+    external: true

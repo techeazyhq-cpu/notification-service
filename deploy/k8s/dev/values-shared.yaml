@@ -1,0 +1,56 @@
+# Copyright 2026 Vasantha Kumar
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+# @author Vasantha Kumar <vasantha.kumar@hotmail.com>
+#
+# DEVELOPMENT ONLY: shared infrastructure (ADR-040). Install into the `notification` namespace on top of
+# values-k3s.yaml, with PostgreSQL, Redis, Pulsar and Mailpit from the `common` namespace that consent-manager's
+# `common` chart runs, and the SMS/WhatsApp/push catcher from catcher.yaml in this namespace:
+#
+#   helm install notification helm/notification-service -n notification -f k8s/dev/values-k3s.yaml -f k8s/dev/values-shared.yaml
+#
+# `common` admits traffic only from the namespaces `consent-manager` and `notification`. Egress to it is limited by port,
+# not by pod labels, so it doesn't depend on how the `common` chart labels its pods.
+config:
+  database:
+    url: jdbc:postgresql://postgres.common.svc.cluster.local:5432/notification
+  redis:
+    host: redis.common.svc.cluster.local
+    # consent-manager uses 0 and its sandbox 1
+    database: 2
+  pulsar:
+    url: pulsar://pulsar.common.svc.cluster.local:6650
+  providerTrustedHosts: mailpit.common.svc.cluster.local,catcher.notification.svc.cluster.local
+
+networkPolicy:
+  datastoreEgress:
+    - to:
+        - namespaceSelector:
+            matchLabels: {kubernetes.io/metadata.name: common}
+      ports:
+        - {protocol: TCP, port: 5432}
+        - {protocol: TCP, port: 6379}
+        - {protocol: TCP, port: 6650}
+  providerEgress:
+    trustedInternalEgress:
+      - to:
+          - namespaceSelector:
+              matchLabels: {kubernetes.io/metadata.name: common}
+        ports:
+          - {protocol: TCP, port: 1025}
+      - to:
+          - podSelector:
+              matchLabels: {app: catcher}
+        ports:
+          - {protocol: TCP, port: 9000}

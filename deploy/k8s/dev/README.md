@@ -80,6 +80,29 @@ add `--resolve api.notification.localhost:8880:127.0.0.1`). Sign in as `admin` w
 the first sign-in requires a new password and two-factor authentication (ADR-020). Add an SMS provider with the URL
 `http://catcher.datastores:9000/sms`; `catcher.datastores` is a trusted provider host in these values.
 
+## Shared infrastructure
+
+Next to consent-manager, the cluster has three namespaces instead (ADR-040): `common`, with the PostgreSQL, Redis,
+Pulsar, Keycloak and Mailpit both applications use, installed by consent-manager's `common` chart; `consent-manager`;
+and `notification`, with this chart and the SMS/WhatsApp/push catcher. `common` admits traffic only from the other
+two. Skip `datastores.yaml` and its secret and ConfigMap from step 3, install `common` from consent-manager, and then:
+
+```bash
+docker exec -i k3s-notification kubectl apply -f - < deploy/k8s/dev/catcher.yaml
+```
+
+Create `notification-secrets` as in step 3, with `DB_PASSWORD` set to the `notification_app` role's password and
+`MIGRATION_DB_PASSWORD` to the `notification` role's, as the `common` chart created them. Then install with
+[values-shared.yaml](values-shared.yaml) on top of the k3s values:
+
+```bash
+docker run --rm --network container:k3s-notification -v "$PWD/kubeconfig:/root/.kube/config:ro" -v "$PWD/deploy:/deploy" -w /deploy alpine/helm:4.3.0 install notification helm/notification-service -n notification -f k8s/dev/values-k3s.yaml -f k8s/dev/values-shared.yaml --wait --timeout 10m
+```
+
+The services reach `postgres`, `redis` and `pulsar` at `<name>.common.svc.cluster.local`, use Redis database `2`, and
+may send to `mailpit.common.svc.cluster.local:1025` and `http://catcher.notification.svc.cluster.local:9000`; their
+network policies allow those and DNS, and nothing else inside the cluster. Add providers with those addresses.
+
 ## 5. Remove it
 
 ```bash

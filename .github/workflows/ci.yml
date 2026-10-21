@@ -96,13 +96,14 @@ jobs:
         run: >-
           docker run --rm -v "$PWD/deploy:/deploy" -w /deploy alpine/helm:4.3.0
           lint helm/notification-service --strict
-      - name: Render with default, development and each cloud's values and validate against the Kubernetes schemas
+      - name: Render with default, development, shared-infrastructure and each cloud's values and validate against the Kubernetes schemas
         run: |
-          values_files=("" "k8s/dev/values-k3s.yaml")
+          values_files=("" "k8s/dev/values-k3s.yaml" "k8s/dev/values-k3s.yaml,k8s/dev/values-shared.yaml")
           for cloud in $CLOUDS; do values_files+=("helm/notification-service/values-$cloud.yaml"); done
           for values_file in "${values_files[@]}"; do
             values_arguments=()
-            if [ -n "$values_file" ]; then values_arguments=(-f "$values_file"); fi
+            IFS=, read -ra layered_files <<< "$values_file"
+            for layered_file in "${layered_files[@]}"; do values_arguments+=(-f "$layered_file"); done
             docker run --rm -v "$PWD/deploy:/deploy" -w /deploy alpine/helm:4.3.0 \
               template notification helm/notification-service "${values_arguments[@]}" > rendered.yaml
             if grep -n "from: \[\]" rendered.yaml; then
@@ -111,9 +112,9 @@ jobs:
             docker run --rm -v "$PWD:/work" ghcr.io/yannh/kubeconform:v0.8.0 \
               -strict -summary -kubernetes-version 1.33.0 /work/rendered.yaml
           done
-      - name: Validate the development datastores manifest and every cloud's Pulsar storage class
+      - name: Validate the development datastores and catcher manifests and every cloud's Pulsar storage class
         run: |
-          manifests=(/work/deploy/k8s/dev/datastores.yaml)
+          manifests=(/work/deploy/k8s/dev/datastores.yaml /work/deploy/k8s/dev/catcher.yaml)
           for cloud in $CLOUDS; do manifests+=("/work/deploy/k8s/pulsar/storage-class-$cloud.yaml"); done
           docker run --rm -v "$PWD:/work" ghcr.io/yannh/kubeconform:v0.8.0 \
             -strict -summary -kubernetes-version 1.33.0 "${manifests[@]}"
