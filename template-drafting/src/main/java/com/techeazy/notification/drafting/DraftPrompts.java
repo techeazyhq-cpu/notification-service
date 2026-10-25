@@ -18,7 +18,11 @@
 
 package com.techeazy.notification.drafting;
 
+import com.techeazy.notification.application.TemplateRenderer;
+
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
@@ -36,8 +40,10 @@ final class DraftPrompts {
 
             Placeholders
             - A placeholder is written {{name}}: two braces, the name, two braces, nothing else inside.
-            - Use only the placeholder names the brief lists. {{recipient}} is also available and holds the \
-            recipient's phone number or e-mail address; use it only when the brief asks for it.
+            - Use every placeholder the brief lists, each at least once, where it reads naturally: the business \
+            listed it because the message needs that value. Use no placeholder the brief does not list. \
+            {{recipient}} is also available and holds the recipient's phone number or e-mail address; use it only \
+            when the brief asks for it.
             - Never invent facts that a placeholder should supply: no amounts, dates, codes, names, addresses, phone \
             numbers or links. If the brief needs such a value and no placeholder exists for it, write around it.
             - Write no e-mail addresses, web addresses or phone numbers of your own, and no stand-ins to fill in by \
@@ -75,7 +81,7 @@ final class DraftPrompts {
                 Channel: %s
                 Category: %s
                 Tone: %s
-                Placeholders you may use: %s
+                Placeholders to use%s
 
                 <brief>
                 %s
@@ -84,8 +90,15 @@ final class DraftPrompts {
                 placeholders(request.variables()), request.purpose());
     }
 
-    /** Asks for a corrected draft, naming the rules the previous one broke. */
+    /**
+     * Asks for a corrected draft, naming the rules the previous one broke and the listed placeholders it left out, so
+     * the correction does not fix one and lose the other.
+     */
     static String correction(DraftRequest request, String subject, String body, List<String> violations) {
+        Set<String> used = TemplateRenderer.variables(subject, body);
+        List<String> points = new ArrayList<>(violations);
+        request.variables().stream().filter(variable -> !used.contains(variable))
+                .map(variable -> "Does not use {{" + variable + "}}, which the brief lists").forEach(points::add);
         return brief(request) + """
 
                 Your previous draft broke these rules:
@@ -98,13 +111,14 @@ final class DraftPrompts {
                 </previous_draft>
 
                 Write a corrected draft that keeps what was good and fixes every point above.
-                """.formatted(violations.stream().map(v -> "- " + v).collect(Collectors.joining("\n")),
+                """.formatted(points.stream().map(point -> "- " + point).collect(Collectors.joining("\n")),
                 subject == null ? "" : subject, body == null ? "" : body);
     }
 
     static String placeholders(List<String> variables) {
         return variables.isEmpty()
-                ? "none besides {{recipient}}"
-                : variables.stream().map(v -> "{{" + v + "}}").collect(Collectors.joining(", "));
+                ? ": none besides {{recipient}}, if needed"
+                : ", each at least once: " + variables.stream().map(v -> "{{" + v + "}}")
+                        .collect(Collectors.joining(", "));
     }
 }
