@@ -18,7 +18,8 @@
 
 import { useEffect, useState } from 'react';
 import {
-  api, DRAFTING_EFFORTS, DraftingEffort, DraftingSettings, DraftingSettingsInput, LLM_PROVIDERS, LlmProvider,
+  api, ClientDrafting, ClientDraftingInput, DRAFTING_EFFORTS, DraftingEffort, DraftingSettings, DraftingSettingsInput,
+  LLM_PROVIDERS, LlmProvider,
 } from '../api';
 import { useLoad } from '../hooks';
 
@@ -212,6 +213,96 @@ export default function AiDrafting() {
           )}
         </form>
       )}
+      {data && <ClientAccess defaultBudget={data.clientMonthlyTokenBudget} settingsVersion={data.updatedAt} />}
     </>
+  );
+}
+
+/**
+ * Each client's drafting policy (ADR-045): switch drafting off for one client, or give it its own monthly budget in
+ * place of the default, with what it has spent this month. A change applies to the client's next draft.
+ */
+function ClientAccess({ defaultBudget, settingsVersion }: { defaultBudget: number; settingsVersion?: string }) {
+  const { data, error, reload } = useLoad(() => api<ClientDrafting[]>('GET', '/settings/template-drafting/clients'),
+    [settingsVersion]);
+
+  return (
+    <div className="card">
+      <h3>Clients</h3>
+      <p className="muted">
+        Every client has drafting with the default of {defaultBudget.toLocaleString()} tokens a month unless you
+        change it here. Leave the budget empty for the default, or set a client's own; 0 or switching it off stops
+        that client drafting. Spend counts from the first of the month (UTC).
+      </p>
+      {error && <p className="error" role="alert">{error}</p>}
+      <table>
+        <thead>
+          <tr>
+            <th>Client</th><th>Drafting</th><th>Own monthly budget</th><th>In effect</th><th>Used this month</th><th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {data?.map((client) => <ClientAccessRow key={client.clientId} client={client} onSaved={reload} />)}
+          {data?.length === 0 && <tr><td colSpan={6} className="muted">No clients yet.</td></tr>}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function ClientAccessRow({ client, onSaved }: { client: ClientDrafting; onSaved: () => void }) {
+  const [enabled, setEnabled] = useState(client.draftingEnabled);
+  const [budget, setBudget] = useState(client.monthlyTokenBudget?.toString() ?? '');
+  const [rowError, setRowError] = useState('');
+
+  useEffect(() => {
+    setEnabled(client.draftingEnabled);
+    setBudget(client.monthlyTokenBudget?.toString() ?? '');
+  }, [client]);
+
+  const changed = enabled !== client.draftingEnabled || budget !== (client.monthlyTokenBudget?.toString() ?? '');
+  const usedPercent = client.effectiveMonthlyTokenBudget > 0
+    ? Math.min(100, Math.round((100 * client.tokensUsedThisMonth) / client.effectiveMonthlyTokenBudget))
+    : undefined;
+  const used = client.tokensUsedThisMonth.toLocaleString() + (usedPercent === undefined ? '' : ` (${usedPercent}%)`);
+
+  async function save() {
+    const input: ClientDraftingInput = {
+      draftingEnabled: enabled, monthlyTokenBudget: budget.trim() === '' ? undefined : Number(budget),
+    };
+    try {
+      await api<ClientDrafting>('PUT', `/settings/template-drafting/clients/${client.clientId}`, input);
+      setRowError('');
+      onSaved();
+    } catch (err) { setRowError((err as Error).message); }
+  }
+
+  return (
+    <tr>
+      <td>
+        {client.clientName} {client.clientStatus === 'DISABLED' && <span className="badge DISABLED">DISABLED</span>}
+      </td>
+      <td>
+        <label className="check">
+          <input type="checkbox" checked={enabled} onChange={(e) => setEnabled(e.target.checked)}
+            aria-label={`Drafting for ${client.clientName}`} />
+          <span>{enabled ? 'On' : 'Off'}</span>
+        </label>
+      </td>
+      <td>
+        <input type="number" min={0} value={budget} onChange={(e) => setBudget(e.target.value)} placeholder="Default"
+          aria-label={`Own monthly budget for ${client.clientName}`} style={{ width: 130 }} />
+      </td>
+      <td>
+        {client.effectiveMonthlyTokenBudget > 0
+          ? client.effectiveMonthlyTokenBudget.toLocaleString()
+          : <span className="muted">No drafting</span>}
+      </td>
+      <td>{used}</td>
+      <td>
+        <button type="button" onClick={save} disabled={!changed}>Save</button>
+        {rowError && <span className="error" role="alert"> {rowError}</span>}
+      </td>
+    </tr>
   );
 }

@@ -32,9 +32,12 @@ import java.time.ZoneOffset;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Deque;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -50,6 +53,7 @@ class TemplateDraftServiceTest {
 
     private final ScriptedModel model = new ScriptedModel();
     private final InMemoryLedger ledger = new InMemoryLedger();
+    private final InMemoryPolicies policies = new InMemoryPolicies();
     private final DraftingProperties properties = new DraftingProperties();
     private final List<DraftingSettings> settingsGivenToTheModel = new ArrayList<>();
     private boolean switchedOn = true;
@@ -67,7 +71,7 @@ class TemplateDraftServiceTest {
             settingsGivenToTheModel.add(current);
             return withModel;
         };
-        return new TemplateDraftService(properties, settings, models, ledger, rateLimiter,
+        return new TemplateDraftService(properties, settings, models, ledger, policies, rateLimiter,
                 Clock.fixed(NOW, ZoneOffset.UTC), new SimpleMeterRegistry());
     }
 
@@ -272,6 +276,60 @@ class TemplateDraftServiceTest {
     }
 
     @Test
+    void aClientSwitchedOffCannotDraftWhileOtherClientsAndAdministratorsCan() {
+        policies.saved.put(CLIENT.clientId(), new ClientDraftingPolicy(false, null));
+        model.replies.add(reply(null, "Hi {{firstName}}, at {{time}}.", 1, 1));
+
+        assertThat(service().status(CLIENT).enabled()).isFalse();
+        assertThatThrownBy(() -> service().draft(CLIENT, SMS_BRIEF))
+                .isInstanceOfSatisfying(DraftingException.class,
+                        e -> assertThat(e.reason()).isEqualTo(Reason.DISABLED));
+        assertThat(service().enabledFor(DraftActor.client(UUID.randomUUID(), "other"))).isTrue();
+        assertThat(service().draft(ADMIN, SMS_BRIEF)).isNotNull();
+    }
+
+    @Test
+    void aClientsOwnBudgetReplacesTheDefaultClientBudget() {
+        properties.setClientMonthlyTokenBudget(1000);
+        policies.saved.put(CLIENT.clientId(), new ClientDraftingPolicy(true, 5000L));
+        ledger.usages.add(usage(CLIENT.clientId(), NOW, 2000));
+
+        assertThat(service().status(CLIENT).tokensLeftThisMonth()).isEqualTo(3000);
+    }
+
+    @Test
+    void aClientWithItsOwnBudgetCanDraftWhenTheDefaultKeepsDraftingForAdministratorsOnly() {
+        properties.setClientMonthlyTokenBudget(0);
+        policies.saved.put(CLIENT.clientId(), new ClientDraftingPolicy(true, 2000L));
+
+        assertThat(service().enabledFor(CLIENT)).isTrue();
+        assertThat(service().enabledFor(DraftActor.client(UUID.randomUUID(), "other"))).isFalse();
+    }
+
+    @Test
+    void aClientBudgetOfZeroOfItsOwnSwitchesThatClientOff() {
+        policies.saved.put(CLIENT.clientId(), new ClientDraftingPolicy(true, 0L));
+
+        assertThat(service().enabledFor(CLIENT)).isFalse();
+    }
+
+    @Test
+    void theAllowancesShowEachClientsPolicyBudgetAndSpendThisMonth() {
+        properties.setClientMonthlyTokenBudget(1000);
+        UUID other = UUID.randomUUID();
+        policies.saved.put(CLIENT.clientId(), new ClientDraftingPolicy(false, 5000L));
+        ledger.usages.add(usage(CLIENT.clientId(), NOW, 700));
+        ledger.usages.add(usage(CLIENT.clientId(), Instant.parse("2026-09-30T23:59:59Z"), 400));
+
+        Map<UUID, ClientDraftingAllowance> allowances = service().allowances(List.of(CLIENT.clientId(), other));
+
+        assertThat(allowances.get(CLIENT.clientId()))
+                .isEqualTo(new ClientDraftingAllowance(new ClientDraftingPolicy(false, 5000L), 0, 700));
+        assertThat(allowances.get(other))
+                .isEqualTo(new ClientDraftingAllowance(ClientDraftingPolicy.DEFAULT, 1000, 0));
+    }
+
+    @Test
     void aPushTemplateIsDraftedWithATitle() {
         model.replies.add(reply("Your order has shipped", "Order {{orderId}} arrives in 2-3 days.", 200, 40));
 
@@ -345,6 +403,32 @@ class TemplateDraftServiceTest {
         public long tokensSince(UUID clientId, Instant since) {
             return usages.stream().filter(u -> clientId.equals(u.clientId()) && !u.occurredAt().isBefore(since))
                     .mapToLong(u -> u.inputTokens() + u.outputTokens()).sum();
+        }
+
+        @Override
+        public Map<UUID, Long> tokensByClientSince(Instant since) {
+            return usages.stream().filter(u -> u.clientId() != null && !u.occurredAt().isBefore(since))
+                    .collect(Collectors.groupingBy(Usage::clientId,
+                            Collectors.summingLong(u -> u.inputTokens() + u.outputTokens())));
+        }
+    }
+
+    private static final class InMemoryPolicies implements ClientDraftingPolicies {
+        private final Map<UUID, ClientDraftingPolicy> saved = new HashMap<>();
+
+        @Override
+        public ClientDraftingPolicy of(UUID clientId) {
+            return saved.getOrDefault(clientId, ClientDraftingPolicy.DEFAULT);
+        }
+
+        @Override
+        public Map<UUID, ClientDraftingPolicy> all() {
+            return Map.copyOf(saved);
+        }
+
+        @Override
+        public void save(UUID clientId, ClientDraftingPolicy policy, String administrator) {
+            saved.put(clientId, policy);
         }
     }
 }

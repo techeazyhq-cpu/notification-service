@@ -20,6 +20,7 @@ package com.techeazy.notification.drafting;
 
 import com.techeazy.notification.domain.Channel;
 import com.techeazy.notification.drafting.DraftUsageLedger.Outcome;
+import com.zaxxer.hikari.HikariDataSource;
 import liquibase.Contexts;
 import liquibase.LabelExpression;
 import liquibase.Liquibase;
@@ -92,6 +93,20 @@ class JdbcDraftUsageLedgerTest {
     }
 
     @Test
+    void tokensAreSummedForEachClientThatSpentAny() {
+        UUID first = UUID.randomUUID();
+        UUID second = UUID.randomUUID();
+        Instant since = Instant.parse("2026-11-01T00:00:00Z");
+        ledger.record(usage(first, since.minusSeconds(1), 900, 100));
+        ledger.record(usage(first, since, 300, 200));
+        ledger.record(usage(second, since.plusSeconds(60), 40, 10));
+        ledger.record(usage(null, since.plusSeconds(120), 70, 30));
+
+        assertThat(ledger.tokensByClientSince(since)).containsEntry(first, 500L).containsEntry(second, 50L)
+                .doesNotContainKey(null);
+    }
+
+    @Test
     void theLedgerIsAppendOnly() {
         UUID client = UUID.randomUUID();
         ledger.record(usage(client, MONTH_START, 1, 1));
@@ -100,5 +115,26 @@ class JdbcDraftUsageLedgerTest {
                 .param("c", client).update()).isInstanceOf(DataAccessException.class);
         assertThatThrownBy(() -> jdbc.sql("DELETE FROM template_draft_usage WHERE client_id = :c")
                 .param("c", client).update()).isInstanceOf(DataAccessException.class);
+    }
+
+    @Test
+    void summingPerClientGivesItsConnectionBack() {
+        try (HikariDataSource onePooledConnection = onePooledConnection()) {
+            JdbcDraftUsageLedger pooled = new JdbcDraftUsageLedger(JdbcClient.create(onePooledConnection));
+
+            for (int sum = 0; sum < 3; sum++) {
+                assertThat(pooled.tokensByClientSince(MONTH_START)).isNotNull();
+            }
+        }
+    }
+
+    private static HikariDataSource onePooledConnection() {
+        HikariDataSource dataSource = new HikariDataSource();
+        dataSource.setJdbcUrl(POSTGRES.getJdbcUrl());
+        dataSource.setUsername(POSTGRES.getUsername());
+        dataSource.setPassword(POSTGRES.getPassword());
+        dataSource.setMaximumPoolSize(1);
+        dataSource.setConnectionTimeout(1000);
+        return dataSource;
     }
 }

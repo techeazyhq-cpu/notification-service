@@ -21,6 +21,7 @@ package com.techeazy.notification.drafting;
 import com.techeazy.notification.domain.Channel;
 
 import java.time.Instant;
+import java.util.Map;
 import java.util.UUID;
 
 /**
@@ -56,4 +57,7 @@ public interface DraftUsageLedger {
 
     /** Tokens spent by one client since the given instant. */
     long tokensSince(UUID clientId, Instant since);
+
+    /** Tokens spent by each client since the given instant; a client that spent nothing is absent. */
+    Map<UUID, Long> tokensByClientSince(Instant since);
 }

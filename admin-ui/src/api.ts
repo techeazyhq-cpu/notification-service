@@ -225,6 +225,12 @@ export interface DraftingSettings extends DraftingSettingsLimits {
 export interface DraftingSettingsInput extends DraftingSettingsLimits {
   enabled: boolean; apiKey?: string; removeApiKey: boolean;
 }
+/** One client's AI drafting policy (ADR-045); monthlyTokenBudget is null when the client has the default budget. */
+export interface ClientDrafting {
+  clientId: string; clientName: string; clientStatus: Client['status']; draftingEnabled: boolean;
+  monthlyTokenBudget: number | null; effectiveMonthlyTokenBudget: number; tokensUsedThisMonth: number;
+}
+export interface ClientDraftingInput { draftingEnabled: boolean; monthlyTokenBudget?: number }
 export interface TemplateDraft {
   channel: Channel; subject?: string; body: string; variables: string[]; warnings: string[]; smsLength?: SmsLength; model: string;
 }
