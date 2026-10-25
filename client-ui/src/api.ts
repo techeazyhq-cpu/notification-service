@@ -189,6 +189,11 @@ export type DraftTone = (typeof DRAFT_TONES)[number];
 export interface DraftingStatus { enabled: boolean; model?: string; tokensLeftThisMonth: number; requestsPerMinute: number }
 export interface DraftBrief { channel: Channel; category: Category; tone: DraftTone; purpose: string; variables: string[] }
 export interface SmsLength { encoding: 'GSM-7' | 'UCS-2'; characters: number; segments: number }
+/** A ready-made template to start from (ADR-046); smsLength is present for SMS only. */
+export interface TemplateExample {
+  id: string; channel: Channel; category: Category; name: string; description: string; subject?: string; body: string;
+  variables: string[]; smsLength?: SmsLength;
+}
 export interface TemplateDraft {
   channel: Channel; subject?: string; body: string; variables: string[]; warnings: string[]; smsLength?: SmsLength; model: string;
 }

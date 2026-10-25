@@ -1,7 +1,7 @@
 # ADR-041: Optional AI drafting of message templates
 
 - **Status:** Accepted, amended by ADR-044 (any LLM provider, settings edited in the admin console, drafting in the
-  template editor) and ADR-045 (per-client switch and budget)
+  template editor), ADR-045 (per-client switch and budget) and ADR-046 (example templates)
 - **Date:** 2026-10-21
 
 ## Context
@@ -128,7 +128,7 @@ Negative / accepted:
 - Helm: pass the key from a Secret to admin-api and client-api only. Until then `config.extraEnv` can set it, but it
   then reaches the dispatcher too.
 - A per-client switch and per-client budget overrides in the admin console. Done in ADR-045.
-- A library of example templates that needs no model.
+- A library of example templates that needs no model. Done in ADR-046.
 - Show the drafting ledger (tokens per client per month) in the admin console. Done in ADR-045, as each client's
   spend this month.
 - A prompt evaluation set, so a model or prompt change can be measured before it ships.

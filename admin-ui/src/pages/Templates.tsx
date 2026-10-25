@@ -18,8 +18,9 @@
 
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { api, CATEGORIES, Category, CATEGORY_LABELS, Channel, CHANNELS, DraftBrief, DraftingStatus, Template, TemplateDraft } from '../api';
+import { api, CATEGORIES, Category, CATEGORY_LABELS, Channel, CHANNELS, DraftBrief, DraftingStatus, Template, TemplateDraft, TemplateExample } from '../api';
 import DraftAssistant from '../DraftAssistant';
+import ExamplePicker from '../ExamplePicker';
 import { useLoad } from '../hooks';
 
 const EMPTY = { name: '', channel: 'EMAIL' as Channel, subject: '', body: '', category: 'TRANSACTIONAL' as Category };
@@ -27,6 +28,7 @@ const EMPTY = { name: '', channel: 'EMAIL' as Channel, subject: '', body: '', ca
 export default function Templates() {
   const { data, error, reload } = useLoad(() => api<Template[]>('GET', '/templates'));
   const drafting = useLoad(() => api<DraftingStatus>('GET', '/templates/drafting'));
+  const examples = useLoad(() => api<TemplateExample[]>('GET', '/templates/examples'));
   const [form, setForm] = useState(EMPTY);
   const [editing, setEditing] = useState<string | null>(null);
   const [formError, setFormError] = useState('');
@@ -43,6 +45,11 @@ export default function Templates() {
   async function remove(t: Template) {
     if (!confirm(`Delete template ${t.name}?`)) return;
     try { await api('DELETE', `/templates/${t.id}`); reload(); } catch (err) { alert((err as Error).message); }
+  }
+
+  function applyExample(chosen: TemplateExample) {
+    setForm((current) => ({ ...current, subject: chosen.subject ?? '', body: chosen.body }));
+    setFormError('');
   }
 
   function applyDraft(draft: TemplateDraft, brief: DraftBrief) {
@@ -72,6 +79,8 @@ export default function Templates() {
             </select>
           </label>
         </div>
+        <ExamplePicker examples={examples.data} channel={form.channel} category={form.category}
+          hasContent={!!(form.subject.trim() || form.body.trim())} onPick={applyExample} />
         <DraftAssistant status={drafting.data ?? undefined} channel={form.channel} category={form.category}
           request={(brief) => api<TemplateDraft>('POST', '/templates/drafts', brief)} onDraft={applyDraft}
           unavailable={<>✨ Draft with AI is off. Set up the LLM on the <Link to="/settings/ai-drafting">AI drafting</Link> page to write templates from a short description.</>} />

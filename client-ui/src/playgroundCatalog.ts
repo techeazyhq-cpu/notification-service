@@ -98,6 +98,14 @@ export const CATALOG: PlaygroundEndpoint[] = [
     description: 'Your own templates plus shared read-only ones.',
   },
   {
+    id: 'template-examples', group: 'Templates', title: 'Example templates', method: 'GET', path: '/v1/templates/examples',
+    description: 'Ready-made templates to start from, for the channels you may use. No model is involved and nothing is spent.',
+    query: [
+      { name: 'channel', example: 'SMS', description: 'EMAIL, SMS, WHATSAPP or PUSH' },
+      { name: 'category', example: 'OTP', description: 'OTP, TRANSACTIONAL or PROMOTIONAL' },
+    ],
+  },
+  {
     id: 'template-preview', group: 'Templates', title: 'Preview content', method: 'POST', path: '/v1/templates/preview',
     description: 'Renders with sample values. Nothing is stored or sent.',
     body: { subject: 'Order {{orderId}}', body: 'Hi {{name}}, thanks for your order.', variables: { name: 'Ada' } },

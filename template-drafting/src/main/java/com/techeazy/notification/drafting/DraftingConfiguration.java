@@ -48,6 +48,11 @@ class DraftingConfiguration {
     }
 
     @Bean
+    TemplateExamples templateExamples() {
+        return TemplateExamples.load();
+    }
+
+    @Bean
     ClientDraftingPolicies clientDraftingPolicies(JdbcClient jdbc) {
         return new JdbcClientDraftingPolicies(jdbc, Clock.systemUTC());
     }

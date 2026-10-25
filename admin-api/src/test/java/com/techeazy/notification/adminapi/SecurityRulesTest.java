@@ -205,6 +205,12 @@ class SecurityRulesTest {
         assertThat(status(AdminRole.ADMIN, HttpMethod.POST, "/api/admin/templates/drafts")).isEqualTo(404);
     }
 
+    /** The example library spends nothing, so anyone may read it; only drafting with a model needs ADMIN (ADR-046). */
+    @Test
+    void anyAdministratorMayListTheExampleTemplates() throws Exception {
+        assertThat(status(AdminRole.VIEWER, HttpMethod.GET, "/api/admin/templates/examples")).isEqualTo(404);
+    }
+
     /** The drafting settings hold the API key and set what drafting may spend: only an admin changes them (ADR-044). */
     @Test
     void onlyAnAdminChangesTheDraftingSettingsThoughAViewerMayReadThem() throws Exception {
