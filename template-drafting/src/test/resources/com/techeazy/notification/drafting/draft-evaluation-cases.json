@@ -1,0 +1,380 @@
+[
+  {
+    "id": "sms-otp-verify-phone",
+    "channel": "SMS",
+    "category": "OTP",
+    "tone": "PROFESSIONAL",
+    "purpose": "Send the one-time code a customer needs to verify their phone number, valid for a few minutes",
+    "variables": [
+      "code",
+      "minutes"
+    ],
+    "mustMention": [
+      "{{code}}"
+    ]
+  },
+  {
+    "id": "sms-otp-confirm-payment",
+    "channel": "SMS",
+    "category": "OTP",
+    "tone": "URGENT",
+    "purpose": "Send the one-time code that confirms a card payment, and warn never to share it",
+    "variables": [
+      "code"
+    ],
+    "mustMention": [
+      "{{code}}",
+      "share"
+    ]
+  },
+  {
+    "id": "sms-order-shipped",
+    "channel": "SMS",
+    "category": "TRANSACTIONAL",
+    "tone": "FRIENDLY",
+    "purpose": "Tell the customer their order has shipped and give the tracking link",
+    "variables": [
+      "firstName",
+      "orderId",
+      "trackingUrl"
+    ],
+    "mustMention": [
+      "shipped",
+      "{{trackingUrl}}"
+    ]
+  },
+  {
+    "id": "sms-appointment-reminder",
+    "channel": "SMS",
+    "category": "TRANSACTIONAL",
+    "tone": "PROFESSIONAL",
+    "purpose": "Remind the customer of their appointment tomorrow, with the date and time",
+    "variables": [
+      "firstName",
+      "date",
+      "time"
+    ],
+    "mustMention": [
+      "appointment"
+    ]
+  },
+  {
+    "id": "sms-payment-failed",
+    "channel": "SMS",
+    "category": "TRANSACTIONAL",
+    "tone": "REASSURING",
+    "purpose": "Tell the customer their last payment did not go through and ask them to update their card",
+    "variables": [
+      "firstName",
+      "updateUrl"
+    ],
+    "mustMention": [
+      "payment"
+    ]
+  },
+  {
+    "id": "sms-promo-weekend-sale",
+    "channel": "SMS",
+    "category": "PROMOTIONAL",
+    "tone": "FRIENDLY",
+    "purpose": "Announce a weekend sale with a discount code, and let people opt out by replying STOP",
+    "variables": [
+      "discount",
+      "promoCode"
+    ],
+    "mustMention": [
+      "stop"
+    ]
+  },
+  {
+    "id": "sms-promo-new-store",
+    "channel": "SMS",
+    "category": "PROMOTIONAL",
+    "tone": "FRIENDLY",
+    "purpose": "Invite customers to the opening of a new store in their city, and let them opt out by replying STOP",
+    "variables": [
+      "city",
+      "openingDate"
+    ],
+    "mustMention": [
+      "store",
+      "stop"
+    ]
+  },
+  {
+    "id": "email-otp-verify-email",
+    "channel": "EMAIL",
+    "category": "OTP",
+    "tone": "PROFESSIONAL",
+    "purpose": "Send the one-time code a new user needs to verify their e-mail address",
+    "variables": [
+      "firstName",
+      "code"
+    ],
+    "mustMention": [
+      "{{code}}",
+      "verif"
+    ]
+  },
+  {
+    "id": "email-otp-sign-in",
+    "channel": "EMAIL",
+    "category": "OTP",
+    "tone": "FORMAL",
+    "purpose": "Send the one-time code to finish signing in from a new device, and say what to do if it was not them",
+    "variables": [
+      "code",
+      "deviceName"
+    ],
+    "mustMention": [
+      "{{code}}",
+      "sign"
+    ]
+  },
+  {
+    "id": "email-welcome",
+    "channel": "EMAIL",
+    "category": "TRANSACTIONAL",
+    "tone": "FRIENDLY",
+    "purpose": "Welcome a new customer who just created an account and link to the getting-started guide",
+    "variables": [
+      "firstName",
+      "guideUrl"
+    ],
+    "mustMention": [
+      "welcome"
+    ]
+  },
+  {
+    "id": "email-password-reset",
+    "channel": "EMAIL",
+    "category": "TRANSACTIONAL",
+    "tone": "REASSURING",
+    "purpose": "Send a link to reset the password, say it expires soon, and say to ignore it if they did not ask",
+    "variables": [
+      "firstName",
+      "resetUrl"
+    ],
+    "mustMention": [
+      "password",
+      "{{resetUrl}}"
+    ]
+  },
+  {
+    "id": "email-invoice-ready",
+    "channel": "EMAIL",
+    "category": "TRANSACTIONAL",
+    "tone": "PROFESSIONAL",
+    "purpose": "Tell the customer their monthly invoice is ready, with the amount, the due date and a link to pay",
+    "variables": [
+      "invoiceNumber",
+      "amount",
+      "dueDate",
+      "invoiceUrl"
+    ],
+    "mustMention": [
+      "invoice"
+    ]
+  },
+  {
+    "id": "email-promo-loyalty",
+    "channel": "EMAIL",
+    "category": "PROMOTIONAL",
+    "tone": "FRIENDLY",
+    "purpose": "Thank loyal customers with a discount code for their next order, with an unsubscribe link at the end",
+    "variables": [
+      "firstName",
+      "discount",
+      "promoCode",
+      "unsubscribeUrl"
+    ],
+    "mustMention": [
+      "thank"
+    ]
+  },
+  {
+    "id": "email-promo-new-collection",
+    "channel": "EMAIL",
+    "category": "PROMOTIONAL",
+    "tone": "FRIENDLY",
+    "purpose": "Announce the new autumn collection and link to the shop, with an unsubscribe link at the end",
+    "variables": [
+      "firstName",
+      "shopUrl",
+      "unsubscribeUrl"
+    ],
+    "mustMention": [
+      "collection"
+    ]
+  },
+  {
+    "id": "whatsapp-otp-verify",
+    "channel": "WHATSAPP",
+    "category": "OTP",
+    "tone": "PROFESSIONAL",
+    "purpose": "Send the one-time code to verify a WhatsApp number when the customer signs up",
+    "variables": [
+      "code"
+    ],
+    "mustMention": [
+      "{{code}}"
+    ]
+  },
+  {
+    "id": "whatsapp-otp-withdrawal",
+    "channel": "WHATSAPP",
+    "category": "OTP",
+    "tone": "URGENT",
+    "purpose": "Send the one-time code that approves a withdrawal from the customer's wallet, and warn never to share it",
+    "variables": [
+      "code",
+      "amount"
+    ],
+    "mustMention": [
+      "{{code}}",
+      "share"
+    ]
+  },
+  {
+    "id": "whatsapp-order-delivered",
+    "channel": "WHATSAPP",
+    "category": "TRANSACTIONAL",
+    "tone": "FRIENDLY",
+    "purpose": "Tell the customer their order was delivered and ask them to reply if anything is wrong",
+    "variables": [
+      "firstName",
+      "orderId"
+    ],
+    "mustMention": [
+      "delivered"
+    ]
+  },
+  {
+    "id": "whatsapp-booking-confirmed",
+    "channel": "WHATSAPP",
+    "category": "TRANSACTIONAL",
+    "tone": "PROFESSIONAL",
+    "purpose": "Confirm a table booking at the restaurant with the date, time and number of guests",
+    "variables": [
+      "firstName",
+      "date",
+      "time",
+      "guests"
+    ],
+    "mustMention": [
+      "booking"
+    ]
+  },
+  {
+    "id": "whatsapp-promo-flash-sale",
+    "channel": "WHATSAPP",
+    "category": "PROMOTIONAL",
+    "tone": "URGENT",
+    "purpose": "Announce a flash sale ending tonight with a discount, and let people opt out by replying STOP",
+    "variables": [
+      "firstName",
+      "discount"
+    ],
+    "mustMention": [
+      "sale",
+      "stop"
+    ]
+  },
+  {
+    "id": "whatsapp-promo-referral",
+    "channel": "WHATSAPP",
+    "category": "PROMOTIONAL",
+    "tone": "FRIENDLY",
+    "purpose": "Invite the customer to refer a friend and both get a reward, and let them opt out by replying STOP",
+    "variables": [
+      "firstName",
+      "reward",
+      "referralCode"
+    ],
+    "mustMention": [
+      "friend",
+      "stop"
+    ]
+  },
+  {
+    "id": "push-otp-sign-in",
+    "channel": "PUSH",
+    "category": "OTP",
+    "tone": "PROFESSIONAL",
+    "purpose": "Send the one-time code to finish signing in on the website",
+    "variables": [
+      "code"
+    ],
+    "mustMention": [
+      "{{code}}"
+    ]
+  },
+  {
+    "id": "push-order-out-for-delivery",
+    "channel": "PUSH",
+    "category": "TRANSACTIONAL",
+    "tone": "FRIENDLY",
+    "purpose": "Tell the customer their order is out for delivery today",
+    "variables": [
+      "orderId"
+    ],
+    "mustMention": [
+      "deliver"
+    ]
+  },
+  {
+    "id": "push-payment-received",
+    "channel": "PUSH",
+    "category": "TRANSACTIONAL",
+    "tone": "PROFESSIONAL",
+    "purpose": "Confirm the customer's payment was received, with the amount",
+    "variables": [
+      "amount"
+    ],
+    "mustMention": [
+      "payment"
+    ]
+  },
+  {
+    "id": "push-ride-arriving",
+    "channel": "PUSH",
+    "category": "TRANSACTIONAL",
+    "tone": "FRIENDLY",
+    "purpose": "Tell the rider their driver is arriving in a few minutes, with the car and plate",
+    "variables": [
+      "driverName",
+      "minutes",
+      "carPlate"
+    ],
+    "mustMention": [
+      "driver"
+    ]
+  },
+  {
+    "id": "push-promo-cart",
+    "channel": "PUSH",
+    "category": "PROMOTIONAL",
+    "tone": "FRIENDLY",
+    "purpose": "Remind the customer the product they left in their cart is still waiting",
+    "variables": [
+      "productName"
+    ],
+    "mustMention": [
+      "cart"
+    ]
+  },
+  {
+    "id": "push-promo-price-drop",
+    "channel": "PUSH",
+    "category": "PROMOTIONAL",
+    "tone": "URGENT",
+    "purpose": "Tell the customer the price of a product on their wishlist just dropped",
+    "variables": [
+      "productName",
+      "newPrice"
+    ],
+    "mustMention": [
+      "price"
+    ]
+  }
+]

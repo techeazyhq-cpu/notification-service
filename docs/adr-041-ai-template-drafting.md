@@ -1,7 +1,7 @@
 # ADR-041: Optional AI drafting of message templates
 
 - **Status:** Accepted, amended by ADR-044 (any LLM provider, settings edited in the admin console, drafting in the
-  template editor), ADR-045 (per-client switch and budget) and ADR-046 (example templates)
+  template editor), ADR-045 (per-client switch and budget), ADR-046 (example templates) and ADR-047 (prompt evaluation)
 - **Date:** 2026-10-21
 
 ## Context
@@ -131,4 +131,4 @@ Negative / accepted:
 - A library of example templates that needs no model. Done in ADR-046.
 - Show the drafting ledger (tokens per client per month) in the admin console. Done in ADR-045, as each client's
   spend this month.
-- A prompt evaluation set, so a model or prompt change can be measured before it ships.
+- A prompt evaluation set, so a model or prompt change can be measured before it ships. Done in ADR-047.

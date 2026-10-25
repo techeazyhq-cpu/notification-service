@@ -322,7 +322,19 @@ table. Every use, and every change to the settings, is in the admin audit log. A
 | `TEMPLATE_DRAFTING_CLIENT_MONTHLY_TOKENS` | `200000` |
 | `TEMPLATE_DRAFTING_REQUESTS_PER_MINUTE` | `5` |
 
-See ADR-041, ADR-044 and the [client guide](docs/client-guide.md#manage-templates-through-the-api).
+Before changing the model or the prompt, measure it with the prompt evaluation (ADR-047): 26 briefs across every
+channel and category, scored on the channel rules, the variables and the words each brief needs. It calls the model,
+so it never runs with the build; run it on request, for example against a local Ollama:
+
+```bash
+mvn -pl template-drafting -am test -Dsurefire.failIfNoSpecifiedTests=false -Dtest=DraftEvaluationRun -Ddrafting.evaluation.model=llama3.2:3b
+```
+
+Add `-Ddrafting.evaluation.provider=ANTHROPIC -Ddrafting.evaluation.model=claude-opus-5-5` (with
+`TEMPLATE_DRAFTING_API_KEY` set) for a hosted model. The report goes to `template-drafting/target/drafting-evaluation/`
+and the run fails below a 90% pass rate (`-Ddrafting.evaluation.min-pass-rate`).
+
+See ADR-041, ADR-044, ADR-047 and the [client guide](docs/client-guide.md#manage-templates-through-the-api).
 
 ## Push data
 
