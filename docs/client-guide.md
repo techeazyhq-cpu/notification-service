@@ -112,6 +112,10 @@ Open a request to see its details:
   3. Choose the **Category**. Pick **One-time password** for login and verification codes: every send from the
      template is then an OTP, unless a request says otherwise.
   4. **Create template**.
+- **Start from an example** appears in the template form for every channel you may use, AI drafting on or off.
+  It lists ready-made templates for the channel and category chosen in the form, such as a verification code,
+  an order shipped or a sale with an opt-out. **Use this example** fills the subject and body; change them as you
+  need, then **Create template**. Examples cost nothing and already meet the channel's rules.
 - **Draft with AI** appears in the template form when your operator has turned AI drafting on. Choose the channel and
   category in the form, then pick a tone, list the placeholders the message may use (`firstName, orderId`) and
   describe what the message is for. The draft meets
@@ -525,6 +529,7 @@ once, then expire it.
 | `PUT /v1/templates/{id}` | Changes one. The channel can't change; leaving out `category` keeps the current one |
 | `DELETE /v1/templates/{id}` | Deletes one. Requests already accepted keep their text |
 | `POST /v1/templates/preview` | Renders a `subject` and `body` with sample `variables`, and lists the placeholders still missing |
+| `GET /v1/templates/examples` | Ready-made templates to start from, optionally filtered by `channel` and `category`, for the channels you may use. Each has an `id`, `name`, `description`, `subject` (e-mail and push), `body`, `variables` and, for SMS, `smsLength`. Free, and available whether AI drafting is on or off |
 | `GET /v1/templates/drafting` | Whether AI drafting is on for you (`enabled`), the `model`, `tokensLeftThisMonth` and `requestsPerMinute` |
 | `POST /v1/templates/drafts` | Drafts a template with AI from `channel` (`SMS`, `EMAIL`, `WHATSAPP`, `PUSH`), optional `category` and `tone` (`FRIENDLY`, `PROFESSIONAL`, `FORMAL`, `REASSURING`, `URGENT`), `purpose` (10–1000 characters) and up to 15 `variables` names. Returns `subject`, `body`, `variables`, `warnings` and, for SMS, `smsLength`. Saves nothing |
 

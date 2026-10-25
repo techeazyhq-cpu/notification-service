@@ -231,6 +231,11 @@ export interface ClientDrafting {
   monthlyTokenBudget: number | null; effectiveMonthlyTokenBudget: number; tokensUsedThisMonth: number;
 }
 export interface ClientDraftingInput { draftingEnabled: boolean; monthlyTokenBudget?: number }
+/** A ready-made template to start from (ADR-046); smsLength is present for SMS only. */
+export interface TemplateExample {
+  id: string; channel: Channel; category: Category; name: string; description: string; subject?: string; body: string;
+  variables: string[]; smsLength?: SmsLength;
+}
 export interface TemplateDraft {
   channel: Channel; subject?: string; body: string; variables: string[]; warnings: string[]; smsLength?: SmsLength; model: string;
 }

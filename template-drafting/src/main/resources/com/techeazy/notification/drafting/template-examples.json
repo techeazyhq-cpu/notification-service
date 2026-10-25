@@ -1,0 +1,223 @@
+[
+  {
+    "id": "sms-otp-verification",
+    "channel": "SMS",
+    "category": "OTP",
+    "name": "Verification code",
+    "description": "A one-time code to verify a phone number or an action.",
+    "body": "{{code}} is your verification code. It expires in {{minutes}} minutes. Never share it with anyone."
+  },
+  {
+    "id": "sms-otp-sign-in",
+    "channel": "SMS",
+    "category": "OTP",
+    "name": "Sign-in code",
+    "description": "A one-time code to finish signing in.",
+    "body": "Your sign-in code is {{code}}. If you did not try to sign in, you can ignore this message."
+  },
+  {
+    "id": "sms-order-shipped",
+    "channel": "SMS",
+    "category": "TRANSACTIONAL",
+    "name": "Order shipped",
+    "description": "Tell a customer their order is on its way, with a tracking link.",
+    "body": "Hi {{firstName}}, your order {{orderId}} has shipped. Track it here: {{trackingUrl}}"
+  },
+  {
+    "id": "sms-appointment-reminder",
+    "channel": "SMS",
+    "category": "TRANSACTIONAL",
+    "name": "Appointment reminder",
+    "description": "Remind a customer of an upcoming appointment.",
+    "body": "Reminder: your appointment with {{businessName}} is on {{date}} at {{time}}. Reply C to cancel."
+  },
+  {
+    "id": "sms-payment-received",
+    "channel": "SMS",
+    "category": "TRANSACTIONAL",
+    "name": "Payment received",
+    "description": "Confirm that a payment arrived.",
+    "body": "We received your payment of {{amount}} for invoice {{invoiceNumber}}. Thank you for your business."
+  },
+  {
+    "id": "sms-promo-sale",
+    "channel": "SMS",
+    "category": "PROMOTIONAL",
+    "name": "Sale with a code",
+    "description": "Announce a sale with a discount code, with an opt-out.",
+    "body": "{{businessName}}: {{discount}} off everything until {{endDate}}. Use code {{promoCode}} at checkout. Reply STOP to opt out."
+  },
+  {
+    "id": "sms-promo-back-in-stock",
+    "channel": "SMS",
+    "category": "PROMOTIONAL",
+    "name": "Back in stock",
+    "description": "Tell a customer a product they wanted is available again, with an opt-out.",
+    "body": "Good news, {{firstName}}: {{productName}} is back in stock. Reply STOP to opt out."
+  },
+  {
+    "id": "email-otp-verification",
+    "channel": "EMAIL",
+    "category": "OTP",
+    "name": "Verification code",
+    "description": "A one-time code to verify an e-mail address or an action.",
+    "subject": "Your verification code",
+    "body": "Hi {{firstName}},\n\nYour verification code is {{code}}. It expires in {{minutes}} minutes.\n\nIf you did not ask for this code, you can ignore this e-mail. Never share the code with anyone.\n\nThe {{businessName}} team\n"
+  },
+  {
+    "id": "email-welcome",
+    "channel": "EMAIL",
+    "category": "TRANSACTIONAL",
+    "name": "Welcome",
+    "description": "Welcome a new customer after they sign up.",
+    "subject": "Welcome to {{businessName}}, {{firstName}}",
+    "body": "Hi {{firstName}},\n\nThanks for joining {{businessName}}. Your account is ready, and you can sign in at any time here: {{signInUrl}}\n\nIf you have any questions, just reply to this e-mail.\n\nThe {{businessName}} team\n"
+  },
+  {
+    "id": "email-password-reset",
+    "channel": "EMAIL",
+    "category": "TRANSACTIONAL",
+    "name": "Password reset",
+    "description": "Send a link to choose a new password.",
+    "subject": "Reset your password",
+    "body": "Hi {{firstName}},\n\nWe received a request to reset your password. Choose a new one here: {{resetUrl}}\n\nThe link expires in {{minutes}} minutes. If you did not ask to reset your password, you can ignore this e-mail and your password stays the same.\n\nThe {{businessName}} team\n"
+  },
+  {
+    "id": "email-order-confirmation",
+    "channel": "EMAIL",
+    "category": "TRANSACTIONAL",
+    "name": "Order confirmation",
+    "description": "Confirm an order with its total and delivery date.",
+    "subject": "Order {{orderId}} confirmed",
+    "body": "Hi {{firstName}},\n\nThank you for your order {{orderId}}. We have received it and will let you know when it ships.\n\nOrder total: {{orderTotal}}\nExpected delivery: {{deliveryDate}}\n\nYou can see your order at any time here: {{orderUrl}}\n\nThe {{businessName}} team\n"
+  },
+  {
+    "id": "email-invoice-ready",
+    "channel": "EMAIL",
+    "category": "TRANSACTIONAL",
+    "name": "Invoice ready",
+    "description": "Tell a customer a new invoice is ready to view and pay.",
+    "subject": "Your invoice {{invoiceNumber}} is ready",
+    "body": "Hi {{firstName}},\n\nYour invoice {{invoiceNumber}} for {{amount}} is ready. Please pay it by {{dueDate}}.\n\nView and pay the invoice here: {{invoiceUrl}}\n\nThe {{businessName}} team\n"
+  },
+  {
+    "id": "email-promo-offer",
+    "channel": "EMAIL",
+    "category": "PROMOTIONAL",
+    "name": "Offer with a code",
+    "description": "Send a discount code with an end date and an unsubscribe link.",
+    "subject": "{{discount}} off for you, {{firstName}}",
+    "body": "Hi {{firstName}},\n\nAs a thank you for being a customer, here is {{discount}} off your next order. Use code {{promoCode}} at checkout before {{endDate}}.\n\nStart shopping: {{shopUrl}}\n\nThe {{businessName}} team\n\nYou receive this e-mail because you subscribed to offers from {{businessName}}. Unsubscribe: {{unsubscribeUrl}}\n"
+  },
+  {
+    "id": "email-win-back",
+    "channel": "EMAIL",
+    "category": "PROMOTIONAL",
+    "name": "We miss you",
+    "description": "Invite back a customer who has not ordered for a while.",
+    "subject": "We miss you, {{firstName}}",
+    "body": "Hi {{firstName}},\n\nIt has been a while since your last visit, and a lot has changed at {{businessName}}. Come and see what is new: {{shopUrl}}\n\nThe {{businessName}} team\n\nYou receive this e-mail because you subscribed to news from {{businessName}}. Unsubscribe: {{unsubscribeUrl}}\n"
+  },
+  {
+    "id": "whatsapp-otp-verification",
+    "channel": "WHATSAPP",
+    "category": "OTP",
+    "name": "Verification code",
+    "description": "A one-time code to verify a phone number or an action.",
+    "body": "Your {{businessName}} verification code is {{code}}. It expires in {{minutes}} minutes. Do not share this code with anyone."
+  },
+  {
+    "id": "whatsapp-order-shipped",
+    "channel": "WHATSAPP",
+    "category": "TRANSACTIONAL",
+    "name": "Order shipped",
+    "description": "Tell a customer their order is on its way, with a tracking link.",
+    "body": "Hi {{firstName}}, your order {{orderId}} is on its way. Track your parcel at {{trackingUrl}} and reply here if you need help."
+  },
+  {
+    "id": "whatsapp-appointment-reminder",
+    "channel": "WHATSAPP",
+    "category": "TRANSACTIONAL",
+    "name": "Appointment reminder",
+    "description": "Remind a customer of an appointment and ask them to confirm.",
+    "body": "Hello {{firstName}}, this is a reminder of your appointment with {{businessName}} on {{date}} at {{time}}. Reply YES to confirm or NO to cancel."
+  },
+  {
+    "id": "whatsapp-delivery-today",
+    "channel": "WHATSAPP",
+    "category": "TRANSACTIONAL",
+    "name": "Delivery today",
+    "description": "Tell a customer their order arrives today and when.",
+    "body": "Hi {{firstName}}, your order {{orderId}} arrives today between {{timeWindow}}. Please make sure someone is available to receive it."
+  },
+  {
+    "id": "whatsapp-promo-offer",
+    "channel": "WHATSAPP",
+    "category": "PROMOTIONAL",
+    "name": "Offer with a code",
+    "description": "Send a discount code with an end date and an opt-out.",
+    "body": "Hi {{firstName}}, enjoy {{discount}} off at {{businessName}} until {{endDate}} with code {{promoCode}}. Reply STOP to stop receiving offers."
+  },
+  {
+    "id": "whatsapp-back-in-stock",
+    "channel": "WHATSAPP",
+    "category": "PROMOTIONAL",
+    "name": "Back in stock",
+    "description": "Tell a customer a product they wanted is available again, with an opt-out.",
+    "body": "Good news, {{firstName}}! {{productName}} is back in stock. Reply STOP to stop receiving offers."
+  },
+  {
+    "id": "push-otp-sign-in",
+    "channel": "PUSH",
+    "category": "OTP",
+    "name": "Sign-in code",
+    "description": "A one-time code to finish signing in.",
+    "subject": "Your sign-in code",
+    "body": "Use {{code}} to finish signing in. It expires in {{minutes}} minutes."
+  },
+  {
+    "id": "push-order-out-for-delivery",
+    "channel": "PUSH",
+    "category": "TRANSACTIONAL",
+    "name": "Out for delivery",
+    "description": "Tell a customer their order arrives today.",
+    "subject": "Your order is out for delivery",
+    "body": "Order {{orderId}} arrives today. Tap to track it."
+  },
+  {
+    "id": "push-payment-received",
+    "channel": "PUSH",
+    "category": "TRANSACTIONAL",
+    "name": "Payment received",
+    "description": "Confirm that a payment arrived.",
+    "subject": "Payment received",
+    "body": "We received your payment of {{amount}}. Thank you!"
+  },
+  {
+    "id": "push-appointment-reminder",
+    "channel": "PUSH",
+    "category": "TRANSACTIONAL",
+    "name": "Appointment reminder",
+    "description": "Remind a customer of an appointment the next day.",
+    "subject": "Your appointment is tomorrow",
+    "body": "See you at {{time}} with {{businessName}}. Tap to view or reschedule."
+  },
+  {
+    "id": "push-flash-sale",
+    "channel": "PUSH",
+    "category": "PROMOTIONAL",
+    "name": "Flash sale",
+    "description": "Announce a sale that ends today.",
+    "subject": "{{discount}} off today only",
+    "body": "{{firstName}}, the sale ends at midnight. Tap to shop now."
+  },
+  {
+    "id": "push-cart-reminder",
+    "channel": "PUSH",
+    "category": "PROMOTIONAL",
+    "name": "Cart reminder",
+    "description": "Remind a customer of what is still in their cart.",
+    "subject": "You left something behind",
+    "body": "{{productName}} is still in your cart. Tap to complete your order."
+  }
+]

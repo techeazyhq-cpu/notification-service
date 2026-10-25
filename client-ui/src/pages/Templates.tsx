@@ -17,8 +17,9 @@
  */
 
 import { useEffect, useState } from 'react';
-import { api, CATEGORIES, Category, CATEGORY_LABELS, Channel, CHANNELS, DraftBrief, DraftingStatus, Me, Preview, send, Template, TemplateDraft, TemplateInput, variablesOf } from '../api';
+import { api, CATEGORIES, Category, CATEGORY_LABELS, Channel, CHANNELS, DraftBrief, DraftingStatus, Me, Preview, send, Template, TemplateDraft, TemplateExample, TemplateInput, variablesOf } from '../api';
 import DraftAssistant from '../DraftAssistant';
+import ExamplePicker from '../ExamplePicker';
 import { useDebounced, useLoad } from '../hooks';
 
 const EMPTY: TemplateInput = { name: '', channel: 'SMS', subject: '', body: '', category: 'TRANSACTIONAL' };
@@ -82,6 +83,7 @@ export default function Templates() {
   const me = useLoad(() => api<Me>('/v1/me'));
   const { data, error, reload } = useLoad(() => api<Template[]>('/v1/templates'));
   const drafting = useLoad(() => api<DraftingStatus>('/v1/templates/drafting'));
+  const examples = useLoad(() => api<TemplateExample[]>('/v1/templates/examples'));
   const [form, setForm] = useState<TemplateInput>(EMPTY);
   const [editing, setEditing] = useState<Template | null>(null);
   const [values, setValues] = useState<Record<string, string>>({});
@@ -134,6 +136,12 @@ export default function Templates() {
     drafting.reload();
   }
 
+  function applyExample(chosen: TemplateExample) {
+    setForm((current) => ({ ...current, subject: chosen.subject ?? '', body: chosen.body }));
+    setValues({});
+    setFormError('');
+  }
+
   const example = sendExample({ name: form.name || 'my-template', channel: form.channel, variables: variablesOf(form.subject, form.body) });
 
   return (
@@ -166,6 +174,10 @@ export default function Templates() {
             </select>
           </label>
         </div>
+        {!readOnly && (
+          <ExamplePicker examples={examples.data} channel={form.channel} category={form.category}
+            hasContent={!!(form.subject?.trim() || form.body.trim())} onPick={applyExample} />
+        )}
         {!readOnly && (
           <DraftAssistant status={drafting.data ?? undefined} channel={form.channel} category={form.category}
             request={(brief) => send<TemplateDraft>('POST', '/v1/templates/drafts', brief)} onDraft={applyDraft} />
