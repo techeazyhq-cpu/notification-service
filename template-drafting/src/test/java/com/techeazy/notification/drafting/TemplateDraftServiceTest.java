@@ -272,8 +272,21 @@ class TemplateDraftServiceTest {
     }
 
     @Test
+    void aPushTemplateIsDraftedWithATitle() {
+        model.replies.add(reply("Your order has shipped", "Order {{orderId}} arrives in 2-3 days.", 200, 40));
+
+        TemplateDraft draft = service().draft(ADMIN, new DraftRequest(Channel.PUSH, MessageCategory.TRANSACTIONAL,
+                DraftTone.FRIENDLY, "Tell the customer their order has shipped", List.of("orderId")));
+
+        assertThat(draft.subject()).isEqualTo("Your order has shipped");
+        assertThat(draft.body()).isEqualTo("Order {{orderId}} arrives in 2-3 days.");
+        assertThat(model.prompts.getFirst().user()).contains("Channel: PUSH");
+        assertThat(ledger.usages).singleElement()
+                .satisfies(usage -> assertThat(usage.channel()).isEqualTo(Channel.PUSH));
+    }
+
+    @Test
     void invalidBriefsAreRefusedBeforeAnythingElse() {
-        assertInvalid(new DraftRequest(Channel.PUSH, null, null, "Tell users about the sale", List.of()));
         assertInvalid(new DraftRequest(null, null, null, "Tell users about the sale", List.of()));
         assertInvalid(new DraftRequest(Channel.SMS, null, null, "short", List.of()));
         assertInvalid(new DraftRequest(Channel.SMS, null, null, "x".repeat(1001), List.of()));

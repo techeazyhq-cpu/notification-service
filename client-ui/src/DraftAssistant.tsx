@@ -17,7 +17,7 @@
  */
 
 import { ReactNode, useState } from 'react';
-import { Category, Channel, DRAFT_CHANNELS, DRAFT_TONES, DraftBrief, DraftingStatus, DraftTone, TemplateDraft } from './api';
+import { Category, Channel, DRAFT_TONES, DraftBrief, DraftingStatus, DraftTone, TemplateDraft } from './api';
 import { parseVariables, smsSummary } from './draftLogic';
 
 const TONE_LABELS: Record<DraftTone, string> = {
@@ -49,7 +49,7 @@ export default function DraftAssistant({ status, channel, category, request, onD
   const [draft, setDraft] = useState<TemplateDraft | null>(null);
 
   if (!status?.enabled) return unavailable ? <div className="draft-panel muted">{unavailable}</div> : null;
-  const draftable = (DRAFT_CHANNELS as readonly Channel[]).includes(channel);
+  const heading = channel === 'PUSH' ? 'title' : 'subject';
 
   async function generate() {
     if (purpose.trim().length < PURPOSE_MIN_LENGTH) {
@@ -74,11 +74,10 @@ export default function DraftAssistant({ status, channel, category, request, onD
   return (
     <div className="draft-panel">
       <div className="spread">
-        <span><b>✨ Draft with AI</b> <span className="muted">writes the subject and body below for you</span></span>
+        <span><b>✨ Draft with AI</b> <span className="muted">writes the {heading} and body below for you</span></span>
         <button type="button" onClick={() => setOpen(!open)} aria-expanded={open}>{open ? 'Hide' : 'Describe the message'}</button>
       </div>
-      {open && !draftable && <p className="muted">AI drafting covers SMS, EMAIL and WHATSAPP templates. Pick one of those channels above.</p>}
-      {open && draftable && (
+      {open && (
         <>
           <p className="muted">
             Drafting a {channel} template with {status.model}. Only this description and the variable names are sent, so leave out
@@ -106,7 +105,7 @@ export default function DraftAssistant({ status, channel, category, request, onD
           </div>
           {draft && (
             <div className="notice" style={{ marginTop: 12 }}>
-              <b>Draft placed in the subject and body below.</b> Review and edit it, then save the template.
+              <b>Draft placed in the {heading} and body below.</b> Review and edit it, then save the template.
               {draft.smsLength && <div>SMS length: {smsSummary(draft.smsLength)}.</div>}
               {draft.warnings.length > 0 && <ul>{draft.warnings.map((w) => <li key={w}>{w}</li>)}</ul>}
             </div>

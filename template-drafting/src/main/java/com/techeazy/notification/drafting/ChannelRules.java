@@ -40,13 +40,20 @@ import java.util.regex.Pattern;
  */
 public final class ChannelRules {
 
-    /** The channels a template can be drafted for; push notifications carry a title and data, not a template text. */
-    public static final Set<Channel> SUPPORTED = EnumSet.of(Channel.SMS, Channel.EMAIL, Channel.WHATSAPP);
+    /** The channels a template can be drafted for: all of them, a push notification as its title and text. */
+    public static final Set<Channel> SUPPORTED = EnumSet.of(Channel.SMS, Channel.EMAIL, Channel.WHATSAPP,
+            Channel.PUSH);
     public static final int SMS_MAX_SEGMENTS = 3;
     public static final int EMAIL_SUBJECT_MAX_LENGTH = 150;
     public static final int EMAIL_BODY_MAX_LENGTH = 10_000;
     /** The body limit of a WhatsApp Business message template, so a draft can also be submitted for approval. */
     public static final int WHATSAPP_BODY_MAX_LENGTH = 1024;
+    /** Longer push titles are cut off on most lock screens. */
+    public static final int PUSH_TITLE_MAX_LENGTH = 65;
+    /** What an expanded push notification shows on most devices. */
+    public static final int PUSH_BODY_MAX_LENGTH = 240;
+    /** What a collapsed push notification often shows; beyond it the text may be cut off. */
+    public static final int PUSH_BODY_COLLAPSED_LENGTH = 120;
     static final int ASSUMED_VALUE_LENGTH = 12;
 
     private static final String GSM_BASIC = "@£$¥èéùìòÇ\nØø\rÅåΔ_ΦΓΛΩΠΨΣΘΞÆæßÉ !\"#¤%&'()*+,-./0123456789:;<=>?"
@@ -58,6 +65,15 @@ public final class ChannelRules {
             "(?i)<\\s*(script|style|iframe|object|embed|form|input|link|meta|base)\\b|\\son[a-z]+\\s*=|javascript:");
     private static final Pattern STARTS_WITH_PLACEHOLDER = Pattern.compile("^\\s*\\{\\{");
     private static final Pattern ENDS_WITH_PLACEHOLDER = Pattern.compile("}}[\\s.!?]*$");
+    private static final Pattern LINK_TARGET =
+            Pattern.compile("(?i)\\bhref\\s*=\\s*(?:\"([^\"]*)\"|'([^']*)'|([^\\s>]+))");
+    private static final Pattern ONLY_A_PLACEHOLDER = Pattern.compile("^\\s*\\{\\{\\s*[\\w.\\-]+\\s*}}\\s*$");
+    private static final Pattern EMAIL_ADDRESS = Pattern.compile("[\\w.+-]+@[\\w-]+(?:\\.[\\w-]+)+");
+    private static final Pattern WEB_ADDRESS = Pattern.compile("(?i)\\b(?:https?://|www\\.)[^\\s<>\"']+");
+    /** Seven or more digits, however they are grouped: a phone number, account or order number, or a date. */
+    private static final Pattern LONG_NUMBER = Pattern.compile("\\+?\\d(?:[\\s().-]*\\d){6,}");
+    private static final Pattern BRACKETED_STAND_IN = Pattern.compile("\\[[^\\[\\]\\n]{1,60}]");
+    private static final int MAX_EXAMPLES = 3;
 
     /**
      * How long an SMS is.
@@ -95,11 +111,14 @@ public final class ChannelRules {
             return new Check(violations, warnings, null);
         }
         checkPlaceholders(subject, body, allowedVariables, violations, warnings);
+        checkLinkTargets(body, violations);
+        checkInventedDetails(subject, body, violations);
         SmsLength smsLength = null;
         switch (channel) {
             case SMS -> smsLength = checkSms(subject, body, violations, warnings);
             case EMAIL -> checkEmail(subject, body, violations);
             case WHATSAPP -> checkWhatsApp(subject, body, violations, warnings);
+            case PUSH -> checkPush(subject, body, violations, warnings);
             default -> throw new IllegalStateException("Unsupported channel " + channel);
         }
         return new Check(List.copyOf(violations), List.copyOf(warnings), smsLength);
@@ -135,6 +154,56 @@ public final class ChannelRules {
         }
     }
 
+    /** A link may only lead where a placeholder says, so the model cannot send customers to an address it made up. */
+    private static void checkLinkTargets(String body, List<String> violations) {
+        Matcher link = LINK_TARGET.matcher(body);
+        List<String> invented = new ArrayList<>();
+        while (link.find()) {
+            String target = link.group(1) != null ? link.group(1) : link.group(2) != null ? link.group(2)
+                    : link.group(3);
+            if (!ONLY_A_PLACEHOLDER.matcher(target).matches()) {
+                invented.add(target.strip());
+            }
+        }
+        if (!invented.isEmpty()) {
+            violations.add("A link must point to a placeholder, such as href=\"{{trackingUrl}}\", not: "
+                    + examples(invented));
+        }
+    }
+
+    /**
+     * Contact details and values a placeholder should supply, which the model may only have made up: e-mail addresses,
+     * web addresses, phone and other long numbers, and stand-ins such as "[Your Company Name]" left to fill in by
+     * hand. Placeholders and HTML tags are removed first, so neither {@code {{supportEmail}}} nor a link's target,
+     * which {@link #checkLinkTargets} judges, counts.
+     */
+    private static void checkInventedDetails(String subject, String body, List<String> violations) {
+        String text = HTML_TAG.matcher(PLACEHOLDER.matcher((subject == null ? "" : subject) + "\n" + body)
+                .replaceAll(" ")).replaceAll(" ");
+        reportFound(EMAIL_ADDRESS, text, "Contains an e-mail address the brief did not give; use a placeholder or "
+                + "leave it out: ", violations);
+        reportFound(WEB_ADDRESS, text, "Contains a link the brief did not give; use a placeholder: ", violations);
+        reportFound(LONG_NUMBER, text, "Contains a phone number or other number a placeholder should supply: ",
+                violations);
+        reportFound(BRACKETED_STAND_IN, text, "Contains a stand-in to fill in by hand; use a placeholder or write "
+                + "around it: ", violations);
+    }
+
+    private static void reportFound(Pattern pattern, String text, String violation, List<String> violations) {
+        Matcher found = pattern.matcher(text);
+        List<String> matches = new ArrayList<>();
+        while (found.find()) {
+            matches.add(found.group().strip());
+        }
+        if (!matches.isEmpty()) {
+            violations.add(violation + examples(matches));
+        }
+    }
+
+    private static String examples(List<String> found) {
+        return String.join(", ", found.stream().distinct().limit(MAX_EXAMPLES).toList());
+    }
+
     private static SmsLength checkSms(String subject, String body, List<String> violations, List<String> warnings) {
         noSubject(subject, "SMS", violations);
         noMarkup(body, "SMS", violations);
@@ -152,19 +221,7 @@ public final class ChannelRules {
     }
 
     private static void checkEmail(String subject, String body, List<String> violations) {
-        if (subject == null || subject.isBlank()) {
-            violations.add("An e-mail needs a subject");
-        } else {
-            if (subject.length() > EMAIL_SUBJECT_MAX_LENGTH) {
-                violations.add("The subject is longer than " + EMAIL_SUBJECT_MAX_LENGTH + " characters");
-            }
-            if (subject.contains("\n") || subject.contains("\r")) {
-                violations.add("The subject must be a single line");
-            }
-            if (HTML_TAG.matcher(subject).find()) {
-                violations.add("The subject must be plain text");
-            }
-        }
+        checkHeading(subject, "An e-mail needs a subject", "subject", EMAIL_SUBJECT_MAX_LENGTH, violations);
         if (body.length() > EMAIL_BODY_MAX_LENGTH) {
             violations.add("The body is longer than " + EMAIL_BODY_MAX_LENGTH + " characters");
         }
@@ -181,6 +238,36 @@ public final class ChannelRules {
         }
         if (STARTS_WITH_PLACEHOLDER.matcher(body).find() || ENDS_WITH_PLACEHOLDER.matcher(body).find()) {
             warnings.add("Starts or ends with a placeholder, which WhatsApp does not approve in message templates");
+        }
+    }
+
+    /** A push notification shows the template's subject as its title and its body as the text, both plain. */
+    private static void checkPush(String subject, String body, List<String> violations, List<String> warnings) {
+        checkHeading(subject, "A push notification needs a title", "title", PUSH_TITLE_MAX_LENGTH, violations);
+        noMarkup(body, "Push", violations);
+        if (body.length() > PUSH_BODY_MAX_LENGTH) {
+            violations.add("The text is longer than " + PUSH_BODY_MAX_LENGTH + " characters");
+        } else if (body.length() > PUSH_BODY_COLLAPSED_LENGTH) {
+            warnings.add("Longer than " + PUSH_BODY_COLLAPSED_LENGTH + " characters, so it may be cut off until "
+                    + "the notification is expanded");
+        }
+    }
+
+    /** The e-mail subject or push title: present, short, on one line and plain text. */
+    private static void checkHeading(String heading, String missing, String name, int maxLength,
+                                     List<String> violations) {
+        if (heading == null || heading.isBlank()) {
+            violations.add(missing);
+            return;
+        }
+        if (heading.length() > maxLength) {
+            violations.add("The " + name + " is longer than " + maxLength + " characters");
+        }
+        if (heading.contains("\n") || heading.contains("\r")) {
+            violations.add("The " + name + " must be a single line");
+        }
+        if (HTML_TAG.matcher(heading).find()) {
+            violations.add("The " + name + " must be plain text");
         }
     }
 

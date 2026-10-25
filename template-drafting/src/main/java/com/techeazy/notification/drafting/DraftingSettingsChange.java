@@ -21,12 +21,15 @@ package com.techeazy.notification.drafting;
 /**
  * What an administrator saves on the AI drafting settings page (ADR-044).
  *
- * @param apiKey       a new Anthropic API key, or null to keep the one in effect; never part of {@link #toString()}
+ * @param provider     the LLM provider that writes drafts
+ * @param baseUrl      where the provider is reached; blank for its own endpoint
+ * @param apiKey       a new API key, or null to keep the one in effect; never part of {@link #toString()}
  * @param removeApiKey true to delete the stored key, so the environment's key, if any, applies again
  */
-public record DraftingSettingsChange(boolean enabled, String apiKey, boolean removeApiKey, String model,
-                                     String effort, long maxTokens, long monthlyTokenBudget,
-                                     long clientMonthlyTokenBudget, int requestsPerMinute) {
+public record DraftingSettingsChange(boolean enabled, LlmProvider provider, String baseUrl, String apiKey,
+                                     boolean removeApiKey, String model, String effort, long maxTokens,
+                                     long monthlyTokenBudget, long clientMonthlyTokenBudget,
+                                     int requestsPerMinute) {
 
     public boolean replacesApiKey() {
         return apiKey != null && !apiKey.isBlank();
@@ -34,7 +37,8 @@ public record DraftingSettingsChange(boolean enabled, String apiKey, boolean rem
 
     @Override
     public String toString() {
-        return "DraftingSettingsChange[enabled=" + enabled + ", apiKey=" + DraftingSettings.hintOf(apiKey)
+        return "DraftingSettingsChange[enabled=" + enabled + ", provider=" + provider + ", baseUrl=" + baseUrl
+                + ", apiKey=" + DraftingSettings.hintOf(apiKey)
                 + ", removeApiKey=" + removeApiKey + ", model=" + model + ", effort=" + effort + ", maxTokens="
                 + maxTokens + ", monthlyTokenBudget=" + monthlyTokenBudget + ", clientMonthlyTokenBudget="
                 + clientMonthlyTokenBudget + ", requestsPerMinute=" + requestsPerMinute + "]";

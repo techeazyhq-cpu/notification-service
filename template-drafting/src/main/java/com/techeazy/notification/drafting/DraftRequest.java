@@ -27,7 +27,7 @@ import java.util.List;
  * What the author wants a template for. Only this description goes to the model: never recipients, never variable
  * values, never existing templates or messages (ADR-041).
  *
- * @param channel   the channel the template is for; SMS, EMAIL or WHATSAPP
+ * @param channel   the channel the template is for; SMS, EMAIL, WHATSAPP or PUSH
  * @param category  what the messages are for; absent means {@link MessageCategory#TRANSACTIONAL}
  * @param tone      the voice of the draft; absent means {@link DraftTone#PROFESSIONAL}
  * @param purpose   the author's description of the message, in their own words

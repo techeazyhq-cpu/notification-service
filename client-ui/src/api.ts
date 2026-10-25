@@ -183,8 +183,7 @@ export interface SenderAddress {
   createdAt: string; verifiedAt?: string; verificationSentAt?: string;
 }
 
-/** AI template drafting (ADR-041): only SMS, e-mail and WhatsApp templates can be drafted. */
-export const DRAFT_CHANNELS = ['SMS', 'EMAIL', 'WHATSAPP'] as const satisfies readonly Channel[];
+/** AI template drafting (ADR-041, ADR-044): every channel can be drafted, a push as its title and text. */
 export const DRAFT_TONES = ['FRIENDLY', 'PROFESSIONAL', 'FORMAL', 'REASSURING', 'URGENT'] as const;
 export type DraftTone = (typeof DRAFT_TONES)[number];
 export interface DraftingStatus { enabled: boolean; model?: string; tokensLeftThisMonth: number; requestsPerMinute: number }

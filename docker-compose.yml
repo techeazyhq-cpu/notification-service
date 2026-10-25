@@ -58,12 +58,22 @@ x-svc-env: &svc-env
   SECRETS_ENCRYPTION_KEY: ${SECRETS_ENCRYPTION_KEY:-development-only-change-me}
   # Encrypts message template variables (names, one-time codes) at rest; the same value on every service.
   DATA_ENCRYPTION_KEY: ${DATA_ENCRYPTION_KEY:-development-only-change-me}
-  PROVIDER_TRUSTED_HOSTS: ${PROVIDER_TRUSTED_HOSTS:-mailpit,catcher}
+  # host.docker.internal is the developer's machine, where a local Ollama for AI drafting runs (ADR-044).
+  PROVIDER_TRUSTED_HOSTS: ${PROVIDER_TRUSTED_HOSTS:-mailpit,catcher,host.docker.internal}
   LOG_FORMAT: ${LOG_FORMAT:-}
   TRACING_SAMPLING_PROBABILITY: ${TRACING_SAMPLING_PROBABILITY:-1.0}
   # Without this, a service refuses to start with the default DB_PASSWORD/ADMIN_PASSWORD/keys above
   # (see notification-core's InsecureDefaults and ADR-013).
   SPRING_PROFILES_ACTIVE: local
+
+# AI template drafting defaults (ADR-041), for admin-api and client-api only. Settings saved on the admin UI's AI
+# drafting page win (ADR-044). Any provider: ANTHROPIC, OPENAI, GEMINI, DEEPSEEK, OLLAMA or OPENAI_COMPATIBLE.
+x-drafting-env: &drafting-env
+  TEMPLATE_DRAFTING_PROVIDER: ${TEMPLATE_DRAFTING_PROVIDER:-ANTHROPIC}
+  TEMPLATE_DRAFTING_BASE_URL: ${TEMPLATE_DRAFTING_BASE_URL:-}
+  TEMPLATE_DRAFTING_API_KEY: ${TEMPLATE_DRAFTING_API_KEY:-}
+  TEMPLATE_DRAFTING_MODEL: ${TEMPLATE_DRAFTING_MODEL:-claude-opus-5-5}
+  ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
 
 services:
   # SMS / WhatsApp / Push catcher: web UI on http://localhost:9000
@@ -92,10 +102,9 @@ services:
     profiles: [app]
     build: { context: ., args: { MODULE: client-api } }
     ports: ["8080:8080", "127.0.0.1:9080:9080"]
+    extra_hosts: &host-machine ["host.docker.internal:host-gateway"]
     environment:
-      <<: *svc-env
-      # Default key for AI template drafting (ADR-041); a key saved on the admin UI's AI drafting page wins (ADR-044).
-      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      <<: [*svc-env, *drafting-env]
     depends_on: &svc-deps
       db-migrate: { condition: service_completed_successfully }
 
@@ -104,8 +113,9 @@ services:
     profiles: [app]
     build: { context: ., args: { MODULE: admin-api } }
     ports: ["8081:8081", "127.0.0.1:9081:9081"]
+    extra_hosts: *host-machine
     environment:
-      <<: *svc-env
+      <<: [*svc-env, *drafting-env]
       ADMIN_USERNAME: admin
       ADMIN_PASSWORD: admin
       ADMIN_TWO_FACTOR_KEY: ${ADMIN_TWO_FACTOR_KEY:-development-only-change-me}
@@ -113,8 +123,6 @@ services:
       ADMIN_REQUIRE_TWO_FACTOR: ${ADMIN_REQUIRE_TWO_FACTOR:-false}
       API_DOCS_ENABLED: ${ADMIN_API_DOCS_ENABLED:-true}
       ANOMALY_AGGREGATION_CRON: ${ANOMALY_AGGREGATION_CRON:-0 5 * * * *}
-      # Default key for AI template drafting (ADR-041); a key saved on the admin UI's AI drafting page wins (ADR-044).
-      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
     depends_on: *svc-deps
 
   dispatcher:

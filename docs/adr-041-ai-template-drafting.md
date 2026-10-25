@@ -1,6 +1,7 @@
 # ADR-041: Optional AI drafting of message templates
 
-- **Status:** Accepted, amended by ADR-044 (settings edited in the admin console, drafting in the template editor)
+- **Status:** Accepted, amended by ADR-044 (any LLM provider, settings edited in the admin console, drafting in the
+  template editor)
 - **Date:** 2026-10-21
 
 ## Context

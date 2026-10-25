@@ -88,7 +88,11 @@ admin:
 # AI drafting of message templates (ADR-041). These are the defaults until an administrator saves settings on the
 # admin UI's AI drafting page (ADR-044); without a key in either place drafting is off.
 template-drafting:
-  api-key: ${ANTHROPIC_API_KEY:}
+  # ANTHROPIC, OPENAI, GEMINI, DEEPSEEK, OLLAMA or OPENAI_COMPATIBLE; the base URL is optional except for the last.
+  provider: ${TEMPLATE_DRAFTING_PROVIDER:ANTHROPIC}
+  base-url: ${TEMPLATE_DRAFTING_BASE_URL:}
+  # Not needed for a local Ollama. ANTHROPIC_API_KEY is still read, for deployments that set only it.
+  api-key: ${TEMPLATE_DRAFTING_API_KEY:${ANTHROPIC_API_KEY:}}
   model: ${TEMPLATE_DRAFTING_MODEL:claude-opus-5-5}
   effort: ${TEMPLATE_DRAFTING_EFFORT:low}
   max-tokens: ${TEMPLATE_DRAFTING_MAX_TOKENS:8000}
