@@ -50,6 +50,7 @@ import org.springframework.web.servlet.config.annotation.EnableWebMvc;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -212,6 +213,17 @@ class SecurityRulesTest {
         assertThat(status(AdminRole.VIEWER, HttpMethod.PUT, settings)).isEqualTo(403);
         assertThat(status(AdminRole.OPERATOR, HttpMethod.PUT, settings)).isEqualTo(403);
         assertThat(status(AdminRole.ADMIN, HttpMethod.PUT, settings)).isEqualTo(404);
+    }
+
+    /** A client's drafting policy sets what that client may spend: only an admin changes it (ADR-045). */
+    @Test
+    void onlyAnAdminChangesAClientsDraftingPolicyThoughAViewerMayReadIt() throws Exception {
+        String clients = "/api/admin/settings/template-drafting/clients";
+        String oneClient = clients + "/" + UUID.randomUUID();
+        assertThat(status(AdminRole.VIEWER, HttpMethod.GET, clients)).isEqualTo(404);
+        assertThat(status(AdminRole.VIEWER, HttpMethod.PUT, oneClient)).isEqualTo(403);
+        assertThat(status(AdminRole.OPERATOR, HttpMethod.PUT, oneClient)).isEqualTo(403);
+        assertThat(status(AdminRole.ADMIN, HttpMethod.PUT, oneClient)).isEqualTo(404);
     }
 
     /** What a tenant pays is configuration: only an admin sets it, though anyone may read it (ADR-034). */

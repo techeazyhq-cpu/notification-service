@@ -22,7 +22,9 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 
 import java.sql.Timestamp;
 import java.time.Instant;
+import java.util.Map;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 /** Keeps the ledger in {@code template_draft_usage} (changeset {@code 025-template-draft-usage}). */
 class JdbcDraftUsageLedger implements DraftUsageLedger {
@@ -73,5 +75,18 @@ class JdbcDraftUsageLedger implements DraftUsageLedger {
                 .param("clientId", clientId)
                 .param(SINCE, Timestamp.from(since))
                 .query(Long.class).single();
+    }
+
+    @Override
+    public Map<UUID, Long> tokensByClientSince(Instant since) {
+        return jdbc.sql("""
+                SELECT client_id, SUM(input_tokens + output_tokens) AS tokens FROM template_draft_usage
+                WHERE client_id IS NOT NULL AND occurred_at >= :since
+                GROUP BY client_id
+                """)
+                .param(SINCE, Timestamp.from(since))
+                .query((row, rowNumber) -> Map.entry(row.getObject("client_id", UUID.class), row.getLong("tokens")))
+                .list().stream()
+                .collect(Collectors.toUnmodifiableMap(Map.Entry::getKey, Map.Entry::getValue));
     }
 }

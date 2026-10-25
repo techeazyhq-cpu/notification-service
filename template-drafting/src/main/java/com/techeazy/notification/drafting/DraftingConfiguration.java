@@ -48,6 +48,11 @@ class DraftingConfiguration {
     }
 
     @Bean
+    ClientDraftingPolicies clientDraftingPolicies(JdbcClient jdbc) {
+        return new JdbcClientDraftingPolicies(jdbc, Clock.systemUTC());
+    }
+
+    @Bean
     DraftingSettingsStore draftingSettingsStore(JdbcClient jdbc, DraftingProperties properties,
                                                 @Qualifier(SecretsConfig.TEMPLATE_DRAFTING_API_KEY_CIPHER)
                                                 AesGcmCipher apiKeyCipher) {
@@ -56,7 +61,8 @@ class DraftingConfiguration {
 
     @Bean
     TemplateDraftService templateDraftService(DraftingProperties properties, DraftingSettingsStore settings,
-                                              DraftUsageLedger ledger, RateLimiter rateLimiter, MeterRegistry meters,
+                                              DraftUsageLedger ledger, ClientDraftingPolicies policies,
+                                              RateLimiter rateLimiter, MeterRegistry meters,
                                               ProviderDestinationPolicy destinations) {
         DraftModels models = new LlmDraftModels(current -> AnthropicOkHttpClient.builder()
                 .apiKey(current.apiKey())
@@ -66,6 +72,7 @@ class DraftingConfiguration {
                 .build(),
                 HttpClient.newBuilder().connectTimeout(properties.getTimeout()).build(),
                 properties.getTimeout(), properties.isFallbacks(), destinations);
-        return new TemplateDraftService(properties, settings, models, ledger, rateLimiter, Clock.systemUTC(), meters);
+        return new TemplateDraftService(properties, settings, models, ledger, policies, rateLimiter, Clock.systemUTC(),
+                meters);
     }
 }

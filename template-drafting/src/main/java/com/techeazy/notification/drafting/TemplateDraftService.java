@@ -31,8 +31,11 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.YearMonth;
 import java.time.ZoneOffset;
+import java.util.Collection;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.regex.Pattern;
@@ -40,11 +43,11 @@ import java.util.regex.Pattern;
 /**
  * Drafts a template from an author's brief (ADR-041). The settings in effect are read for every call, so a change an
  * administrator saves in the console applies to the next draft (ADR-044). In order: drafting must be on for the
- * caller, the brief must be valid, the caller must be within its per-minute rate limit, and the platform's and (for a
- * client) the client's monthly token budgets must not be spent. The model's reply is then checked against the
- * channel's rules; a reply that breaks them is sent back once with the broken rules listed, and if the correction
- * breaks them too no draft is returned. Every call that reached the model is written to the
- * {@link DraftUsageLedger} with its tokens.
+ * caller (for a client, also by its own policy, ADR-045), the brief must be valid, the caller must be within its
+ * per-minute rate limit, and the platform's and (for a client) the client's monthly token budgets must not be spent.
+ * The model's reply is then checked against the channel's rules; a reply that breaks them is sent back once with the
+ * broken rules listed, and if the correction breaks them too no draft is returned. Every call that reached the model
+ * is written to the {@link DraftUsageLedger} with its tokens.
  *
  * <p>Nothing is saved as a template and nothing is sent: the author saves the draft through the template endpoints.
  */
@@ -63,17 +66,20 @@ public class TemplateDraftService {
     private final DraftingSettingsSource settings;
     private final DraftModels models;
     private final DraftUsageLedger ledger;
+    private final ClientDraftingPolicies policies;
     private final RateLimiter rateLimiter;
     private final Clock clock;
     private final MeterRegistry meters;
     private final Counter tokens;
 
     public TemplateDraftService(DraftingProperties properties, DraftingSettingsSource settings, DraftModels models,
-                                DraftUsageLedger ledger, RateLimiter rateLimiter, Clock clock, MeterRegistry meters) {
+                                DraftUsageLedger ledger, ClientDraftingPolicies policies, RateLimiter rateLimiter,
+                                Clock clock, MeterRegistry meters) {
         this.properties = properties;
         this.settings = settings;
         this.models = models;
         this.ledger = ledger;
+        this.policies = policies;
         this.rateLimiter = rateLimiter;
         this.clock = clock;
         this.meters = meters;
@@ -84,7 +90,7 @@ public class TemplateDraftService {
 
     /**
      * Whether this caller may draft at all: drafting is switched on with a key, a model can be built from the
-     * settings and, for a client, clients have a budget.
+     * settings and, for a client, its policy leaves it a budget.
      */
     public boolean enabledFor(DraftActor actor) {
         return modelFor(actor, settings.current()).isPresent();
@@ -120,11 +126,29 @@ public class TemplateDraftService {
         return attempt(actor, request, model, current);
     }
 
+    /** Each client's policy, the budget it gives the client this month and what the client has spent of it. */
+    public Map<UUID, ClientDraftingAllowance> allowances(Collection<UUID> clientIds) {
+        long defaultBudget = settings.current().clientMonthlyTokenBudget();
+        Map<UUID, ClientDraftingPolicy> saved = policies.all();
+        Map<UUID, Long> spent = ledger.tokensByClientSince(monthStart());
+        Map<UUID, ClientDraftingAllowance> allowances = new LinkedHashMap<>();
+        for (UUID clientId : clientIds) {
+            ClientDraftingPolicy policy = saved.getOrDefault(clientId, ClientDraftingPolicy.DEFAULT);
+            allowances.put(clientId, new ClientDraftingAllowance(policy, policy.monthlyTokenBudget(defaultBudget),
+                    spent.getOrDefault(clientId, 0L)));
+        }
+        return allowances;
+    }
+
     private Optional<DraftModel> modelFor(DraftActor actor, DraftingSettings current) {
-        if (!current.active() || (actor.isClient() && current.clientMonthlyTokenBudget() <= 0)) {
+        if (!current.active() || (actor.isClient() && clientBudget(actor, current) <= 0)) {
             return Optional.empty();
         }
         return models.forSettings(current);
+    }
+
+    private long clientBudget(DraftActor actor, DraftingSettings current) {
+        return policies.of(actor.clientId()).monthlyTokenBudget(current.clientMonthlyTokenBudget());
     }
 
     private TemplateDraft attempt(DraftActor actor, DraftRequest request, DraftModel model,
@@ -207,14 +231,17 @@ public class TemplateDraftService {
     }
 
     private long tokensLeft(DraftActor actor, DraftingSettings current) {
-        Instant monthStart = YearMonth.now(clock.withZone(ZoneOffset.UTC)).atDay(1).atStartOfDay(ZoneOffset.UTC)
-                .toInstant();
+        Instant monthStart = monthStart();
         long platformLeft = current.monthlyTokenBudget() - ledger.tokensSince(monthStart);
         if (!actor.isClient()) {
             return Math.max(0, platformLeft);
         }
-        long clientLeft = current.clientMonthlyTokenBudget() - ledger.tokensSince(actor.clientId(), monthStart);
+        long clientLeft = clientBudget(actor, current) - ledger.tokensSince(actor.clientId(), monthStart);
         return Math.max(0, Math.min(platformLeft, clientLeft));
+    }
+
+    private Instant monthStart() {
+        return YearMonth.now(clock.withZone(ZoneOffset.UTC)).atDay(1).atStartOfDay(ZoneOffset.UTC).toInstant();
     }
 
     private void record(DraftActor actor, DraftRequest request, String servedBy, long inputTokens, long outputTokens,
