@@ -389,7 +389,7 @@ GitHub Actions run on every pull request and on `main` (`.github/workflows`):
 
 - **CI:** `mvn verify` (unit tests and the PostgreSQL integration tests), UI build and tests plus `npm audit`, and a build and vulnerability scan (Trivy, critical) of all six Docker images. On `main` and on `v*` tags, once every check is green, the six images are published to GHCR, signed keylessly with cosign and given a signed SPDX SBOM attestation ([ADR-027](docs/adr-027-signed-images-and-sbom.md)).
 - **Security:** repository scan for vulnerable dependencies, committed secrets and misconfiguration (high and critical), CodeQL for Java and TypeScript, and a weekly re-run.
-- **Dependabot** opens weekly update pull requests for Maven, npm, Docker and the workflows themselves.
+- **Dependabot** raises alerts and opens pull requests for dependencies with a known security advisory only; routine version updates are off ([ADR-049](docs/adr-049-dependabot-security-updates-only.md)).
 
 Make the **CI** and **Security** checks required in the branch protection rules of `main` so nothing merges while they are red.
 
