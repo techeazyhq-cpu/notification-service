@@ -125,8 +125,9 @@ Negative / accepted:
 
 ## Follow-ups
 
-- Helm: pass the key from a Secret to admin-api and client-api only. Until then `config.extraEnv` can set it, but it
-  then reaches the dispatcher too.
+- Helm: pass the key from a Secret to admin-api and client-api only. Done: the chart reads the optional key
+  `TEMPLATE_DRAFTING_API_KEY` from its Secret into those two services, and never into the dispatcher. Without that key
+  in the Secret nothing changes. `config.extraEnv` is no longer the place for it.
 - A per-client switch and per-client budget overrides in the admin console. Done in ADR-045.
 - A library of example templates that needs no model. Done in ADR-046.
 - Show the drafting ledger (tokens per client per month) in the admin console. Done in ADR-045, as each client's

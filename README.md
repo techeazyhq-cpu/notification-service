@@ -301,7 +301,8 @@ the author saves the template as usual. Only the description and variable names 
 values.
 
 The environment variables below are the defaults until settings are saved in the console (`docker compose` passes
-them to admin-api and client-api only). `ANTHROPIC_API_KEY` still works as the key when no other is set:
+them to admin-api and client-api only; so does the Helm chart, which reads the key from its Secret's optional
+`TEMPLATE_DRAFTING_API_KEY`). `ANTHROPIC_API_KEY` still works as the key when no other is set:
 
 ```bash
 TEMPLATE_DRAFTING_PROVIDER=OPENAI TEMPLATE_DRAFTING_MODEL=<model> TEMPLATE_DRAFTING_API_KEY=sk-... docker compose --profile app up -d --build
