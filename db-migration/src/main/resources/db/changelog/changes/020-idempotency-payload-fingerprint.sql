@@ -1,6 +1,6 @@
 --liquibase formatted sql
 
--- Copyright 2026 Vasantha Kumar
+-- Copyright 2026 Vasantha Kumar Kesavan
 --
 -- Licensed under the Apache License, Version 2.0 (the "License");
 -- you may not use this file except in compliance with the License.
@@ -14,7 +14,7 @@
 -- See the License for the specific language governing permissions and
 -- limitations under the License.
 --
--- @author Vasantha Kumar <vasantha.kumar@hotmail.com>
+-- @author Vasantha Kumar Kesavan <vasantha.kumar@hotmail.com>
 
 --changeset notification:020-idempotency-payload-fingerprint
 --comment A keyed fingerprint of each request's payload, so reusing an Idempotency-Key for a different request is refused instead of silently answered with the first request. A new nullable column: nothing existing is locked or rewritten, and earlier requests (no fingerprint) are replayed as before.

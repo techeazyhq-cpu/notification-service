@@ -1,4 +1,4 @@
-# Copyright 2026 Vasantha Kumar
+# Copyright 2026 Vasantha Kumar Kesavan
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-# @author Vasantha Kumar <vasantha.kumar@hotmail.com>
+# @author Vasantha Kumar Kesavan <vasantha.kumar@hotmail.com>
 #
 # Redis holds only rate-limit counters and caches, rebuilt on their own after a loss (ADR-026), so it has no
 # persistence. Memorystore signs its TLS certificate with a CA of its own; the chart trusts exactly that CA.

@@ -1,6 +1,6 @@
 --liquibase formatted sql
 
--- Copyright 2026 Vasantha Kumar
+-- Copyright 2026 Vasantha Kumar Kesavan
 --
 -- Licensed under the Apache License, Version 2.0 (the "License");
 -- you may not use this file except in compliance with the License.
@@ -14,7 +14,7 @@
 -- See the License for the specific language governing permissions and
 -- limitations under the License.
 --
--- @author Vasantha Kumar <vasantha.kumar@hotmail.com>
+-- @author Vasantha Kumar Kesavan <vasantha.kumar@hotmail.com>
 
 --changeset notification:021-inflight-usage-index runInTransaction:false
 --comment Counts a tenant's messages still in flight per channel and category, read at every postpaid accept with a spend cap. Partial on the in-flight statuses, which are few at any moment, so it stays small. Built concurrently and checked for validity (ADR-003).

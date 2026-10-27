@@ -1,6 +1,6 @@
-// Copyright 2026 Vasantha Kumar
+// Copyright 2026 Vasantha Kumar Kesavan
 // Licensed under the Apache License, Version 2.0 (see LICENSE).
-// @author Vasantha Kumar <vasantha.kumar@hotmail.com>
+// @author Vasantha Kumar Kesavan <vasantha.kumar@hotmail.com>
 //
 // Failure drills against a running Compose stack. Each drill breaks something while messages are in flight, then
 // checks the promises the design makes: an accepted request is never lost, a provider outage does not fail messages,

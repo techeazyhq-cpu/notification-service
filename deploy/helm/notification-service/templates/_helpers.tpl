@@ -1,6 +1,6 @@
 {{/*
-Copyright 2026 Vasantha Kumar. Licensed under the Apache License, Version 2.0.
-@author Vasantha Kumar <vasantha.kumar@hotmail.com>
+Copyright 2026 Vasantha Kumar Kesavan. Licensed under the Apache License, Version 2.0.
+@author Vasantha Kumar Kesavan <vasantha.kumar@hotmail.com>
 */}}
 
 {{/* Name of a component's objects: <release>-<component>, e.g. notification-client-api. */}}

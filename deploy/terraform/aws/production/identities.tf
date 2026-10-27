@@ -1,4 +1,4 @@
-# Copyright 2026 Vasantha Kumar
+# Copyright 2026 Vasantha Kumar Kesavan
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-# @author Vasantha Kumar <vasantha.kumar@hotmail.com>
+# @author Vasantha Kumar Kesavan <vasantha.kumar@hotmail.com>
 #
 # EKS Pod Identity roles, each bound to one service account and allowed only what that workload does. The services
 # themselves get no AWS role: they read their secrets from the Kubernetes Secret that External Secrets writes.

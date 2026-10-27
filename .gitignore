@@ -31,6 +31,9 @@ dist/
 *.iml
 .vscode/
 
+# The demo client's API key that scripts/seed.mjs writes, kept out of the console and of git
+/.local/
+
 # Local k3s trial (deploy/k8s/dev/README.md): cluster credentials and image archives
 /kubeconfig
 /images.tar

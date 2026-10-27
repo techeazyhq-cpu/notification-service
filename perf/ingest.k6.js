@@ -1,6 +1,6 @@
-// Copyright 2026 Vasantha Kumar
+// Copyright 2026 Vasantha Kumar Kesavan
 // Licensed under the Apache License, Version 2.0 (see LICENSE).
-// @author Vasantha Kumar <vasantha.kumar@hotmail.com>
+// @author Vasantha Kumar Kesavan <vasantha.kumar@hotmail.com>
 //
 // Load model for the Client API. Run through perf/run-benchmark.mjs, which seeds the environment and passes
 // BASE_URL and API_KEY. Scenarios run one after another so their numbers do not contaminate each other.

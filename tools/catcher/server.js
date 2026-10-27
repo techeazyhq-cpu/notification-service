@@ -1,5 +1,5 @@
 /*
- * Copyright 2026 Vasantha Kumar
+ * Copyright 2026 Vasantha Kumar Kesavan
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  *
- * @author Vasantha Kumar <vasantha.kumar@hotmail.com>
+ * @author Vasantha Kumar Kesavan <vasantha.kumar@hotmail.com>
  */
 
 // Local stand-in for SMS, WhatsApp and Push gateways (like Mailpit is for email). Not for production use.
@@ -116,10 +116,13 @@ const routes = {
   },
 };
 
+/** The routes as a Map, so a request line reaches only the handlers above, never an inherited property such as constructor. */
+const ROUTES = new Map(Object.entries(routes));
+
 async function handle(req, res) {
   const [pathname, query = ''] = req.url.split('?');
   const params = new URLSearchParams(query);
-  const route = routes[`${req.method} ${pathname}`];
+  const route = ROUTES.get(`${req.method} ${pathname}`);
   if (route) return route(req, res, params);
   const channel = pathname.slice(1);
   if (req.method === 'POST' && CHANNELS.has(channel)) return capture(req, res, channel);

@@ -1,4 +1,4 @@
-# Copyright 2026 Vasantha Kumar
+# Copyright 2026 Vasantha Kumar Kesavan
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-# @author Vasantha Kumar <vasantha.kumar@hotmail.com>
+# @author Vasantha Kumar Kesavan <vasantha.kumar@hotmail.com>
 # Builds any deployable module:  docker build --build-arg MODULE=client-api -t notification-client-api .
 # Pinned to JDK 21: Lombok silently generates no methods on newer JDKs (JDK 24 confirmed in ADR-011, and again in
 # ADR-018; JDK 26 hit the same failure in between, ADR-014). Dependabot has now reopened this exact PR three times

@@ -1,5 +1,5 @@
 /*
- * Copyright 2026 Vasantha Kumar
+ * Copyright 2026 Vasantha Kumar Kesavan
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  *
- * @author Vasantha Kumar <vasantha.kumar@hotmail.com>
+ * @author Vasantha Kumar Kesavan <vasantha.kumar@hotmail.com>
  */
 
 // Seeds a local environment through the Admin API: catcher providers, sample templates, a demo client.
@@ -23,11 +23,16 @@
 //      SMTP_HOST/SMTP_PORT (mailpit/1025) and CATCHER_URL (http://catcher:9000) are the addresses the
 //      *dispatcher* uses, i.e. Docker service names when the stack runs in Compose. When running the
 //      dispatcher on your host instead, use SMTP_HOST=localhost CATCHER_URL=http://localhost:9000.
+//      DEMO_KEY_FILE (.local/demo-api-key) is where the new demo client's API key is written, never to the console.
+import { mkdir, writeFile } from 'node:fs/promises';
+import { dirname } from 'node:path';
+
 const ADMIN = process.env.ADMIN_URL || 'http://localhost:8081'; // NOSONAR: plain-HTTP default is for local development only
 let auth = '';
 const SMTP_HOST = process.env.SMTP_HOST || 'mailpit';
 const SMTP_PORT = process.env.SMTP_PORT || '1025';
 const CATCHER = process.env.CATCHER_URL || 'http://catcher:9000'; // NOSONAR: in-cluster catcher for local development only
+const KEY_FILE = process.env.DEMO_KEY_FILE || '.local/demo-api-key';
 
 async function signIn() {
   const res = await fetch(ADMIN + '/api/admin/auth/login', {
@@ -87,5 +92,7 @@ if (clientExists) {
   console.log('= /clients/demo-app exists (API key is only shown at creation; rotate it in the admin UI if lost)');
 } else {
   const { apiKey } = await api('POST', '/clients', { name: 'demo-app', allowedChannels: ['EMAIL', 'SMS', 'WHATSAPP', 'PUSH'] });
-  console.log(`+ /clients/demo-app\n\n  API key (shown once): ${apiKey}\n`);
+  await mkdir(dirname(KEY_FILE), { recursive: true });
+  await writeFile(KEY_FILE, apiKey + '\n', { mode: 0o600 });
+  console.log(`+ /clients/demo-app\n\n  API key written once to ${KEY_FILE} (owner-only on Linux and macOS): API_KEY=$(cat ${KEY_FILE})\n`);
 }
