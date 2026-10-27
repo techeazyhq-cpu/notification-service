@@ -108,11 +108,18 @@ class SecretReencryption {
         }
     }
 
+    /** Both the current signing secrets and those kept for a rotation's grace period (ADR-051). */
     private int signingSecrets() {
+        return signingSecrets("signing_secret") + signingSecrets("previous_signing_secret");
+    }
+
+    private int signingSecrets(String columnName) {
         int rewritten = 0;
-        for (Map.Entry<UUID, String> row : column("SELECT id, signing_secret AS value FROM client WHERE signing_secret IS NOT NULL")) {
+        for (Map.Entry<UUID, String> row : column("SELECT id, " + columnName + " AS value FROM client WHERE "
+                + columnName + " IS NOT NULL")) {
             if (signingSecrets.needsReencryption(row.getValue())) {
-                rewritten += jdbc.sql("UPDATE client SET signing_secret = :new WHERE id = :id AND signing_secret = :old")
+                rewritten += jdbc.sql("UPDATE client SET " + columnName + " = :new WHERE id = :id AND " + columnName
+                                + " = :old")
                         .param("new", signingSecrets.reencrypt(row.getValue())).param("id", row.getKey())
                         .param("old", row.getValue()).update();
             }

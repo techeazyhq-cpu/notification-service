@@ -102,8 +102,11 @@ export async function api<T = unknown>(method: string, path: string, body?: unkn
   return (text ? JSON.parse(text) : null) as T;
 }
 
-/** signingEnabled: the client has a request-signing secret; signingRequired: its writes must be signed (ADR-036). */
-export interface Client { id: string; name: string; status: 'ACTIVE' | 'DISABLED'; allowedChannels: Channel[]; apiKeyPrefix: string; createdAt: string; signingEnabled: boolean; signingRequired: boolean }
+/**
+ * signingEnabled: the client has a request-signing secret; signingRequired: its writes must be signed (ADR-036).
+ * previousSecretAcceptedUntil: while a rotation's grace period runs, when the old secret stops working (ADR-051).
+ */
+export interface Client { id: string; name: string; status: 'ACTIVE' | 'DISABLED'; allowedChannels: Channel[]; apiKeyPrefix: string; createdAt: string; signingEnabled: boolean; signingRequired: boolean; previousSecretAcceptedUntil: string | null }
 /** ownerClientId is null for shared templates (managed here); otherwise the template belongs to that client. */
 export interface Template { id: string; ownerClientId?: string; ownerName?: string; name: string; channel: Channel; subject?: string; body: string; category?: Category }
 export interface Provider { id: string; channel: Channel; name: string; type: 'SMTP' | 'HTTP_JSON' | 'FCM'; settings: Record<string, string>; enabled: boolean; priority: number }

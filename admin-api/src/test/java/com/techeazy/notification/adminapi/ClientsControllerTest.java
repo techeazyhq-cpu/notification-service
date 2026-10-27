@@ -34,7 +34,10 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.RequestBuilder;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
+import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
+import java.time.ZoneOffset;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -48,8 +51,10 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 
-/** Administrators issue, require and remove a client's request-signing secret (ADR-036). */
+/** Administrators issue, require and remove a client's request-signing secret (ADR-036, ADR-051). */
 class ClientsControllerTest {
+
+    private static final Instant NOW = Instant.parse("2026-10-27T12:00:00Z");
 
     private final ClientRepository repository = mock(ClientRepository.class);
     private final ClientSigningSecrets secrets = new ClientSigningSecrets(new AesGcmCipher("credentials-key"));
@@ -67,7 +72,8 @@ class ClientsControllerTest {
         client.setApiKeyPrefix("ntf_abcdef");
         client.setCreatedAt(Instant.parse("2026-10-01T00:00:00Z"));
         when(repository.findById(client.getId())).thenReturn(Optional.of(client));
-        mvc = MockMvcBuilders.standaloneSetup(new ClientsController(repository, secrets, changes))
+        mvc = MockMvcBuilders.standaloneSetup(new ClientsController(repository, secrets, changes,
+                        Clock.fixed(NOW, ZoneOffset.UTC)))
                 .setControllerAdvice(new AdminErrorHandler(Optional::empty)).build();
     }
 
@@ -76,11 +82,12 @@ class ClientsControllerTest {
         perform(post(path("/signing-secret")));
         perform(put(path("/signing-required")).contentType(MediaType.APPLICATION_JSON).content("{\"required\":true}"));
         perform(post(path("/rotate-key")));
+        perform(delete(path("/signing-secret/previous")));
         perform(delete(path("/signing-secret")));
         perform(put(path("")).contentType(MediaType.APPLICATION_JSON)
                 .content("{\"name\":\"Acme\",\"status\":\"DISABLED\",\"allowedChannels\":[\"SMS\"]}"));
 
-        verify(changes, times(5)).clientChanged(client.getId());
+        verify(changes, times(6)).clientChanged(client.getId());
     }
 
     @Test
@@ -102,6 +109,61 @@ class ClientsControllerTest {
 
         assertThat(second).isNotEqualTo(first);
         assertThat(secrets.decryptForUse(client.getSigningSecret())).isEqualTo(second);
+        assertThat(client.getPreviousSigningSecret()).isNull();
+        assertThat(client.getPreviousSigningSecretExpiresAt()).isNull();
+    }
+
+    @Test
+    void rotatingWithAGracePeriodKeepsTheOldSecretWorkingUntilItEnds() throws Exception {
+        String first = issue("").get("signingSecret").asText();
+
+        JsonNode rotated = issue("{\"previousSecretHours\":24}");
+
+        Instant until = NOW.plus(Duration.ofHours(24));
+        assertThat(secrets.decryptForUse(client.getPreviousSigningSecret())).isEqualTo(first);
+        assertThat(client.getPreviousSigningSecretExpiresAt()).isEqualTo(until);
+        assertThat(rotated.at("/client/previousSecretAcceptedUntil").asLong()).isEqualTo(until.getEpochSecond());
+    }
+
+    @Test
+    void aFirstSecretHasNothingToKeepWhateverTheGracePeriod() throws Exception {
+        JsonNode issued = issue("{\"previousSecretHours\":24}");
+
+        assertThat(client.getPreviousSigningSecret()).isNull();
+        assertThat(issued.at("/client/previousSecretAcceptedUntil").isNull()).isTrue();
+    }
+
+    @Test
+    void aGracePeriodOfMoreThanAWeekOrBelowZeroIsRefused() throws Exception {
+        issue("");
+
+        assertThat(perform(issueRequest("{\"previousSecretHours\":169}")).getStatus()).isEqualTo(400);
+        assertThat(perform(issueRequest("{\"previousSecretHours\":-1}")).getStatus()).isEqualTo(400);
+        assertThat(client.getPreviousSigningSecret()).isNull();
+    }
+
+    @Test
+    void endingTheGracePeriodEarlyForgetsTheOldSecret() throws Exception {
+        issue("");
+        issue("{\"previousSecretHours\":24}");
+
+        JsonNode view = json.readTree(perform(delete(path("/signing-secret/previous"))).getContentAsString());
+
+        assertThat(client.getPreviousSigningSecret()).isNull();
+        assertThat(client.getPreviousSigningSecretExpiresAt()).isNull();
+        assertThat(view.get("previousSecretAcceptedUntil").isNull()).isTrue();
+    }
+
+    @Test
+    void aGracePeriodThatHasEndedIsNotShown() throws Exception {
+        issue("");
+        client.setPreviousSigningSecret(client.getSigningSecret());
+        client.setPreviousSigningSecretExpiresAt(NOW);
+
+        JsonNode view = json.readTree(perform(put(path("/signing-required")).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"required\":false}")).getContentAsString());
+
+        assertThat(view.get("previousSecretAcceptedUntil").isNull()).isTrue();
     }
 
     @Test
@@ -121,15 +183,26 @@ class ClientsControllerTest {
 
     @Test
     void removingTheSecretAlsoStopsRequiringSignatures() throws Exception {
-        perform(post(path("/signing-secret")));
+        issue("");
+        issue("{\"previousSecretHours\":24}");
         perform(requireSignatures(true));
 
         JsonNode view = json.readTree(perform(delete(path("/signing-secret"))).getContentAsString());
 
         assertThat(client.getSigningSecret()).isNull();
+        assertThat(client.getPreviousSigningSecret()).isNull();
         assertThat(client.isSigningRequired()).isFalse();
         assertThat(view.get("signingEnabled").asBoolean()).isFalse();
         assertThat(view.get("signingRequired").asBoolean()).isFalse();
+    }
+
+    private JsonNode issue(String body) throws Exception {
+        return json.readTree(perform(issueRequest(body)).getContentAsString());
+    }
+
+    private RequestBuilder issueRequest(String body) {
+        return body.isEmpty() ? post(path("/signing-secret"))
+                : post(path("/signing-secret")).contentType(MediaType.APPLICATION_JSON).content(body);
     }
 
     private RequestBuilder requireSignatures(boolean required) {

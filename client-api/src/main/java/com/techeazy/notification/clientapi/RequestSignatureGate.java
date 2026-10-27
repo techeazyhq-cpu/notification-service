@@ -41,6 +41,8 @@ import java.util.UUID;
  *   <li>An unsigned request is refused only when the client requires signatures and the request changes state
  *       (POST, PUT, PATCH, DELETE). Reads stay unsigned, which keeps the client tracker's views working.</li>
  *   <li>The nonce is claimed only once the signature is valid, so forged requests cannot fill the nonce store.</li>
+ *   <li>After a rotation with a grace period (ADR-051), a signature made with the previous secret is accepted until
+ *       the period ends. The end is compared with the clock on every request, so a cached client cannot extend it.</li>
  * </ul>
  */
 @Component
@@ -62,9 +64,24 @@ class RequestSignatureGate {
         }
     }
 
-    /** What the gate needs to know about the client; the secret is still encrypted. */
-    record SigningPolicy(String storedSecret, boolean required) {
+    /**
+     * What the gate needs to know about the client; the secrets are still encrypted.
+     *
+     * @param storedSecret   the current signing secret, or {@code null} if the client has none
+     * @param required       whether its state-changing requests must be signed
+     * @param previousSecret the secret it replaced, still accepted during a grace period, or {@code null}
+     * @param previousUntil  when the grace period ends; the previous secret is refused from this instant on
+     */
+    record SigningPolicy(String storedSecret, boolean required, String previousSecret, Instant previousUntil) {
         static final SigningPolicy NONE = new SigningPolicy(null, false);
+
+        SigningPolicy(String storedSecret, boolean required) {
+            this(storedSecret, required, null, null);
+        }
+
+        boolean acceptsPrevious(Instant now) {
+            return previousSecret != null && previousUntil != null && now.isBefore(previousUntil);
+        }
     }
 
     private static final Set<String> STATE_CHANGING = Set.of("POST", "PUT", "PATCH", "DELETE");
@@ -124,8 +141,7 @@ class RequestSignatureGate {
         }
         String canonical = RequestSignature.canonical(timestamp, nonce, request.getMethod(), request.getRequestURI(),
                 request.getQueryString(), cached.body());
-        if (!RequestSignature.matches(secrets.decryptForUse(policy.storedSecret()), canonical,
-                request.getHeader(RequestSignature.SIGNATURE_HEADER))) {
+        if (!matchesASecret(policy, canonical, request.getHeader(RequestSignature.SIGNATURE_HEADER), now)) {
             return Admission.refuse(ErrorCode.SIGNATURE_INVALID,
                     "The signature does not match the method, path, query and body of this request");
         }
@@ -133,6 +149,14 @@ class RequestSignatureGate {
             return Admission.refuse(ErrorCode.REQUEST_REPLAYED, "This X-Signature-Nonce was already used");
         }
         return Admission.admit(cached);
+    }
+
+    private boolean matchesASecret(SigningPolicy policy, String canonical, String signature, Instant now) {
+        if (RequestSignature.matches(secrets.decryptForUse(policy.storedSecret()), canonical, signature)) {
+            return true;
+        }
+        return policy.acceptsPrevious(now)
+                && RequestSignature.matches(secrets.decryptForUse(policy.previousSecret()), canonical, signature);
     }
 
     private static boolean isSigned(HttpServletRequest request) {

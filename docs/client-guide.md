@@ -389,8 +389,10 @@ platform then returns the original request rather than sending twice.
 Everything you change in the console and the API playground is then signed for you. Leave the field empty if you have
 no secret.
 
-**When the secret changes:** a new secret replaces the old one, and requests signed with the old one are refused
-straight away (within 30 seconds at most). Agree a moment with your operator, and switch your configuration at that moment.
+**When the secret changes:** your operator can keep the old secret working for a while, up to 7 days, so you can
+switch your servers one by one. Both secrets are accepted until then. Ask how long you have. Without a grace period,
+for example after a suspected leak, requests signed with the old secret are refused straight away (within 30 seconds
+at most).
 
 ### Send to one recipient
 

@@ -47,6 +47,7 @@ class RequestSignatureGateTest {
     private static final Duration WINDOW = Duration.ofMinutes(5);
     private static final UUID CLIENT = UUID.randomUUID();
     private static final String SECRET = "nss_" + "ab".repeat(32);
+    private static final String NEW_SECRET = "nss_" + "cd".repeat(32);
     private static final String BODY = "{\"channel\":\"SMS\",\"recipient\":\"+15550100\",\"body\":\"hi\"}";
 
     private final ClientSigningSecrets secrets = new ClientSigningSecrets(new AesGcmCipher("credentials-key"));
@@ -144,6 +145,38 @@ class RequestSignatureGateTest {
     }
 
     @Test
+    void duringAGracePeriodBothTheNewAndThePreviousSecretAreAccepted() throws IOException {
+        SigningPolicy rotated = rotatedUntil(NOW.plusSeconds(3600));
+
+        Admission previous = gate.admit(signed(post(BODY), NOW, "nonce-previous-001", BODY), CLIENT, rotated);
+        Admission current = gate.admit(signedWith(NEW_SECRET, post(BODY), NOW, "nonce-current-0001", BODY), CLIENT,
+                rotated);
+
+        assertThat(previous.admitted()).isTrue();
+        assertThat(current.admitted()).isTrue();
+        assertThat(nonces.used).containsKeys(CLIENT + "/nonce-previous-001", CLIENT + "/nonce-current-0001");
+    }
+
+    @Test
+    void thePreviousSecretIsRefusedFromTheMomentItsGracePeriodEnds() throws IOException {
+        Admission admission = gate.admit(signed(post(BODY), NOW, "nonce-lapsed-00001", BODY), CLIENT,
+                rotatedUntil(NOW));
+
+        assertThat(admission.refusal()).isEqualTo(ErrorCode.SIGNATURE_INVALID);
+        assertThat(nonces.used).isEmpty();
+    }
+
+    @Test
+    void aRequestSignedWithThePreviousSecretCannotBeReplayedEither() throws IOException {
+        SigningPolicy rotated = rotatedUntil(NOW.plusSeconds(3600));
+        gate.admit(signed(post(BODY), NOW, "nonce-prev-replay1", BODY), CLIENT, rotated);
+
+        Admission again = gate.admit(signed(post(BODY), NOW, "nonce-prev-replay1", BODY), CLIENT, rotated);
+
+        assertThat(again.refusal()).isEqualTo(ErrorCode.REQUEST_REPLAYED);
+    }
+
+    @Test
     void aSignatureFromAClientWithoutASecretIsRefused() throws IOException {
         Admission admission = gate.admit(signed(post(BODY), NOW, "nonce-nosecret-01", BODY), CLIENT, SigningPolicy.NONE);
 
@@ -178,13 +211,23 @@ class RequestSignatureGateTest {
         return request;
     }
 
+    private SigningPolicy rotatedUntil(Instant previousUntil) {
+        return new SigningPolicy(secrets.encryptForStorage(NEW_SECRET), true, secrets.encryptForStorage(SECRET),
+                previousUntil);
+    }
+
     private static MockHttpServletRequest signed(MockHttpServletRequest request, Instant at, String nonce, String signedBody) {
+        return signedWith(SECRET, request, at, nonce, signedBody);
+    }
+
+    private static MockHttpServletRequest signedWith(String secret, MockHttpServletRequest request, Instant at,
+                                                     String nonce, String signedBody) {
         String timestamp = Long.toString(at.getEpochSecond());
         String canonical = RequestSignature.canonical(timestamp, nonce, request.getMethod(), request.getRequestURI(),
                 request.getQueryString(), signedBody.getBytes(StandardCharsets.UTF_8));
         request.addHeader(RequestSignature.TIMESTAMP_HEADER, timestamp);
         request.addHeader(RequestSignature.NONCE_HEADER, nonce);
-        request.addHeader(RequestSignature.SIGNATURE_HEADER, RequestSignature.sign(SECRET, canonical));
+        request.addHeader(RequestSignature.SIGNATURE_HEADER, RequestSignature.sign(secret, canonical));
         return request;
     }
 

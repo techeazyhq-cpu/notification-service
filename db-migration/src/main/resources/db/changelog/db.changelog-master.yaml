@@ -74,3 +74,5 @@ databaseChangeLog:
       file: db/changelog/changes/028-template-draft-usage-push.sql
   - include:
       file: db/changelog/changes/029-client-drafting-policy.sql
+  - include:
+      file: db/changelog/changes/030-previous-signing-secret.sql

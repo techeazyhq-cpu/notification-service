@@ -143,7 +143,8 @@ replay protection. Others integrate from simple scripts and must not be forced i
   afresh; the client guide says so and gives code in shell, Python, Node.js and Java.
 - **Rotation is immediate.** Issuing a new secret makes requests signed with the old one fail at once: the admin API
   announces every client change and the client API drops its cache (the 30-second expiry is only the fallback). To rotate without errors, the client stops signing, the administrator makes signing optional, then
-  issues the new secret. Accepting the previous secret for a grace period is left for a later change.
+  issues the new secret. Accepting the previous secret for a grace period is left for a later change. Done in
+  ADR-051: a rotation can keep the old secret working for up to 7 days.
 - **Shared exposure in the console.** The console holds the signing secret in the same page as the API key, so
   script running in that page could use both. Signing in the console protects against replay of captured traffic, not
   against a compromised browser.
