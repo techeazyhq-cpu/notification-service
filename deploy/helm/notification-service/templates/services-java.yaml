@@ -87,6 +87,16 @@ spec:
               valueFrom: {secretKeyRef: {name: {{ $root.Values.secrets.existingSecret }}, key: ADMIN_TWO_FACTOR_KEY_PREVIOUS, optional: true}}
             - name: ADMIN_CORS_ORIGINS
               value: {{ $root.Values.config.adminCorsOrigins | quote }}
+            {{- with $root.Values.config.database.reportingUser }}
+            - name: DB_REPORTING_USER
+              value: {{ . | quote }}
+            - name: DB_REPORTING_PASSWORD
+              valueFrom: {secretKeyRef: {name: {{ $root.Values.secrets.existingSecret }}, key: DB_REPORTING_PASSWORD}}
+            {{- end }}
+            {{- with $root.Values.config.database.reportingUrl }}
+            - name: DB_REPORTING_URL
+              value: {{ . | quote }}
+            {{- end }}
             - name: FORWARD_HEADERS_STRATEGY
               value: {{ ternary "native" "none" $root.Values.networkPolicy.enabled | quote }}
             {{- end }}

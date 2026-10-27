@@ -28,6 +28,7 @@ import java.util.Map;
 public class AnomalyProperties {
 
     private final Scoring scoring = new Scoring();
+    private final ReportingDatabase reportingDatabase = new ReportingDatabase();
     private boolean enabled;
     private String aggregationCron = "0 5 * * * *";
     private int recomputeHours = 3;
@@ -64,6 +65,37 @@ public class AnomalyProperties {
     public void setEmailDomainMinRecipients(int emailDomainMinRecipients) { this.emailDomainMinRecipients = emailDomainMinRecipients; }
 
     public Scoring getScoring() { return scoring; }
+
+    public ReportingDatabase getReportingDatabase() { return reportingDatabase; }
+
+    /**
+     * The database the job reads tenants' messages and requests from (ADR-050). Unset, it reads through the service's
+     * own connection. Set, it logs in as a read-only role, on the primary or on a read replica.
+     */
+    public static class ReportingDatabase {
+        private String url;
+        private String username;
+        private String password;
+        private int maximumPoolSize = 2;
+
+        /** Whether a reporting user is set; only then does the job get a connection of its own. */
+        public boolean isConfigured() { return username != null && !username.isBlank(); }
+
+        /** The JDBC URL; a read replica's, or the primary's. */
+        public String getUrl() { return url; }
+        public void setUrl(String url) { this.url = url; }
+
+        /** The read-only role; blank to read through the service's own connection. */
+        public String getUsername() { return username; }
+        public void setUsername(String username) { this.username = username; }
+
+        public String getPassword() { return password; }
+        public void setPassword(String password) { this.password = password; }
+
+        /** How many connections the job may hold; one run reads one query at a time. */
+        public int getMaximumPoolSize() { return maximumPoolSize; }
+        public void setMaximumPoolSize(int maximumPoolSize) { this.maximumPoolSize = maximumPoolSize; }
+    }
 
     /** How an hour is judged against the tenant's history. Tuned by how often administrators mark false alarms. */
     public static class Scoring {

@@ -52,6 +52,7 @@ class TrafficAggregatorTest {
 
     private static final Instant HOUR = Instant.parse("2026-09-01T10:00:00Z");
     private static final Instant COMPUTED_AT = Instant.parse("2026-09-01T11:05:00Z");
+    private static final String REPORTING_ROLE = "notification_reporting";
 
     @Container
     static final PostgreSQLContainer<?> POSTGRES = new PostgreSQLContainer<>("postgres:16-alpine");
@@ -72,7 +73,14 @@ class TrafficAggregatorTest {
             }
         }
         jdbc = JdbcClient.create(dataSource);
-        aggregator = new TrafficAggregator(jdbc, Clock.fixed(COMPUTED_AT, ZoneOffset.UTC), Duration.ofDays(30), 5);
+        jdbc.sql("CREATE ROLE " + REPORTING_ROLE + " LOGIN PASSWORD '" + REPORTING_ROLE + "'").update();
+        jdbc.sql("GRANT USAGE ON SCHEMA public TO " + REPORTING_ROLE).update();
+        jdbc.sql("GRANT SELECT ON ALL TABLES IN SCHEMA public TO " + REPORTING_ROLE).update();
+        jdbc.sql("ALTER ROLE " + REPORTING_ROLE + " SET default_transaction_read_only = on").update();
+        JdbcClient readOnly = JdbcClient.create(new DriverManagerDataSource(POSTGRES.getJdbcUrl(), REPORTING_ROLE,
+                REPORTING_ROLE));
+        aggregator = new TrafficAggregator(readOnly, jdbc, Clock.fixed(COMPUTED_AT, ZoneOffset.UTC),
+                Duration.ofDays(30), 5);
     }
 
     @Test

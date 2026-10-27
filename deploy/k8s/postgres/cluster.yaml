@@ -17,9 +17,12 @@
 # PostgreSQL for production on Kubernetes with CloudNativePG (operator 1.30+, Barman Cloud plugin 0.15+, which needs
 # cert-manager): three instances with one synchronous standby (no committed transaction is lost when the primary
 # fails), automatic failover, continuous WAL archiving and a daily base backup for point-in-time recovery, and the
-# two roles of ADR-012. Pair it with object-store.yaml. See docs/disaster-recovery.md and ADR-026.
+# two roles of ADR-012, plus the read-only role of ADR-050. Pair it with object-store.yaml. See
+# docs/disaster-recovery.md and ADR-026.
 # Secrets (kubernetes.io/basic-auth): notification-db-owner (username notification) for the migration job,
-# notification-db-app (username notification_app) for the services.
+# notification-db-app (username notification_app) for the services, notification-db-reporting (username
+# notification_reporting) for admin-api's traffic job. Point that job at the standbys with the chart's
+# config.database.reportingUrl: jdbc:postgresql://notification-db-ro.common:5432/notification.
 apiVersion: postgresql.cnpg.io/v1
 kind: Cluster
 metadata:
@@ -50,6 +53,12 @@ spec:
         - >-
           ALTER DEFAULT PRIVILEGES FOR ROLE notification IN SCHEMA public
           GRANT USAGE, SELECT ON SEQUENCES TO notification_app
+        - CREATE ROLE notification_reporting LOGIN
+        - ALTER ROLE notification_reporting SET default_transaction_read_only = on
+        - GRANT USAGE ON SCHEMA public TO notification_reporting
+        - >-
+          ALTER DEFAULT PRIVILEGES FOR ROLE notification IN SCHEMA public
+          GRANT SELECT ON TABLES TO notification_reporting
   managed:
     roles:
       - name: notification_app
@@ -57,6 +66,11 @@ spec:
         login: true
         passwordSecret:
           name: notification-db-app
+      - name: notification_reporting
+        ensure: present
+        login: true
+        passwordSecret:
+          name: notification-db-reporting
   storage:
     size: 20Gi
   walStorage:

@@ -37,7 +37,8 @@ import java.util.UUID;
 
 /**
  * Measures each tenant's traffic for one hour from {@code notification_message} and {@code notification_request}, and
- * stores it in {@code traffic_hourly} (ADR-039). Every count is made in the database and only grouped totals come back,
+ * stores it in {@code traffic_hourly} (ADR-039). It reads through one connection and writes through another, so the
+ * reads can go to a read-only role or a read replica (ADR-050). Every count is made in the database and only grouped totals come back,
  * at most one row per tenant, channel and destination. Phone numbers are grouped by their first three digits and mapped
  * to a calling code here, so no address leaves the database.
  *
@@ -111,13 +112,23 @@ class TrafficAggregator {
         private final Map<String, Integer> errorCodes = new TreeMap<>();
     }
 
+    private final JdbcClient source;
     private final JdbcClient jdbc;
     private final Clock clock;
     private final Duration newRecipientLookback;
     private final int emailDomainMinRecipients;
     private final ObjectMapper json = new ObjectMapper();
 
-    TrafficAggregator(JdbcClient jdbc, Clock clock, Duration newRecipientLookback, int emailDomainMinRecipients) {
+    /**
+     * @param source                   reads tenants' messages and requests; may be read-only
+     * @param jdbc                     reads and writes {@code traffic_hourly}
+     * @param clock                    stamps each measurement
+     * @param newRecipientLookback     how long a recipient must have gone without a message to count as new
+     * @param emailDomainMinRecipients the fewest recipients an e-mail domain needs to be named
+     */
+    TrafficAggregator(JdbcClient source, JdbcClient jdbc, Clock clock, Duration newRecipientLookback,
+                      int emailDomainMinRecipients) {
+        this.source = source;
         this.jdbc = jdbc;
         this.clock = clock;
         this.newRecipientLookback = newRecipientLookback;
@@ -196,7 +207,7 @@ class TrafficAggregator {
     }
 
     private JdbcClient.StatementSpec between(String sql, Timestamp start, Timestamp end) {
-        return jdbc.sql(sql).param("start", start).param("end", end);
+        return source.sql(sql).param("start", start).param("end", end);
     }
 
     private static Tally tally(Map<Key, Tally> tallies, ResultSet row) throws SQLException {
