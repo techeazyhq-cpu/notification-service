@@ -38,7 +38,10 @@ services:
 
   admin-api:
     ports: !override ["18081:8081", "127.0.0.1:19081:9081"]
-    environment: *shared-env
+    environment:
+      <<: *shared-env
+      # The shared PostgreSQL has no read-only reporting role (ADR-050), so the traffic job reads as notification_app.
+      DB_REPORTING_USER: ""
 
   dispatcher:
     ports: !override ["127.0.0.1:18082:8082"]

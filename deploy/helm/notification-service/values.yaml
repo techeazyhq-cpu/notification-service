@@ -33,7 +33,8 @@ imagePullSecrets: []
 # Secrets, Vault) with the keys DB_PASSWORD (runtime role), MIGRATION_DB_PASSWORD (schema owner),
 # SECRETS_ENCRYPTION_KEY, DATA_ENCRYPTION_KEY, ADMIN_TWO_FACTOR_KEY and ADMIN_PASSWORD. During a key rotation
 # (ADR-037) it may also hold SECRETS_ENCRYPTION_KEY_PREVIOUS, DATA_ENCRYPTION_KEY_PREVIOUS,
-# ADMIN_TWO_FACTOR_KEY_PREVIOUS and FINGERPRINT_KEY; all four are optional.
+# ADMIN_TWO_FACTOR_KEY_PREVIOUS and FINGERPRINT_KEY; all four are optional. With config.database.reportingUser set
+# it also holds DB_REPORTING_PASSWORD (ADR-050).
 secrets:
   existingSecret: notification-secrets
 
@@ -43,6 +44,10 @@ config:
     # Runtime role with DML rights only; the migration job uses the schema owner (ADR-012).
     appUser: notification_app
     migrationUser: notification
+    # Read-only role admin-api's hourly traffic job reads messages as (ADR-050); empty to read as appUser.
+    reportingUser: ""
+    # A read replica's JDBC URL for that job; empty to read from url.
+    reportingUrl: ""
   redis:
     host: redis
     port: 6379

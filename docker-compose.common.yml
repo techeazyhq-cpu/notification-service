@@ -47,6 +47,9 @@ services:
       POSTGRES_PASSWORD: notification
       DB_APP_USER: ${DB_APP_USER:-notification_app}
       DB_APP_PASSWORD: ${DB_APP_PASSWORD:-notification_app}
+      # Read-only role for admin-api's hourly traffic job (ADR-050); set DB_REPORTING_USER empty to skip it.
+      DB_REPORTING_USER: ${DB_REPORTING_USER-notification_reporting}
+      DB_REPORTING_PASSWORD: ${DB_REPORTING_PASSWORD:-notification_reporting}
     ports: ["5432:5432"]
     volumes:
       - pgdata:/var/lib/postgresql/data

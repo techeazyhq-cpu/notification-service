@@ -111,16 +111,18 @@ Negative / accepted:
 - **Detection lags by up to an hour plus the job's run time.** Prepaid credit and postpaid spend
   caps (ADR-004) remain the hard limit in the meantime.
 - **The job reads an hour of messages each run.** It needs an index on `notification_message (created_at)` if the
-  existing ones do not serve it; to be confirmed with `EXPLAIN` on production-sized data (see `perf/`).
+  existing ones do not serve it; to be confirmed with `EXPLAIN` on production-sized data (see `perf/`). Confirmed in
+  ADR-050: the existing indexes serve every query, at about 20 ms an hour.
 - **The job runs as `notification_app`,** which can write as well as read (ADR-012). A read-only role or a read replica
-  for reporting would be stronger and is left as a follow-up.
+  for reporting would be stronger and is left as a follow-up. Done in ADR-050, as an opt-in read-only role that can
+  point at a replica.
 - **Seasonal tenants trip it.** A tenant's first sale or month-end run looks like an anomaly. The false-alarm action
   is the release valve, and the rate it is used at is what tunes the threshold.
 - **New tables, a job, an alert rule and a dashboard page** to maintain.
 
 ## Follow-ups
 
-- A read-only database role, or a read replica, for reporting jobs.
+- A read-only database role, or a read replica, for reporting jobs. Done in ADR-050.
 - Tenant-facing anomaly notices in the client console, once false alarms are rare enough to show customers.
 - Optional automatic pausing of a tenant's SMS above a high score, decided on Stage 1's data.
 - The Stage 2 shadow evaluation and its recorded result.

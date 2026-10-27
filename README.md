@@ -204,7 +204,10 @@ The migration job and the three services connect as different, least-privilege d
 schema (`notification`, full DDL), while `client-api`, `admin-api` and `dispatcher` connect as `notification_app`, which
 can only read and write rows, never alter or drop anything. Starting `common` creates `notification_app`
 automatically (`scripts/postgres-init/01-create-app-role.sh`, run once by the Postgres image on a fresh volume); against
-an existing database, an operator runs that script's SQL by hand once. See ADR-012.
+an existing database, an operator runs that script's SQL by hand once. See ADR-012. It also creates
+`notification_reporting` (`02-create-reporting-role.sh`), a read-only role that admin-api's hourly traffic job reads
+messages as. On a volume created before that role existed, run the script's SQL once or set `DB_REPORTING_USER` empty.
+See ADR-050.
 
 ```bash
 docker compose run --rm db-migrate status        # what is still to be applied

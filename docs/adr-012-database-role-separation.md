@@ -60,3 +60,5 @@ Document the manual grant statements for a non-compose deployment (e.g. RDS/Clou
 guide once one exists; consider a distinct read-only role for reporting/dashboard queries if a read replica is
 introduced (see finding C1); rotate `DB_APP_PASSWORD` the same way any other production secret is rotated once
 secrets management (finding S3/S4) is addressed.
+
+The read-only role for reporting queries is `notification_reporting`, added in ADR-050 for admin-api's traffic job.

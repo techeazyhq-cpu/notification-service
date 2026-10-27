@@ -67,6 +67,12 @@ anomaly:
   aggregation-cron: ${ANOMALY_AGGREGATION_CRON:0 5 * * * *}
   backfill-days: ${ANOMALY_BACKFILL_DAYS:56}
   retention-days: ${ANOMALY_RETENTION_DAYS:400}
+  # Where the hourly job reads messages from (ADR-050). With no user it reads through the service's own connection;
+  # with one it logs in as that read-only role, at DB_REPORTING_URL (a read replica) or else at DB_URL.
+  reporting-database:
+    url: ${DB_REPORTING_URL:${DB_URL:jdbc:postgresql://localhost:5432/notification}}
+    username: ${DB_REPORTING_USER:}
+    password: ${DB_REPORTING_PASSWORD:}
 
 billing:
   payment-terms-days: ${BILLING_PAYMENT_TERMS_DAYS:30}

@@ -18,10 +18,12 @@
 
 package com.techeazy.notification.adminapi.anomaly;
 
+import com.techeazy.notification.config.InsecureDefaults;
 import io.micrometer.core.instrument.MeterRegistry;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.core.env.Environment;
 import org.springframework.jdbc.core.simple.JdbcClient;
 
 import java.time.Clock;
@@ -32,10 +34,23 @@ import java.time.Duration;
 @EnableConfigurationProperties(AnomalyProperties.class)
 class AnomalyConfiguration {
 
+    static final String DEVELOPMENT_REPORTING_DEFAULT = "notification_reporting";
+
     @Bean
-    TrafficAggregator trafficAggregator(JdbcClient jdbc, Clock clock, AnomalyProperties properties) {
-        return new TrafficAggregator(jdbc, clock, Duration.ofDays(properties.getNewRecipientLookbackDays()),
-                properties.getEmailDomainMinRecipients());
+    TrafficSource trafficSource(JdbcClient jdbc, AnomalyProperties properties, Environment env) {
+        AnomalyProperties.ReportingDatabase reporting = properties.getReportingDatabase();
+        if (reporting.isConfigured()) {
+            InsecureDefaults.reject(env, "anomaly.reporting-database.password", reporting.getPassword(),
+                    DEVELOPMENT_REPORTING_DEFAULT);
+        }
+        return TrafficSource.of(reporting, jdbc);
+    }
+
+    @Bean
+    TrafficAggregator trafficAggregator(TrafficSource source, JdbcClient jdbc, Clock clock,
+                                        AnomalyProperties properties) {
+        return new TrafficAggregator(source.jdbc(), jdbc, clock,
+                Duration.ofDays(properties.getNewRecipientLookbackDays()), properties.getEmailDomainMinRecipients());
     }
 
     @Bean

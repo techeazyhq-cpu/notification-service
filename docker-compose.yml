@@ -123,6 +123,10 @@ services:
       ADMIN_REQUIRE_TWO_FACTOR: ${ADMIN_REQUIRE_TWO_FACTOR:-false}
       API_DOCS_ENABLED: ${ADMIN_API_DOCS_ENABLED:-true}
       ANOMALY_AGGREGATION_CRON: ${ANOMALY_AGGREGATION_CRON:-0 5 * * * *}
+      # The traffic job reads messages as this read-only role (ADR-050). A Postgres volume created before it existed
+      # has no such role: run scripts/postgres-init/02-create-reporting-role.sh's SQL once, or set this empty.
+      DB_REPORTING_USER: ${DB_REPORTING_USER-notification_reporting}
+      DB_REPORTING_PASSWORD: ${DB_REPORTING_PASSWORD:-notification_reporting}
     depends_on: *svc-deps
 
   dispatcher:

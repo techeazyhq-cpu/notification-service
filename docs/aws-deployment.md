@@ -123,9 +123,24 @@ In this order. Each is a standard Helm chart; pin the versions you have tested.
      GRANT USAGE, SELECT ON SEQUENCES TO notification_app;
    ```
 
+   Optionally, a read-only role for admin-api's hourly traffic job (ADR-050). Then set the chart's
+   `config.database.reportingUser` to `notification_reporting`, and `config.database.reportingUrl` to a read
+   replica's JDBC URL if you have one:
+
+   ```sql
+   CREATE ROLE notification_reporting LOGIN PASSWORD '<generated password>';
+   ALTER ROLE notification_reporting SET default_transaction_read_only = on;
+   GRANT USAGE ON SCHEMA public TO notification_reporting;
+   GRANT SELECT ON ALL TABLES IN SCHEMA public TO notification_reporting;
+   ALTER DEFAULT PRIVILEGES FOR ROLE notification IN SCHEMA public
+     GRANT SELECT ON TABLES TO notification_reporting;
+   ```
+
 4. **Application secrets.** Put one JSON object in the secret named by `terraform output application_secret_arn`,
    with the keys `DB_PASSWORD` (the password above), `SECRETS_ENCRYPTION_KEY`, `DATA_ENCRYPTION_KEY`,
-   `ADMIN_TWO_FACTOR_KEY` and `ADMIN_PASSWORD`. Generate the keys as the README describes, never reuse local ones.
+   `ADMIN_TWO_FACTOR_KEY` and `ADMIN_PASSWORD`. If you created the read-only role, add `DB_REPORTING_PASSWORD` too,
+   and a matching entry to `deploy/k8s/aws/external-secrets.yaml`. Generate the keys as the README describes, never
+   reuse local ones.
 5. **Sync them into the cluster:**
 
    ```bash
