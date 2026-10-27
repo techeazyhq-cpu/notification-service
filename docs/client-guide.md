@@ -116,6 +116,10 @@ Open a request to see its details:
   It lists ready-made templates for the channel and category chosen in the form, such as a verification code,
   an order shipped or a sale with an opt-out. **Use this example** fills the subject and body; change them as you
   need, then **Create template**. Examples cost nothing and already meet the channel's rules.
+  Every example also comes in Hindi, Tamil and Arabic: pick the **Language** next to it. Translated SMS text uses
+  Unicode, so each SMS segment holds 70 characters instead of 160, and most translated SMS are two segments. The
+  translations still await a native speaker's review, so read one before you use it. Through the API:
+  `GET /v1/templates/examples?language=hi`.
 - **Draft with AI** appears in the template form when your operator has turned AI drafting on. Choose the channel and
   category in the form, then pick a tone, list the placeholders the message may use (`firstName, orderId`) and
   describe what the message is for. The draft meets

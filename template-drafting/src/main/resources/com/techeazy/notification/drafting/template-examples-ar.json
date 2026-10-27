@@ -1,0 +1,119 @@
+[
+  {
+    "id": "sms-otp-verification",
+    "body": "{{code}} رمز التحقق. صالح {{minutes}} دقيقة. لا تشاركه مع أحد."
+  },
+  {
+    "id": "sms-otp-sign-in",
+    "body": "رمز تسجيل الدخول {{code}}. إن لم تطلبه فتجاهل هذه الرسالة."
+  },
+  {
+    "id": "sms-order-shipped",
+    "body": "مرحبًا {{firstName}}، تم شحن طلبك {{orderId}}. تتبّعه هنا: {{trackingUrl}}"
+  },
+  {
+    "id": "sms-appointment-reminder",
+    "body": "تذكير: موعدك مع {{businessName}} يوم {{date}} الساعة {{time}}. أرسل C للإلغاء."
+  },
+  {
+    "id": "sms-payment-received",
+    "body": "استلمنا دفعتك بمبلغ {{amount}} للفاتورة {{invoiceNumber}}. شكرًا لتعاملك معنا."
+  },
+  {
+    "id": "sms-promo-sale",
+    "body": "{{businessName}}: خصم {{discount}} على كل شيء حتى {{endDate}}. استخدم الرمز {{promoCode}} عند الدفع. أرسل STOP لإلغاء الاشتراك."
+  },
+  {
+    "id": "sms-promo-back-in-stock",
+    "body": "خبر سار يا {{firstName}}: {{productName}} متوفر مجددًا. أرسل STOP لإلغاء الاشتراك."
+  },
+  {
+    "id": "email-otp-verification",
+    "subject": "رمز التحقق الخاص بك",
+    "body": "مرحبًا {{firstName}}،\n\nرمز التحقق الخاص بك هو {{code}}. تنتهي صلاحيته خلال {{minutes}} دقيقة.\n\nإذا لم تطلب هذا الرمز، يمكنك تجاهل هذه الرسالة. لا تشارك الرمز مع أي شخص أبدًا.\n\nفريق {{businessName}}\n"
+  },
+  {
+    "id": "email-welcome",
+    "subject": "أهلًا بك في {{businessName}} يا {{firstName}}",
+    "body": "مرحبًا {{firstName}}،\n\nشكرًا لانضمامك إلى {{businessName}}. حسابك جاهز، ويمكنك تسجيل الدخول في أي وقت من هنا: {{signInUrl}}\n\nإذا كانت لديك أي أسئلة، فقط ردّ على هذه الرسالة.\n\nفريق {{businessName}}\n"
+  },
+  {
+    "id": "email-password-reset",
+    "subject": "إعادة تعيين كلمة المرور",
+    "body": "مرحبًا {{firstName}}،\n\nتلقّينا طلبًا لإعادة تعيين كلمة المرور الخاصة بك. اختر كلمة مرور جديدة من هنا: {{resetUrl}}\n\nتنتهي صلاحية الرابط خلال {{minutes}} دقيقة. إذا لم تطلب إعادة تعيين كلمة المرور، يمكنك تجاهل هذه الرسالة وستبقى كلمة المرور كما هي.\n\nفريق {{businessName}}\n"
+  },
+  {
+    "id": "email-order-confirmation",
+    "subject": "تم تأكيد الطلب {{orderId}}",
+    "body": "مرحبًا {{firstName}}،\n\nشكرًا لطلبك {{orderId}}. لقد استلمناه وسنُعلمك عند شحنه.\n\nإجمالي الطلب: {{orderTotal}}\nموعد التسليم المتوقع: {{deliveryDate}}\n\nيمكنك الاطلاع على طلبك في أي وقت من هنا: {{orderUrl}}\n\nفريق {{businessName}}\n"
+  },
+  {
+    "id": "email-invoice-ready",
+    "subject": "فاتورتك {{invoiceNumber}} جاهزة",
+    "body": "مرحبًا {{firstName}}،\n\nفاتورتك {{invoiceNumber}} بمبلغ {{amount}} جاهزة. يُرجى سدادها قبل {{dueDate}}.\n\nاعرض الفاتورة وادفعها من هنا: {{invoiceUrl}}\n\nفريق {{businessName}}\n"
+  },
+  {
+    "id": "email-promo-offer",
+    "subject": "خصم {{discount}} لك يا {{firstName}}",
+    "body": "مرحبًا {{firstName}}،\n\nشكرًا لكونك من عملائنا، إليك خصم {{discount}} على طلبك القادم. استخدم الرمز {{promoCode}} عند الدفع قبل {{endDate}}.\n\nابدأ التسوق: {{shopUrl}}\n\nفريق {{businessName}}\n\nتصلك هذه الرسالة لأنك اشتركت في عروض {{businessName}}. إلغاء الاشتراك: {{unsubscribeUrl}}\n"
+  },
+  {
+    "id": "email-win-back",
+    "subject": "اشتقنا إليك يا {{firstName}}",
+    "body": "مرحبًا {{firstName}}،\n\nمرّ وقت منذ زيارتك الأخيرة، وتغيّر الكثير في {{businessName}}. تعرّف على الجديد: {{shopUrl}}\n\nفريق {{businessName}}\n\nتصلك هذه الرسالة لأنك اشتركت في أخبار {{businessName}}. إلغاء الاشتراك: {{unsubscribeUrl}}\n"
+  },
+  {
+    "id": "whatsapp-otp-verification",
+    "body": "رمز التحقق الخاص بك من {{businessName}} هو {{code}}. تنتهي صلاحيته خلال {{minutes}} دقيقة. لا تشارك هذا الرمز مع أي شخص."
+  },
+  {
+    "id": "whatsapp-order-shipped",
+    "body": "مرحبًا {{firstName}}، طلبك {{orderId}} في الطريق إليك. تتبّع شحنتك عبر {{trackingUrl}} وردّ هنا إذا احتجت إلى مساعدة."
+  },
+  {
+    "id": "whatsapp-appointment-reminder",
+    "body": "مرحبًا {{firstName}}، هذا تذكير بموعدك مع {{businessName}} يوم {{date}} الساعة {{time}}. أرسل YES للتأكيد أو NO للإلغاء."
+  },
+  {
+    "id": "whatsapp-delivery-today",
+    "body": "مرحبًا {{firstName}}، يصل طلبك {{orderId}} اليوم بين {{timeWindow}}. يُرجى التأكد من وجود من يستلمه."
+  },
+  {
+    "id": "whatsapp-promo-offer",
+    "body": "مرحبًا {{firstName}}، استمتع بخصم {{discount}} لدى {{businessName}} حتى {{endDate}} باستخدام الرمز {{promoCode}}. أرسل STOP لإيقاف العروض."
+  },
+  {
+    "id": "whatsapp-back-in-stock",
+    "body": "خبر سار يا {{firstName}}! {{productName}} متوفر مجددًا. أرسل STOP لإيقاف العروض."
+  },
+  {
+    "id": "push-otp-sign-in",
+    "subject": "رمز تسجيل الدخول",
+    "body": "استخدم {{code}} لإكمال تسجيل الدخول. تنتهي صلاحيته خلال {{minutes}} دقيقة."
+  },
+  {
+    "id": "push-order-out-for-delivery",
+    "subject": "طلبك في طريقه للتسليم",
+    "body": "يصل الطلب {{orderId}} اليوم. انقر لتتبّعه."
+  },
+  {
+    "id": "push-payment-received",
+    "subject": "تم استلام الدفعة",
+    "body": "استلمنا دفعتك بمبلغ {{amount}}. شكرًا لك!"
+  },
+  {
+    "id": "push-appointment-reminder",
+    "subject": "موعدك غدًا",
+    "body": "نراك الساعة {{time}} مع {{businessName}}. انقر للعرض أو لتغيير الموعد."
+  },
+  {
+    "id": "push-flash-sale",
+    "subject": "خصم {{discount}} اليوم فقط",
+    "body": "{{firstName}}، ينتهي التخفيض عند منتصف الليل. انقر للتسوق الآن."
+  },
+  {
+    "id": "push-cart-reminder",
+    "subject": "نسيت شيئًا في سلتك",
+    "body": "{{productName}} ما زال في سلتك. انقر لإكمال طلبك."
+  }
+]

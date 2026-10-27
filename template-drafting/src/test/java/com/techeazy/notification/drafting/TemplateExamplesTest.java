@@ -25,6 +25,7 @@ import java.io.ByteArrayInputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -36,8 +37,8 @@ class TemplateExamplesTest {
     private final TemplateExamples examples = TemplateExamples.load();
 
     @Test
-    void everyExampleMeetsItsChannelsRulesWithoutAWarning() {
-        assertThat(examples.find(null, null)).isNotEmpty().allSatisfy(example -> {
+    void everyEnglishExampleMeetsItsChannelsRulesWithoutAWarning() {
+        assertThat(examples.find(null, null, "en")).isNotEmpty().allSatisfy(example -> {
             ChannelRules.Check check = ChannelRules.check(example.channel(), example.subject(), example.body(),
                     example.variables());
             assertThat(check.violations()).as(example.id()).isEmpty();
@@ -46,10 +47,48 @@ class TemplateExamplesTest {
     }
 
     @Test
-    void everyChannelHasAnExampleInEveryCategory() {
-        for (Channel channel : ChannelRules.SUPPORTED) {
-            for (MessageCategory category : MessageCategory.values()) {
-                assertThat(examples.find(channel, category)).as(channel + " " + category).isNotEmpty();
+    void aTranslationIsWarnedOnlyAboutWhatItsScriptDoesToAnSms() {
+        assertThat(examples.find(null, null)).filteredOn(example -> !example.language().equals("en")).isNotEmpty()
+                .allSatisfy(example -> {
+                    ChannelRules.Check check = ChannelRules.check(example.channel(), example.subject(), example.body(),
+                            example.variables());
+                    assertThat(check.violations()).as(example.id()).isEmpty();
+                    if (example.channel() == Channel.SMS) {
+                        assertThat(check.warnings()).as(example.id()).contains(ChannelRules.UCS2_WARNING);
+                        assertThat(example.smsLength().segments()).as(example.id())
+                                .isLessThanOrEqualTo(example.category() == MessageCategory.OTP ? 1
+                                        : ChannelRules.SMS_MAX_SEGMENTS);
+                    } else {
+                        assertThat(check.warnings()).as(example.id()).isEmpty();
+                    }
+                });
+    }
+
+    @Test
+    void everyEnglishExampleIsTranslatedIntoEveryLanguageWithTheSamePlaceholders() {
+        List<TemplateExample> english = examples.find(null, null, "en");
+        for (String language : TemplateExamples.TRANSLATIONS) {
+            assertThat(examples.find(null, null, language)).as(language).hasSameSizeAs(english);
+            for (TemplateExample original : english) {
+                TemplateExample translated = examples.find(original.channel(), original.category(), language).stream()
+                        .filter(example -> example.id().equals(original.id() + "-" + language)).findFirst()
+                        .orElseThrow(() -> new AssertionError(original.id() + " has no " + language + " translation"));
+                assertThat(translated.variables()).as(translated.id())
+                        .containsExactlyInAnyOrderElementsOf(original.variables());
+                assertThat(translated.name()).isEqualTo(original.name());
+                assertThat(translated.body()).isNotEqualTo(original.body());
+            }
+        }
+    }
+
+    @Test
+    void everyChannelHasAnExampleInEveryCategoryInEveryLanguage() {
+        for (String language : List.of("en", "hi", "ta", "ar")) {
+            for (Channel channel : ChannelRules.SUPPORTED) {
+                for (MessageCategory category : MessageCategory.values()) {
+                    assertThat(examples.find(channel, category, language)).as(language + " " + channel + " "
+                            + category).isNotEmpty();
+                }
             }
         }
     }
@@ -92,6 +131,58 @@ class TemplateExamplesTest {
         assertThatThrownBy(() -> TemplateExamples.from(utf8(broken)))
                 .isInstanceOf(IllegalStateException.class).hasMessageContaining("bad-sms")
                 .hasMessageContaining("phone number");
+    }
+
+    @Test
+    void aTranslationThatDropsOrAddsAPlaceholderIsRefused() {
+        String english = """
+                [{"id":"otp","channel":"SMS","category":"OTP","name":"Code","description":"A code",
+                  "body":"Your code is {{code}}. It expires in {{minutes}} minutes."}]
+                """;
+        String dropped = """
+                [{"id":"otp","body":"आपका कोड {{code}} है।"}]
+                """;
+
+        assertThatThrownBy(() -> TemplateExamples.from(utf8(english), Map.of("hi", utf8(dropped))))
+                .isInstanceOf(IllegalStateException.class).hasMessageContaining("otp-hi")
+                .hasMessageContaining("minutes");
+    }
+
+    @Test
+    void aTranslationOfAnExampleThatDoesNotExistIsRefused() {
+        String english = """
+                [{"id":"otp","channel":"SMS","category":"OTP","name":"Code","description":"A code",
+                  "body":"Your code is {{code}}."}]
+                """;
+        String unknown = """
+                [{"id":"welcome","body":"مرحبًا {{firstName}}"}]
+                """;
+
+        assertThatThrownBy(() -> TemplateExamples.from(utf8(english), Map.of("ar", utf8(unknown))))
+                .isInstanceOf(IllegalStateException.class).hasMessageContaining("welcome-ar");
+    }
+
+    @Test
+    void aTranslationIsHeldToEveryOtherRule() {
+        String english = """
+                [{"id":"help","channel":"SMS","category":"TRANSACTIONAL","name":"Help","description":"Help",
+                  "body":"Hi {{firstName}}, reply here if you need help."}]
+                """;
+        String invented = """
+                [{"id":"help","body":"வணக்கம் {{firstName}}, உதவிக்கு 0800 123 4567 ஐ அழைக்கவும்."}]
+                """;
+
+        assertThatThrownBy(() -> TemplateExamples.from(utf8(english), Map.of("ta", utf8(invented))))
+                .isInstanceOf(IllegalStateException.class).hasMessageContaining("help-ta")
+                .hasMessageContaining("phone number");
+    }
+
+    @Test
+    void examplesAreFilteredByLanguage() {
+        assertThat(examples.find(Channel.SMS, MessageCategory.OTP, "ar")).isNotEmpty()
+                .allSatisfy(example -> assertThat(example.language()).isEqualTo("ar"));
+        assertThat(examples.find(Channel.SMS, MessageCategory.OTP))
+                .extracting(TemplateExample::language).contains("en", "hi", "ta", "ar");
     }
 
     @Test

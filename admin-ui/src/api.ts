@@ -235,9 +235,10 @@ export interface ClientDrafting {
 }
 export interface ClientDraftingInput { draftingEnabled: boolean; monthlyTokenBudget?: number }
 /** A ready-made template to start from (ADR-046); smsLength is present for SMS only. */
+/** language: the subject and body's BCP 47 tag, such as en or ar; name and description are always English. */
 export interface TemplateExample {
-  id: string; channel: Channel; category: Category; name: string; description: string; subject?: string; body: string;
-  variables: string[]; smsLength?: SmsLength;
+  id: string; language: string; channel: Channel; category: Category; name: string; description: string; subject?: string;
+  body: string; variables: string[]; smsLength?: SmsLength;
 }
 export interface TemplateDraft {
   channel: Channel; subject?: string; body: string; variables: string[]; warnings: string[]; smsLength?: SmsLength; model: string;

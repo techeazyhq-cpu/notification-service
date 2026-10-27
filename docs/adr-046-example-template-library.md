@@ -59,7 +59,7 @@ still worth having:
 - **Generate the examples with the drafting model.** They would vary from release to release and cost tokens to
   produce, which is what this library exists to avoid.
 - **Localised examples.** Useful later. The catalogue format leaves room for a language field, but every example is in
-  English for now, like the rest of the UI.
+  English for now, like the rest of the UI. Done in ADR-052: Hindi, Tamil and Arabic.
 
 ## Consequences
 
@@ -72,4 +72,4 @@ Negative / accepted:
 - Examples do not adapt to a business's own wording or variables. An author edits them, or uses AI drafting when it
   is available.
 - Adding or changing an example needs a release.
-- The catalogue is in English only.
+- The catalogue is in English only. ADR-052 adds Hindi, Tamil and Arabic.

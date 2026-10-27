@@ -183,11 +183,11 @@ export default function Templates() {
             request={(brief) => send<TemplateDraft>('POST', '/v1/templates/drafts', brief)} onDraft={applyDraft} />
         )}
         <label style={{ marginTop: 12 }}><span>Subject / title (required for EMAIL)</span>
-          <input value={form.subject ?? ''} onChange={(e) => setForm({ ...form, subject: e.target.value })} maxLength={500} disabled={readOnly} />
+          <input dir="auto" value={form.subject ?? ''} onChange={(e) => setForm({ ...form, subject: e.target.value })} maxLength={500} disabled={readOnly} />
         </label>
         <label style={{ marginTop: 12 }}>
           <span>Body: use <code>{'{{variable}}'}</code> for values you supply per recipient</span>
-          <textarea value={form.body} onChange={(e) => setForm({ ...form, body: e.target.value })} required maxLength={10000} disabled={readOnly} />
+          <textarea dir="auto" value={form.body} onChange={(e) => setForm({ ...form, body: e.target.value })} required maxLength={10000} disabled={readOnly} />
         </label>
         <div className="row" style={{ marginTop: 12 }}>
           {!readOnly && <button type="submit" className="primary" disabled={busy}>{editing ? 'Save changes' : 'Create template'}</button>}

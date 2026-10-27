@@ -44,7 +44,8 @@ class TemplateExamplesController {
 
     @GetMapping("/examples")
     List<TemplateExample> examples(@RequestParam(required = false) Channel channel,
-                                   @RequestParam(required = false) MessageCategory category) {
-        return examples.find(channel, category);
+                                   @RequestParam(required = false) MessageCategory category,
+                                   @RequestParam(required = false) String language) {
+        return examples.find(channel, category, language);
     }
 }
