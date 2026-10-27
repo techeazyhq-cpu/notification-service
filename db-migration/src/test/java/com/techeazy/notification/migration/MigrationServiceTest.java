@@ -64,7 +64,8 @@ class MigrationServiceTest {
                     "018-fingerprint-backfill-index", "019-signed-requests", "020-idempotency-payload-fingerprint", "021-inflight-usage-index",
                     "022-traffic-hourly", "023-traffic-anomaly", "024-push-data", "025-template-draft-usage",
                     "026-template-drafting-settings", "027-template-drafting-provider",
-                    "028-template-draft-usage-push", "029-client-drafting-policy");
+                    "028-template-draft-usage-push", "029-client-drafting-policy",
+                    "030-previous-signing-secret");
     private static final String NOT_COMPARED = "('databasechangelog','databasechangeloglock','flyway_schema_history',"
             + "'billing_plan','billing_plan_rate','billing_account','credit_ledger_entry','credit_hold','invoice','invoice_line','invoice_payment','admin_user','admin_recovery_code','admin_session','client_sender','admin_audit_event','billing_account_otp_price','message_event','api_request_nonce','traffic_hourly','traffic_anomaly','template_draft_usage',"
             + "'template_drafting_settings','client_drafting_policy')";
@@ -401,6 +402,25 @@ class MigrationServiceTest {
     }
 
     @Test
+    void thePreviousSigningSecretColumnsComeAndGoTogether() throws Exception {
+        String db = newDatabase();
+        MigrationService service = service(db, true);
+        service.update();
+
+        assertThat(query(db, "select pg_get_constraintdef(oid) from pg_constraint "
+                + "where conname = 'ck_client_previous_signing_secret'"))
+                .containsExactly("CHECK (((previous_signing_secret IS NULL) = (previous_signing_secret_expires_at IS NULL)))");
+        assertThat(query(db, "select column_name from information_schema.columns where table_name = 'client' "
+                + "and column_name like 'previous_signing_secret%' order by column_name"))
+                .containsExactly("previous_signing_secret", "previous_signing_secret_expires_at");
+
+        undoFrom(service, "030-previous-signing-secret");
+
+        assertThat(query(db, "select column_name from information_schema.columns where table_name = 'client' "
+                + "and column_name like 'previous_signing_secret%'")).isEmpty();
+    }
+
+    @Test
     void theInFlightUsageIndexIsBuiltValidAndRollsBackCleanly() throws Exception {
         String db = newDatabase();
         MigrationService service = service(db, true);
@@ -732,7 +752,8 @@ class MigrationServiceTest {
                 + "where table_schema='public' and column_name not in "
                 + "('sender_email','sender_name','erased_at','failure_kind',"
                 + "'reprocess_count','error_code','category','expires_at','recipient_fingerprint','template_name',"
-                + "'signing_secret','signing_required','payload_fingerprint','push_data') and table_name not in " + NOT_COMPARED));
+                + "'signing_secret','signing_required','payload_fingerprint','push_data','previous_signing_secret',"
+                + "'previous_signing_secret_expires_at') and table_name not in " + NOT_COMPARED));
         lines.addAll(query(database, "select 'idx ' || tablename || ' ' || indexdef from pg_indexes "
                 + "where schemaname='public' and indexname not in ('ix_message_sent_usage','ix_message_erase_due',"
                 + "'ix_request_erase_due','ix_request_idempotency_due','ix_message_dead_letters',"
@@ -741,7 +762,7 @@ class MigrationServiceTest {
         lines.addAll(query(database, "select 'con ' || conrelid::regclass || ' ' || conname || ' ' || pg_get_constraintdef(oid) "
                 + "from pg_constraint where connamespace = 'public'::regnamespace and conrelid::regclass::text not in "
                         + NOT_COMPARED + " and conname not in ('ck_message_failure_kind', 'ck_request_category',"
-                + " 'ck_message_category', 'ck_template_category')"));
+                + " 'ck_message_category', 'ck_template_category', 'ck_client_previous_signing_secret')"));
         Collections.sort(lines);
         return lines;
     }

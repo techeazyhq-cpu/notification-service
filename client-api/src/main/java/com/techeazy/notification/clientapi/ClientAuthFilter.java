@@ -131,7 +131,8 @@ public class ClientAuthFilter extends OncePerRequestFilter {
     /** Only ACTIVE clients are cached as authenticated; a disabled client resolves to empty (401). */
     private Optional<Caller> lookup(String keyHash) {
         return clients.findByApiKeyHash(keyHash).filter(Client::isActive).map(c -> new Caller(AuthenticatedClient.from(c),
-                new SigningPolicy(c.getSigningSecret(), c.isSigningRequired())));
+                new SigningPolicy(c.getSigningSecret(), c.isSigningRequired(), c.getPreviousSigningSecret(),
+                        c.getPreviousSigningSecretExpiresAt())));
     }
 
     private void reject(HttpServletResponse res, ErrorCode errorCode, String message, Long retryAfter)

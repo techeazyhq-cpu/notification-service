@@ -132,6 +132,22 @@ class SecretReencryptionTest {
     }
 
     @Test
+    void aSigningSecretKeptForARotationsGracePeriodIsRewrittenToo() {
+        UUID client = client(newSigning.encryptForStorage("nss_current"));
+        jdbc.sql("UPDATE client SET previous_signing_secret = :old, previous_signing_secret_expires_at = :until "
+                        + "WHERE id = :id")
+                .param("old", oldSigning.encryptForStorage("nss_previous"))
+                .param("until", Timestamp.from(Instant.now().plusSeconds(3600))).param("id", client).update();
+
+        SecretReencryption.Report report = reencryption.run();
+
+        assertThat(report.signingSecrets()).isEqualTo(1);
+        String previous = jdbc.sql("SELECT previous_signing_secret FROM client WHERE id = :id").param("id", client)
+                .query(String.class).single();
+        assertThat(onlyCurrentKey(SecretsConfig.CLIENT_SIGNING_SECRET).decryptForUse(previous)).isEqualTo("nss_previous");
+    }
+
+    @Test
     void aSecondRunFindsNothingLeftSoThePreviousKeysCanBeRemoved() {
         client(oldSigning.encryptForStorage("nss_signing"));
         admin(oldTwoFactor.encrypt("JBSWY3DPEHPK3PXP"));

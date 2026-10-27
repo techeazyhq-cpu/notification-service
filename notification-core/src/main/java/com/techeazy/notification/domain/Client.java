@@ -33,7 +33,8 @@ import java.util.stream.Collectors;
 /**
  * An API consumer (a calling application). Only the SHA-256 of its API key is stored. Its request-signing secret, if
  * it has one, is stored encrypted, and {@code signingRequired} makes every state-changing request need a signature
- * (ADR-036).
+ * (ADR-036). After a rotation with a grace period, the secret it replaced is kept, encrypted, until
+ * {@code previousSigningSecretExpiresAt} (ADR-051).
  */
 @Entity
 @Table(name = "client")
@@ -47,6 +48,8 @@ public class Client {
     private String allowedChannels;
     private String signingSecret;
     private boolean signingRequired;
+    private String previousSigningSecret;
+    private Instant previousSigningSecretExpiresAt;
     private Instant createdAt;
     private Instant updatedAt;
 

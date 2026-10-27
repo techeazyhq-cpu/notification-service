@@ -177,14 +177,18 @@ sector tenants usually do. Otherwise skip it; the tenant can start later.
 - **Require signatures** once the tenant confirms its integration signs every request (the client guide's *Signed
   requests* section has code). From then on, an unsigned `POST`, `PUT` or `DELETE` is refused with
   `401 SIGNATURE_REQUIRED` (NS-2011). Reads stay unsigned.
-- **Rotate signing secret** replaces the secret at once. Requests signed with the old one fail within 30 seconds, so
-  agree the moment with the tenant.
+- **Rotate signing secret** asks how long the old secret keeps working: not at all, 1 hour, 24 hours or 7 days
+  (ADR-051). During that time the tenant can switch its servers one by one; the client's row shows when the old secret
+  stops working, and **End now** stops it early. If the old secret may have leaked, choose *Not at all*, so requests
+  signed with it fail within 30 seconds.
 - **Remove signing secret** turns signing off again.
 
 API:
 
 ```bash
 curl -X POST "$ADMIN_API/api/admin/clients/$CLIENT_ID/signing-secret" -H "Authorization: Bearer $ADMIN_TOKEN"
+curl -X POST "$ADMIN_API/api/admin/clients/$CLIENT_ID/signing-secret" -H "Authorization: Bearer $ADMIN_TOKEN"   -H "Content-Type: application/json" -d '{"previousSecretHours":24}'
+curl -X DELETE "$ADMIN_API/api/admin/clients/$CLIENT_ID/signing-secret/previous" -H "Authorization: Bearer $ADMIN_TOKEN"
 curl -X PUT "$ADMIN_API/api/admin/clients/$CLIENT_ID/signing-required" -H "Authorization: Bearer $ADMIN_TOKEN"   -H "Content-Type: application/json" -d '{"required":true}'
 ```
 

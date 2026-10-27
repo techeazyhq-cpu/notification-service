@@ -21,12 +21,21 @@ import { Link } from 'react-router-dom';
 import { api, Channel, CHANNELS, Client } from '../api';
 import { useLoad } from '../hooks';
 
+/** How long the old signing secret keeps working after a rotation (ADR-051); the API allows up to 168 hours. */
+const GRACE_PERIODS: { hours: number; label: string }[] = [
+  { hours: 0, label: 'Not at all: refuse it now' },
+  { hours: 1, label: '1 hour' },
+  { hours: 24, label: '24 hours' },
+  { hours: 168, label: '7 days' },
+];
+
 export default function Clients() {
   const { data, error, reload } = useLoad(() => api<Client[]>('GET', '/clients'));
   const [name, setName] = useState('');
   const [channels, setChannels] = useState<Channel[]>([...CHANNELS]);
   const [issued, setIssued] = useState<{ name: string; what: string; value: string } | null>(null);
   const [formError, setFormError] = useState('');
+  const [rotation, setRotation] = useState<{ client: Client; hours: number } | null>(null);
 
   async function create(e: React.SubmitEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -47,12 +56,30 @@ export default function Clients() {
   }
 
   async function issueSigningSecret(c: Client) {
-    const warning = c.signingEnabled
-      ? `Replace the signing secret for ${c.name}? Requests signed with the old secret are refused within 30 seconds.`
-      : `Issue a request-signing secret for ${c.name}? Signing stays optional until you require it.`;
-    if (!confirm(warning)) return;
+    if (c.signingEnabled) {
+      setRotation({ client: c, hours: 24 });
+      return;
+    }
+    if (!confirm(`Issue a request-signing secret for ${c.name}? Signing stays optional until you require it.`)) return;
     const r = await api<{ client: Client; signingSecret: string }>('POST', `/clients/${c.id}/signing-secret`);
     setIssued({ name: c.name, what: 'Signing secret', value: r.signingSecret });
+    reload();
+  }
+
+  async function rotateSigningSecret(e: React.SubmitEvent<HTMLFormElement>) {
+    e.preventDefault();
+    if (!rotation) return;
+    const { client: c, hours } = rotation;
+    const r = await api<{ client: Client; signingSecret: string }>('POST', `/clients/${c.id}/signing-secret`,
+      { previousSecretHours: hours });
+    setRotation(null);
+    setIssued({ name: c.name, what: 'Signing secret', value: r.signingSecret });
+    reload();
+  }
+
+  async function endGracePeriod(c: Client) {
+    if (!confirm(`Stop accepting ${c.name}'s old signing secret now? Requests signed with it are refused within 30 seconds.`)) return;
+    await api('DELETE', `/clients/${c.id}/signing-secret/previous`);
     reload();
   }
 
@@ -89,6 +116,19 @@ export default function Clients() {
           <button type="button" className="link" onClick={() => setIssued(null)}>Dismiss</button>
         </div>
       )}
+      {rotation && (
+        <form className="card row" onSubmit={rotateSigningSecret}>
+          <span>Rotate the signing secret for <b>{rotation.client.name}</b>.</span>
+          <label>Keep the old secret working for
+            <select value={rotation.hours} onChange={(e) => setRotation({ ...rotation, hours: Number(e.target.value) })}>
+              {GRACE_PERIODS.map((g) => <option key={g.hours} value={g.hours}>{g.label}</option>)}
+            </select>
+          </label>
+          <button type="submit" className="primary">Rotate signing secret</button>
+          <button type="button" className="link" onClick={() => setRotation(null)}>Cancel</button>
+          <span className="muted">If the old secret may have leaked, choose “Not at all”.</span>
+        </form>
+      )}
       <form className="card row" onSubmit={create}>
         <label>Name<input value={name} onChange={(e) => setName(e.target.value)} required maxLength={120} /></label>
         {CHANNELS.map((ch) => (
@@ -108,7 +148,15 @@ export default function Clients() {
                 <td><span className={`badge ${c.status}`}>{c.status}</span></td>
                 <td>{c.allowedChannels.join(', ')}</td>
                 <td className="mono">{c.apiKeyPrefix}…</td>
-                <td>{signingLabel(c)}</td>
+                <td>
+                  {signingLabel(c)}
+                  {c.previousSecretAcceptedUntil && (
+                    <div className="muted">
+                      Old secret works until {new Date(c.previousSecretAcceptedUntil).toLocaleString()}{' '}
+                      <button type="button" className="link" onClick={() => endGracePeriod(c)}>End now</button>
+                    </div>
+                  )}
+                </td>
                 <td>
                   <Link to={`/traffic/${c.id}`}>Traffic</Link>{' '}
                   <button type="button" onClick={() => toggle(c)}>{c.status === 'ACTIVE' ? 'Disable' : 'Enable'}</button>{' '}
