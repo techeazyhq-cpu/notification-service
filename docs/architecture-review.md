@@ -78,7 +78,7 @@ The last column is the severity of what remains, for a production launch with re
 | S5 | API keys have no scopes or expiry; rotation is immediate | Open | No scope or expiry column in the migrations | Medium |
 | S6 | Actuator and Swagger unauthenticated on public ports | Closed | ADR-021; network policies admit management ports only from monitoring (ADR-025) | — |
 | S7 | Provider URLs not restricted (SSRF) | Closed | ADR-022 in code; egress policy blocks private, loopback, link-local and CGNAT ranges (ADR-025) | — |
-| S8 | No dependency or image scanning, SBOM or signing | Closed | Trivy for dependencies, secrets and images; CodeQL; Dependabot; signed images with a signed SPDX SBOM (ADR-027). **Remains:** nothing in a cluster yet refuses unsigned images | Low |
+| S8 | No dependency or image scanning, SBOM or signing | Closed | Trivy for dependencies, secrets and images; CodeQL; Dependabot security updates (ADR-049); signed images with a signed SPDX SBOM (ADR-027). **Remains:** nothing in a cluster yet refuses unsigned images | Low |
 
 ### Architecture
 
@@ -128,7 +128,7 @@ The last column is the severity of what remains, for a production launch with re
 
 | ID | Severity | Finding | Recommendation |
 |---|---|---|---|
-| N1 | Medium | The publish job rebuilds images rather than promoting the scanned ones byte for byte, and base images are pinned by tag, not digest (ADR-027) | Pin base images by digest; Dependabot keeps them current |
+| N1 | Medium | The publish job rebuilds images rather than promoting the scanned ones byte for byte, and base images are pinned by tag, not digest (ADR-027) | Pin base images by digest; bump the digests by hand before each release (ADR-049) |
 | N2 | Medium | Signatures and SBOMs are produced but nothing enforces them at deploy time | Kyverno `verifyImages` or the Sigstore policy controller in each cluster, matching the identity in ADR-027 |
 | N3 | Low | While the broker is down, each accept waits the 5 s publish timeout before returning | A circuit breaker on the publisher so accepts return at once and the sweeper publishes later |
 | N4 | Low | The `Helm chart` check is in `branch-protection.json` but not yet applied to `main` | Re-run step 2 of `docs/branch-protection.md` |
