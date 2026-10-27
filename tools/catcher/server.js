@@ -116,10 +116,13 @@ const routes = {
   },
 };
 
+/** The routes as a Map, so a request line reaches only the handlers above, never an inherited property such as constructor. */
+const ROUTES = new Map(Object.entries(routes));
+
 async function handle(req, res) {
   const [pathname, query = ''] = req.url.split('?');
   const params = new URLSearchParams(query);
-  const route = routes[`${req.method} ${pathname}`];
+  const route = ROUTES.get(`${req.method} ${pathname}`);
   if (route) return route(req, res, params);
   const channel = pathname.slice(1);
   if (req.method === 'POST' && CHANNELS.has(channel)) return capture(req, res, channel);

@@ -40,7 +40,7 @@ both UIs and the catcher, joined to that network. Start `common` first:
 ```bash
 docker compose -f docker-compose.common.yml up -d --wait   # postgres, redis, pulsar, mailpit
 docker compose --profile app up -d --build                 # migration, 3 services, both UIs, catcher
-node scripts/seed.mjs                                      # providers, templates, demo client (prints its API key once)
+node scripts/seed.mjs                                      # providers, templates, demo client (writes its API key to .local/demo-api-key)
 ```
 
 Only one `common` may exist on a machine: consent-manager's own `infra/common/compose.yml` is also a project named
