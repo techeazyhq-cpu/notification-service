@@ -1,6 +1,6 @@
 --liquibase formatted sql
 
--- Copyright 2026 Vasantha Kumar
+-- Copyright 2026 Vasantha Kumar Kesavan
 --
 -- Licensed under the Apache License, Version 2.0 (the "License");
 -- you may not use this file except in compliance with the License.
@@ -14,7 +14,7 @@
 -- See the License for the specific language governing permissions and
 -- limitations under the License.
 --
--- @author Vasantha Kumar <vasantha.kumar@hotmail.com>
+-- @author Vasantha Kumar Kesavan <vasantha.kumar@hotmail.com>
 
 --changeset notification:030-previous-signing-secret splitStatements:false
 --comment A rotated request-signing secret kept for a grace period (ADR-051): the secret it replaced, encrypted like the current one, and when it stops being accepted. Both are NULL outside a grace period. New nullable columns: nothing existing is locked or rewritten.

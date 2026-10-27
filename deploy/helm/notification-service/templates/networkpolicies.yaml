@@ -1,6 +1,6 @@
 {{/*
-Copyright 2026 Vasantha Kumar. Licensed under the Apache License, Version 2.0.
-@author Vasantha Kumar <vasantha.kumar@hotmail.com>
+Copyright 2026 Vasantha Kumar Kesavan. Licensed under the Apache License, Version 2.0.
+@author Vasantha Kumar Kesavan <vasantha.kumar@hotmail.com>
 
 Default deny for every pod of the release, then only what each component needs (ADR-025). An empty peer list
 grants nothing: Kubernetes reads "from: []" as "from anywhere", so such a rule is not rendered at all.

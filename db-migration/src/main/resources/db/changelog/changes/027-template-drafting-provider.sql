@@ -1,6 +1,6 @@
 --liquibase formatted sql
 
--- Copyright 2026 Vasantha Kumar
+-- Copyright 2026 Vasantha Kumar Kesavan
 --
 -- Licensed under the Apache License, Version 2.0 (the "License");
 -- you may not use this file except in compliance with the License.
@@ -14,7 +14,7 @@
 -- See the License for the specific language governing permissions and
 -- limitations under the License.
 --
--- @author Vasantha Kumar <vasantha.kumar@hotmail.com>
+-- @author Vasantha Kumar Kesavan <vasantha.kumar@hotmail.com>
 
 --changeset notification:027-template-drafting-provider splitStatements:false
 --comment AI drafting with any LLM provider (ADR-044): Anthropic, or an OpenAI-compatible API (OpenAI, Gemini, DeepSeek, Ollama, others) at an optional base URL. A row saved before this change stays on Anthropic. The table holds at most one row and a constant default is metadata-only, so nothing is rewritten or locked for long.

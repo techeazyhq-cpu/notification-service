@@ -1,4 +1,4 @@
-# Copyright 2026 Vasantha Kumar
+# Copyright 2026 Vasantha Kumar Kesavan
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-# @author Vasantha Kumar <vasantha.kumar@hotmail.com>
+# @author Vasantha Kumar Kesavan <vasantha.kumar@hotmail.com>
 #
 # Logical dumps (deploy/backup/postgres-backup.sh) go to a bucket in the recovery region, so a copy independent of RDS
 # survives the loss of the primary region and of the RDS account-level backups.

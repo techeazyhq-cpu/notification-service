@@ -1,4 +1,4 @@
-# Copyright 2026 Vasantha Kumar
+# Copyright 2026 Vasantha Kumar Kesavan
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-# @author Vasantha Kumar <vasantha.kumar@hotmail.com>
+# @author Vasantha Kumar Kesavan <vasantha.kumar@hotmail.com>
 #
 # One Secret Manager entry per value of the chart's notification-secrets Secret, synced by External Secrets, each kept
 # in the primary and recovery regions only. Terraform writes the two it creates (the schema owner's password,

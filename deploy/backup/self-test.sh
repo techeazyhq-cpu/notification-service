@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Copyright 2026 Vasantha Kumar
+# Copyright 2026 Vasantha Kumar Kesavan
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -13,7 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-# @author Vasantha Kumar <vasantha.kumar@hotmail.com>
+# @author Vasantha Kumar Kesavan <vasantha.kumar@hotmail.com>
 #
 # CI check for postgres-backup.sh and restore-drill.sh: backs up a throwaway database while rows are being written,
 # expects the drill to pass on that backup and to fail on a copy whose counts were altered. Needs Docker. Files move

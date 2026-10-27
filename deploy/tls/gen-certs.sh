@@ -1,7 +1,7 @@
 #!/bin/sh
-# Copyright 2026 Vasantha Kumar
+# Copyright 2026 Vasantha Kumar Kesavan
 # Licensed under the Apache License, Version 2.0 (see LICENSE).
-# @author Vasantha Kumar <vasantha.kumar@hotmail.com>
+# @author Vasantha Kumar Kesavan <vasantha.kumar@hotmail.com>
 #
 # One-shot: creates a private CA and a server certificate for each datastore (PostgreSQL, Redis, Pulsar) so that
 # every hop between the services and their datastores can be TLS with full certificate and hostname verification.

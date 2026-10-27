@@ -1,6 +1,6 @@
 --liquibase formatted sql
 
--- Copyright 2026 Vasantha Kumar
+-- Copyright 2026 Vasantha Kumar Kesavan
 --
 -- Licensed under the Apache License, Version 2.0 (the "License");
 -- you may not use this file except in compliance with the License.
@@ -14,7 +14,7 @@
 -- See the License for the specific language governing permissions and
 -- limitations under the License.
 --
--- @author Vasantha Kumar <vasantha.kumar@hotmail.com>
+-- @author Vasantha Kumar Kesavan <vasantha.kumar@hotmail.com>
 --changeset notification:024-push-data
 --comment A push's optional key-value pairs for the client's app (such as an id to open), sent in FCM's data next to the message id. Encrypted like the variables and erased with them. A new nullable column: nothing existing is locked or rewritten, and earlier messages have none.
 --preconditions onFail:MARK_RAN onError:HALT

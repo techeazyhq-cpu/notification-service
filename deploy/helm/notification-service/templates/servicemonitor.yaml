@@ -1,6 +1,6 @@
 {{/*
-Copyright 2026 Vasantha Kumar. Licensed under the Apache License, Version 2.0.
-@author Vasantha Kumar <vasantha.kumar@hotmail.com>
+Copyright 2026 Vasantha Kumar Kesavan. Licensed under the Apache License, Version 2.0.
+@author Vasantha Kumar Kesavan <vasantha.kumar@hotmail.com>
 
 Prometheus Operator scrape configuration for the three management ports. The job label is the Service name,
 notification-<component> when the release is named "notification", which the alert rules expect (docs/slo.md).

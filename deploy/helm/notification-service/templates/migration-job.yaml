@@ -1,6 +1,6 @@
 {{/*
-Copyright 2026 Vasantha Kumar. Licensed under the Apache License, Version 2.0.
-@author Vasantha Kumar <vasantha.kumar@hotmail.com>
+Copyright 2026 Vasantha Kumar Kesavan. Licensed under the Apache License, Version 2.0.
+@author Vasantha Kumar Kesavan <vasantha.kumar@hotmail.com>
 
 Liquibase migration (ADR-003) before every install and upgrade, as the schema owner. A failed migration fails the
 release before any service is replaced. The finished Job is kept for a day so its log can be read.

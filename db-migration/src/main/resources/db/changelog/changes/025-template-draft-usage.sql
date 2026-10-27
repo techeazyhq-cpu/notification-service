@@ -1,6 +1,6 @@
 --liquibase formatted sql
 
--- Copyright 2026 Vasantha Kumar
+-- Copyright 2026 Vasantha Kumar Kesavan
 --
 -- Licensed under the Apache License, Version 2.0 (the "License");
 -- you may not use this file except in compliance with the License.
@@ -14,7 +14,7 @@
 -- See the License for the specific language governing permissions and
 -- limitations under the License.
 --
--- @author Vasantha Kumar <vasantha.kumar@hotmail.com>
+-- @author Vasantha Kumar Kesavan <vasantha.kumar@hotmail.com>
 
 --changeset notification:025-template-draft-usage splitStatements:false
 --comment One row per AI template draft that reached the model, with the tokens it spent; the monthly drafting budgets are sums over it (ADR-041). Never the brief or the draft. Append-only, like admin_audit_event. A new table: nothing existing is locked.
