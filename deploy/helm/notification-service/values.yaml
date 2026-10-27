@@ -33,8 +33,9 @@ imagePullSecrets: []
 # Secrets, Vault) with the keys DB_PASSWORD (runtime role), MIGRATION_DB_PASSWORD (schema owner),
 # SECRETS_ENCRYPTION_KEY, DATA_ENCRYPTION_KEY, ADMIN_TWO_FACTOR_KEY and ADMIN_PASSWORD. During a key rotation
 # (ADR-037) it may also hold SECRETS_ENCRYPTION_KEY_PREVIOUS, DATA_ENCRYPTION_KEY_PREVIOUS,
-# ADMIN_TWO_FACTOR_KEY_PREVIOUS and FINGERPRINT_KEY; all four are optional. With config.database.reportingUser set
-# it also holds DB_REPORTING_PASSWORD (ADR-050).
+# ADMIN_TWO_FACTOR_KEY_PREVIOUS and FINGERPRINT_KEY; all four are optional. With config.database.reportingUser set it
+# also holds DB_REPORTING_PASSWORD (ADR-050). It may hold TEMPLATE_DRAFTING_API_KEY, the AI drafting provider's key
+# (ADR-041, ADR-044), which only client-api and admin-api receive; a key saved on the admin UI's AI drafting page wins.
 secrets:
   existingSecret: notification-secrets
 
@@ -74,7 +75,8 @@ config:
   clientApiPublicBaseUrl: https://api.example.com
   clientApiCorsOrigins: https://app.example.com
   adminCorsOrigins: https://admin.example.com
-  # Any further environment variables for every service, as a map.
+  # Any further environment variables for every service, as a map. Never a secret: these are plain values, and they
+  # reach the dispatcher too. The drafting key belongs in the Secret, as TEMPLATE_DRAFTING_API_KEY.
   extraEnv: {}
 
 clientApi:

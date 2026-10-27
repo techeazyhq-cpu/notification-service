@@ -70,6 +70,10 @@ spec:
               value: {{ $settings.managementPort | quote }}
             {{- end }}
             {{- include "notification.serviceEnv" $root | nindent 12 }}
+            {{- if has $component (list "client-api" "admin-api") }}
+            - name: TEMPLATE_DRAFTING_API_KEY
+              valueFrom: {secretKeyRef: {name: {{ $root.Values.secrets.existingSecret }}, key: TEMPLATE_DRAFTING_API_KEY, optional: true}}
+            {{- end }}
             {{- if eq $component "client-api" }}
             - name: CLIENT_API_PUBLIC_BASE_URL
               value: {{ $root.Values.config.clientApiPublicBaseUrl | quote }}
