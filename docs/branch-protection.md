@@ -96,7 +96,7 @@ stays disabled until all 14 checks are green.
 
 ## Living with it
 
-- **Dependabot PRs** go through the same checks. A bump that breaks the build (the ADR-011/014/018 failure) now stays
+- **Dependabot security PRs** (ADR-049) go through the same checks. A bump that breaks the build (the ADR-011/014/018 failure) now stays
   red and unmerged instead of reaching `main`.
 - **Renaming a job or matrix entry** in `ci.yml` or `security.yml` changes its check name. Update
   `.github/branch-protection.json` in the same PR and re-run step 2 after it merges, or every later PR waits forever
