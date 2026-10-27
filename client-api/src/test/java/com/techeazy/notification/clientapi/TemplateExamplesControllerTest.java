@@ -38,13 +38,13 @@ class TemplateExamplesControllerTest {
 
     @Test
     void withoutAFilterTheExamplesForEveryChannelTheClientMayUseAreListed() {
-        assertThat(controller.examples(ACME, null, null)).isNotEmpty().extracting(TemplateExample::channel)
+        assertThat(controller.examples(ACME, null, null, null)).isNotEmpty().extracting(TemplateExample::channel)
                 .containsOnly(Channel.SMS, Channel.EMAIL);
     }
 
     @Test
     void examplesAreFilteredByChannelAndCategory() {
-        assertThat(controller.examples(ACME, Channel.EMAIL, MessageCategory.OTP)).isNotEmpty()
+        assertThat(controller.examples(ACME, Channel.EMAIL, MessageCategory.OTP, null)).isNotEmpty()
                 .allSatisfy(example -> {
                     assertThat(example.channel()).isEqualTo(Channel.EMAIL);
                     assertThat(example.category()).isEqualTo(MessageCategory.OTP);
@@ -53,6 +53,12 @@ class TemplateExamplesControllerTest {
 
     @Test
     void aChannelTheClientMayNotUseHasNoExamples() {
-        assertThat(controller.examples(ACME, Channel.WHATSAPP, null)).isEmpty();
+        assertThat(controller.examples(ACME, Channel.WHATSAPP, null, null)).isEmpty();
+    }
+
+    @Test
+    void examplesAreFilteredByLanguage() {
+        assertThat(controller.examples(ACME, Channel.SMS, MessageCategory.OTP, "hi")).isNotEmpty()
+                .allSatisfy(example -> assertThat(example.language()).isEqualTo("hi"));
     }
 }

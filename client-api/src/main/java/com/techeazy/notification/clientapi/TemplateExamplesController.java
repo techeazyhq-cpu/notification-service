@@ -50,12 +50,16 @@ public class TemplateExamplesController {
     @Operation(summary = "Example templates to start from",
             description = "Ready-made templates for each channel and category, which meet the channel's rules as "
                     + "written. Copy one into your own template, change it as you need and create it with "
-                    + "POST /v1/templates. Filter by channel and category; only channels you may use are listed.")
+                    + "POST /v1/templates. Filter by channel, category and language (en, hi, ta or ar); only "
+                    + "channels you may use are listed. Translations are in Hindi, Tamil and Arabic; their SMS "
+                    + "text uses Unicode, so each SMS segment holds 70 characters.")
     @GetMapping("/examples")
     public List<TemplateExample> examples(
             @RequestAttribute(ClientAuthFilter.CLIENT_ATTRIBUTE) AuthenticatedClient client,
             @RequestParam(required = false) Channel channel,
-            @RequestParam(required = false) MessageCategory category) {
-        return examples.find(channel, category).stream().filter(example -> client.allows(example.channel())).toList();
+            @RequestParam(required = false) MessageCategory category,
+            @RequestParam(required = false) String language) {
+        return examples.find(channel, category, language).stream()
+                .filter(example -> client.allows(example.channel())).toList();
     }
 }

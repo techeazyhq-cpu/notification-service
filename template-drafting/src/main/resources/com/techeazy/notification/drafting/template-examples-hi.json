@@ -1,0 +1,119 @@
+[
+  {
+    "id": "sms-otp-verification",
+    "body": "{{code}} आपका कोड है। {{minutes}} मिनट तक मान्य। किसी को न बताएँ।"
+  },
+  {
+    "id": "sms-otp-sign-in",
+    "body": "आपका साइन-इन कोड {{code}} है। आपने नहीं माँगा तो अनदेखा करें।"
+  },
+  {
+    "id": "sms-order-shipped",
+    "body": "नमस्ते {{firstName}}, आपका ऑर्डर {{orderId}} भेज दिया गया है। इसे यहाँ ट्रैक करें: {{trackingUrl}}"
+  },
+  {
+    "id": "sms-appointment-reminder",
+    "body": "रिमाइंडर: {{businessName}} के साथ आपका अपॉइंटमेंट {{date}} को {{time}} बजे है। रद्द करने के लिए C लिखकर जवाब दें।"
+  },
+  {
+    "id": "sms-payment-received",
+    "body": "हमें इनवॉइस {{invoiceNumber}} के लिए आपका {{amount}} का भुगतान मिल गया है। धन्यवाद।"
+  },
+  {
+    "id": "sms-promo-sale",
+    "body": "{{businessName}}: {{endDate}} तक हर चीज़ पर {{discount}} की छूट। चेकआउट पर कोड {{promoCode}} का उपयोग करें। ऑप्ट आउट के लिए STOP लिखकर जवाब दें।"
+  },
+  {
+    "id": "sms-promo-back-in-stock",
+    "body": "खुशखबरी, {{firstName}}: {{productName}} फिर से उपलब्ध है। ऑप्ट आउट के लिए STOP लिखकर जवाब दें।"
+  },
+  {
+    "id": "email-otp-verification",
+    "subject": "आपका सत्यापन कोड",
+    "body": "नमस्ते {{firstName}},\n\nआपका सत्यापन कोड {{code}} है। यह {{minutes}} मिनट में समाप्त हो जाएगा।\n\nअगर आपने यह कोड नहीं माँगा था, तो इस ईमेल को अनदेखा करें। यह कोड कभी किसी से साझा न करें।\n\n{{businessName}} टीम\n"
+  },
+  {
+    "id": "email-welcome",
+    "subject": "{{businessName}} में आपका स्वागत है, {{firstName}}",
+    "body": "नमस्ते {{firstName}},\n\n{{businessName}} से जुड़ने के लिए धन्यवाद। आपका खाता तैयार है, और आप यहाँ कभी भी साइन इन कर सकते हैं: {{signInUrl}}\n\nकोई सवाल हो तो बस इस ईमेल का जवाब दें।\n\n{{businessName}} टीम\n"
+  },
+  {
+    "id": "email-password-reset",
+    "subject": "अपना पासवर्ड रीसेट करें",
+    "body": "नमस्ते {{firstName}},\n\nहमें आपका पासवर्ड रीसेट करने का अनुरोध मिला है। नया पासवर्ड यहाँ चुनें: {{resetUrl}}\n\nयह लिंक {{minutes}} मिनट में समाप्त हो जाएगा। अगर आपने पासवर्ड रीसेट करने को नहीं कहा था, तो इस ईमेल को अनदेखा करें; आपका पासवर्ड नहीं बदलेगा।\n\n{{businessName}} टीम\n"
+  },
+  {
+    "id": "email-order-confirmation",
+    "subject": "ऑर्डर {{orderId}} की पुष्टि हो गई",
+    "body": "नमस्ते {{firstName}},\n\nआपके ऑर्डर {{orderId}} के लिए धन्यवाद। हमें यह मिल गया है और इसके भेजे जाने पर हम आपको बताएँगे।\n\nऑर्डर की कुल राशि: {{orderTotal}}\nअनुमानित डिलीवरी: {{deliveryDate}}\n\nआप अपना ऑर्डर यहाँ कभी भी देख सकते हैं: {{orderUrl}}\n\n{{businessName}} टीम\n"
+  },
+  {
+    "id": "email-invoice-ready",
+    "subject": "आपका इनवॉइस {{invoiceNumber}} तैयार है",
+    "body": "नमस्ते {{firstName}},\n\n{{amount}} का आपका इनवॉइस {{invoiceNumber}} तैयार है। कृपया {{dueDate}} तक इसका भुगतान करें।\n\nइनवॉइस यहाँ देखें और भुगतान करें: {{invoiceUrl}}\n\n{{businessName}} टीम\n"
+  },
+  {
+    "id": "email-promo-offer",
+    "subject": "{{firstName}}, आपके लिए {{discount}} की छूट",
+    "body": "नमस्ते {{firstName}},\n\nहमारे ग्राहक होने के लिए धन्यवाद के रूप में, आपके अगले ऑर्डर पर {{discount}} की छूट। {{endDate}} से पहले चेकआउट पर कोड {{promoCode}} का उपयोग करें।\n\nखरीदारी शुरू करें: {{shopUrl}}\n\n{{businessName}} टीम\n\nआपको यह ईमेल इसलिए मिला है क्योंकि आपने {{businessName}} के ऑफ़र की सदस्यता ली है। सदस्यता छोड़ें: {{unsubscribeUrl}}\n"
+  },
+  {
+    "id": "email-win-back",
+    "subject": "{{firstName}}, हमें आपकी याद आ रही है",
+    "body": "नमस्ते {{firstName}},\n\nआपकी पिछली विज़िट को काफ़ी समय हो गया है, और {{businessName}} में बहुत कुछ बदल गया है। देखिए क्या नया है: {{shopUrl}}\n\n{{businessName}} टीम\n\nआपको यह ईमेल इसलिए मिला है क्योंकि आपने {{businessName}} की ख़बरों की सदस्यता ली है। सदस्यता छोड़ें: {{unsubscribeUrl}}\n"
+  },
+  {
+    "id": "whatsapp-otp-verification",
+    "body": "आपका {{businessName}} सत्यापन कोड {{code}} है। यह {{minutes}} मिनट में समाप्त हो जाएगा। यह कोड किसी से साझा न करें।"
+  },
+  {
+    "id": "whatsapp-order-shipped",
+    "body": "नमस्ते {{firstName}}, आपका ऑर्डर {{orderId}} रास्ते में है। अपना पार्सल {{trackingUrl}} पर ट्रैक करें, और मदद चाहिए तो यहीं जवाब दें।"
+  },
+  {
+    "id": "whatsapp-appointment-reminder",
+    "body": "नमस्ते {{firstName}}, यह {{businessName}} के साथ {{date}} को {{time}} बजे आपके अपॉइंटमेंट का रिमाइंडर है। पुष्टि के लिए YES या रद्द करने के लिए NO लिखकर जवाब दें।"
+  },
+  {
+    "id": "whatsapp-delivery-today",
+    "body": "नमस्ते {{firstName}}, आपका ऑर्डर {{orderId}} आज {{timeWindow}} के बीच पहुँचेगा। कृपया सुनिश्चित करें कि इसे लेने के लिए कोई मौजूद हो।"
+  },
+  {
+    "id": "whatsapp-promo-offer",
+    "body": "नमस्ते {{firstName}}, कोड {{promoCode}} के साथ {{endDate}} तक {{businessName}} पर {{discount}} की छूट पाएँ। ऑफ़र बंद करने के लिए STOP लिखकर जवाब दें।"
+  },
+  {
+    "id": "whatsapp-back-in-stock",
+    "body": "खुशखबरी, {{firstName}}! {{productName}} फिर से उपलब्ध है। ऑफ़र बंद करने के लिए STOP लिखकर जवाब दें।"
+  },
+  {
+    "id": "push-otp-sign-in",
+    "subject": "आपका साइन-इन कोड",
+    "body": "साइन इन पूरा करने के लिए {{code}} का उपयोग करें। यह {{minutes}} मिनट में समाप्त हो जाएगा।"
+  },
+  {
+    "id": "push-order-out-for-delivery",
+    "subject": "आपका ऑर्डर डिलीवरी के लिए निकल चुका है",
+    "body": "ऑर्डर {{orderId}} आज पहुँचेगा। ट्रैक करने के लिए टैप करें।"
+  },
+  {
+    "id": "push-payment-received",
+    "subject": "भुगतान मिल गया",
+    "body": "हमें आपका {{amount}} का भुगतान मिल गया है। धन्यवाद!"
+  },
+  {
+    "id": "push-appointment-reminder",
+    "subject": "आपका अपॉइंटमेंट कल है",
+    "body": "{{businessName}} के साथ {{time}} बजे मिलते हैं। देखने या समय बदलने के लिए टैप करें।"
+  },
+  {
+    "id": "push-flash-sale",
+    "subject": "सिर्फ़ आज {{discount}} की छूट",
+    "body": "{{firstName}}, सेल आधी रात को खत्म होगी। अभी खरीदारी के लिए टैप करें।"
+  },
+  {
+    "id": "push-cart-reminder",
+    "subject": "आप कुछ भूल गए",
+    "body": "{{productName}} अभी भी आपकी कार्ट में है। अपना ऑर्डर पूरा करने के लिए टैप करें।"
+  }
+]

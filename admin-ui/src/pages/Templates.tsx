@@ -84,9 +84,9 @@ export default function Templates() {
         <DraftAssistant status={drafting.data ?? undefined} channel={form.channel} category={form.category}
           request={(brief) => api<TemplateDraft>('POST', '/templates/drafts', brief)} onDraft={applyDraft}
           unavailable={<>✨ Draft with AI is off. Set up the LLM on the <Link to="/settings/ai-drafting">AI drafting</Link> page to write templates from a short description.</>} />
-        <label style={{ marginTop: 12 }}>Subject / title<input value={form.subject} onChange={(e) => setForm({ ...form, subject: e.target.value })} /></label>
+        <label style={{ marginTop: 12 }}>Subject / title<input dir="auto" value={form.subject} onChange={(e) => setForm({ ...form, subject: e.target.value })} /></label>
         <label style={{ marginTop: 12 }}>Body — use {'{{variable}}'} placeholders; {'{{recipient}}'} is always available
-          <textarea value={form.body} onChange={(e) => setForm({ ...form, body: e.target.value })} required />
+          <textarea dir="auto" value={form.body} onChange={(e) => setForm({ ...form, body: e.target.value })} required />
         </label>
         <div className="row" style={{ marginTop: 12 }}>
           <button type="submit" className="primary">{editing ? 'Save changes' : 'Create template'}</button>

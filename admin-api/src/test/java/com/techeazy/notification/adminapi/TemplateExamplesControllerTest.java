@@ -51,6 +51,16 @@ class TemplateExamplesControllerTest {
     }
 
     @Test
+    void examplesAreListedInTheLanguageAskedFor() throws Exception {
+        MockHttpServletResponse response = mvc.perform(get("/api/admin/templates/examples")
+                .param("channel", "SMS").param("category", "OTP").param("language", "ar")).andReturn().getResponse();
+
+        assertThat(response.getStatus()).isEqualTo(200);
+        assertThat(response.getContentAsString()).contains("\"id\":\"sms-otp-verification-ar\"")
+                .contains("\"language\":\"ar\"").doesNotContain("\"language\":\"en\"");
+    }
+
+    @Test
     void anUnknownChannelIsRefused() throws Exception {
         assertThat(mvc.perform(get("/api/admin/templates/examples").param("channel", "FAX")).andReturn()
                 .getResponse().getStatus()).isEqualTo(400);

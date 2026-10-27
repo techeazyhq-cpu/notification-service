@@ -55,6 +55,9 @@ public final class ChannelRules {
     /** What a collapsed push notification often shows; beyond it the text may be cut off. */
     public static final int PUSH_BODY_COLLAPSED_LENGTH = 120;
     static final int ASSUMED_VALUE_LENGTH = 12;
+    /** Warns that SMS text leaves GSM-7, as any Devanagari, Tamil or Arabic text does (ADR-046). */
+    public static final String UCS2_WARNING =
+            "Uses characters outside GSM-7, so a segment holds 70 characters instead of 160";
 
     private static final String GSM_BASIC = "@£$¥èéùìòÇ\nØø\rÅåΔ_ΦΓΛΩΠΨΣΘΞÆæßÉ !\"#¤%&'()*+,-./0123456789:;<=>?"
             + "¡ABCDEFGHIJKLMNOPQRSTUVWXYZÄÖÑÜ§¿abcdefghijklmnopqrstuvwxyzäöñüà";
@@ -204,6 +207,11 @@ public final class ChannelRules {
         return String.join(", ", found.stream().distinct().limit(MAX_EXAMPLES).toList());
     }
 
+    /** Warns that SMS text is sent and billed as more than one segment. */
+    public static String segmentsWarning(int segments) {
+        return "About " + segments + " SMS segments long; each segment is billed as one SMS";
+    }
+
     private static SmsLength checkSms(String subject, String body, List<String> violations, List<String> warnings) {
         noSubject(subject, "SMS", violations);
         noMarkup(body, "SMS", violations);
@@ -212,10 +220,10 @@ public final class ChannelRules {
             violations.add("About " + length.segments() + " SMS segments long; at most " + SMS_MAX_SEGMENTS
                     + " are allowed");
         } else if (length.segments() > 1) {
-            warnings.add("About " + length.segments() + " SMS segments long; each segment is billed as one SMS");
+            warnings.add(segmentsWarning(length.segments()));
         }
         if ("UCS-2".equals(length.encoding())) {
-            warnings.add("Uses characters outside GSM-7, so a segment holds 70 characters instead of 160");
+            warnings.add(UCS2_WARNING);
         }
         return length;
     }
