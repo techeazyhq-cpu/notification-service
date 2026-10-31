@@ -22,7 +22,7 @@
   <parent>
     <groupId>com.techeazy.notification</groupId>
     <artifactId>notification-service</artifactId>
-    <version>0.1.0-SNAPSHOT</version>
+    <version>1.1.0</version>
   </parent>
   <artifactId>template-drafting</artifactId>
   <description>Optional AI drafting of message templates with Claude (ADR-041); off unless an API key is configured</description>
