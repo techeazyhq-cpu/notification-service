@@ -36,7 +36,7 @@ COPY billing/src billing/src
 COPY ${MODULE}/src ${MODULE}/src
 RUN --mount=type=cache,target=/root/.m2 mvn -q -B -DskipTests package -pl ${MODULE} -am
 
-FROM eclipse-temurin:21-jre@sha256:cff19e6215689161eb6162c11b86b0c60ddf802164f2eaf48d570f8fb79a36c5
+FROM eclipse-temurin:21-jre@sha256:0b99b3376fbb50dbf9c0af8535fdd5b8eb0d3fdfc8b1e4967f383b6919f6901a
 ARG MODULE
 RUN useradd --system --uid 1001 app
 USER app
