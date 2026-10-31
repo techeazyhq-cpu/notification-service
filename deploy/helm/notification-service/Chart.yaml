@@ -19,6 +19,6 @@ description: >-
   Multi-channel notification platform: client API, admin API, dispatcher, the two web UIs, and the database migration
   job. PostgreSQL, Redis and Pulsar are external (managed services or their own operators); see ADR-025.
 type: application
-version: 0.1.0
-appVersion: "0.1.0"
+version: 1.1.0
+appVersion: "1.1.0"
 kubeVersion: ">=1.30.0-0"

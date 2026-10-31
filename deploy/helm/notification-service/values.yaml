@@ -24,7 +24,7 @@ image:
   registry: ghcr.io/techeazyhq-cpu
   repositoryPrefix: notification-
   # Defaults to the chart's appVersion, published when the v<appVersion> tag is pushed. Builds of main are tagged
-  # sha-<full commit>. Pin by digest in production: tag: "0.1.0@sha256:...".
+  # sha-<full commit>. Pin by digest in production: tag: "1.1.0@sha256:...".
   tag: ""
   pullPolicy: IfNotPresent
 imagePullSecrets: []
