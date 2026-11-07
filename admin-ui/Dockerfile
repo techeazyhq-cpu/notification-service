@@ -22,7 +22,10 @@ RUN npm run build
 
 # Non-root nginx: serves the SPA and proxies /api to the Admin API, so the browser sees a single origin. The base
 # image already defaults to this user; USER is explicit here so it survives a future change to that default.
+# brotli-libs is upgraded in place for CVE-2026-111497 until a newer base digest ships 1.2.1-r0 or later.
 FROM nginxinc/nginx-unprivileged:1.31-alpine@sha256:b5047b9b76845eac124358373c6852377c52e4b05834a47647e955dd91cb8f1e
+USER root
+RUN apk upgrade --no-cache brotli-libs
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 COPY security-headers.conf /etc/nginx/conf.d/security-headers.inc
 COPY --from=build /app/dist /usr/share/nginx/html
