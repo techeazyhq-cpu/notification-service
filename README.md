@@ -58,6 +58,15 @@ The catcher's JSON is at `/messages`, filtered by `channel`, `to` (the recipient
 inclusive). Reads allow any origin, so an app under development can poll for its own pushes; clearing and failure
 injection don't.
 
+To run the published images instead of building them, add
+[docker-compose.images.yml](docker-compose.images.yml) and leave out `--build`. The images are public on GHCR
+(ADR-027), so there's no login. `NS_IMAGE_TAG` picks the tag: `latest` (the newest release, the default), a release
+such as `1.1.0`, or `main`. The catcher isn't published and is still built.
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.images.yml --profile app up -d --wait
+```
+
 Stop the services with `docker compose --profile app down`; the database and broker keep running, so the services can
 be rebuilt and restarted on their own. Stop those with `docker compose -f docker-compose.common.yml down` (add `-v` to
 also wipe the database and Pulsar data, volumes `notification-pgdata` and `notification-pulsardata`). For UI development
@@ -83,6 +92,12 @@ docker compose -f docker-compose.yml -f docker-compose.shared.yml --profile app 
 
 ```bash
 ADMIN_URL=http://localhost:18081 node scripts/seed.mjs
+```
+
+Or from the published images:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.shared.yml -f docker-compose.images.yml --profile app up -d --wait
 ```
 
 The `notification` project is the same in both cases: the catcher, the migration job, the three services and both UIs,

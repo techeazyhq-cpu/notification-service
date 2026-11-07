@@ -1,0 +1,54 @@
+# Copyright 2026 Vasantha Kumar Kesavan
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+# @author Vasantha Kumar Kesavan <vasantha.kumar@hotmail.com>
+#
+# Published images instead of a local build: the migration job, the three services and both UIs from GHCR, where CI
+# publishes them, signed (ADR-027). Public, so no login. Add it after the other files, standalone or shared, and leave
+# out --build:
+#
+#   docker compose -f docker-compose.yml -f docker-compose.images.yml --profile app up -d --wait
+#   docker compose -f docker-compose.yml -f docker-compose.shared.yml -f docker-compose.images.yml --profile app up -d --wait
+#
+# NS_IMAGE_TAG picks the tag: `latest` (the newest release, the default), a release such as `1.1.0`, `main` (the last
+# build of main) or `sha-<commit>`. Every `up` pulls the tag again. The catcher is a development tool and isn't
+# published, so it is still built here.
+
+x-published: &published
+  pull_policy: always
+
+services:
+  db-migrate:
+    <<: *published
+    image: ghcr.io/techeazyhq-cpu/notification-db-migration:${NS_IMAGE_TAG:-latest}
+
+  client-api:
+    <<: *published
+    image: ghcr.io/techeazyhq-cpu/notification-client-api:${NS_IMAGE_TAG:-latest}
+
+  admin-api:
+    <<: *published
+    image: ghcr.io/techeazyhq-cpu/notification-admin-api:${NS_IMAGE_TAG:-latest}
+
+  dispatcher:
+    <<: *published
+    image: ghcr.io/techeazyhq-cpu/notification-dispatcher:${NS_IMAGE_TAG:-latest}
+
+  admin-ui:
+    <<: *published
+    image: ghcr.io/techeazyhq-cpu/notification-admin-ui:${NS_IMAGE_TAG:-latest}
+
+  client-ui:
+    <<: *published
+    image: ghcr.io/techeazyhq-cpu/notification-client-ui:${NS_IMAGE_TAG:-latest}
